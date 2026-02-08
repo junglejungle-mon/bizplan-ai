@@ -14,10 +14,20 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+interface SlideData {
+  id: string;
+  slide_order: number;
+  slide_type: string;
+  title: string;
+  content: Record<string, unknown>;
+  notes: string | null;
+}
+
 interface IRGeneratorClientProps {
   planId: string;
   planTitle: string;
   hasPresentation: boolean;
+  slides?: SlideData[];
 }
 
 const TEMPLATES: { key: string; label: string }[] = [
@@ -26,10 +36,26 @@ const TEMPLATES: { key: string; label: string }[] = [
   { key: "classic", label: "클래식" },
 ];
 
+const SLIDE_TYPE_LABELS: Record<string, string> = {
+  cover: "표지",
+  problem: "문제 정의",
+  solution: "솔루션",
+  market: "시장 규모",
+  business_model: "비즈니스 모델",
+  traction: "트랙션/성과",
+  competition: "경쟁 분석",
+  tech: "기술/제품 차별성",
+  team: "팀 소개",
+  financials: "재무 계획",
+  ask: "투자 요청",
+  roadmap: "로드맵",
+};
+
 export function IRGeneratorClient({
   planId,
   planTitle,
   hasPresentation,
+  slides = [],
 }: IRGeneratorClientProps) {
   const [selectedTemplate, setSelectedTemplate] = useState("minimal");
   const [generating, setGenerating] = useState(false);
@@ -225,8 +251,70 @@ export function IRGeneratorClient({
         </Card>
       )}
 
-      {/* 생성 시작 카드 */}
-      {!generating && !done && (
+      {/* 슬라이드 목록 (프레젠테이션이 있을 경우) */}
+      {!generating && !done && hasPresentation && slides.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">
+              슬라이드 ({slides.length}장)
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleGenerate}
+            >
+              <Presentation className="h-4 w-4" /> 다시 생성
+            </Button>
+          </div>
+          <div className="grid gap-3">
+            {slides.map((slide) => {
+              const content = slide.content as Record<string, unknown>;
+              const headline = (content?.headline as string) || "";
+              const bullets = (content?.bullets as string[]) || [];
+              return (
+                <Card key={slide.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
+                        {slide.slide_order}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline" className="text-xs">
+                            {SLIDE_TYPE_LABELS[slide.slide_type] || slide.slide_type}
+                          </Badge>
+                          <h3 className="font-medium text-gray-900 truncate">
+                            {slide.title}
+                          </h3>
+                        </div>
+                        {headline && (
+                          <p className="text-sm text-gray-600 mb-1">{headline}</p>
+                        )}
+                        {bullets.length > 0 && (
+                          <ul className="text-xs text-gray-500 space-y-0.5">
+                            {bullets.slice(0, 3).map((b, i) => (
+                              <li key={i} className="truncate">• {b}</li>
+                            ))}
+                            {bullets.length > 3 && (
+                              <li className="text-gray-400">
+                                +{bullets.length - 3}개 더...
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 생성 시작 카드 (프레젠테이션이 없을 경우) */}
+      {!generating && !done && !hasPresentation && (
         <Card>
           <CardContent className="flex flex-col items-center py-16">
             <Presentation className="h-16 w-16 text-gray-300 mb-4" />
