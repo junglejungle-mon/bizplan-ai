@@ -3,7 +3,7 @@
  * Vercel Cron에서 호출 → 3개 API에서 수집 → programs 테이블 UPSERT
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchBizinfoPrograms } from "@/lib/apis/bizinfo";
 import { fetchMssBizPrograms } from "@/lib/apis/mss-biz";
 import { fetchKStartupPrograms } from "@/lib/apis/kstartup";
@@ -70,8 +70,8 @@ export async function collectAllPrograms(): Promise<{
     console.error("[Collector] K-Startup 오류:", e);
   }
 
-  // DB UPSERT
-  const supabase = await createClient();
+  // DB UPSERT (Service Role - RLS 우회)
+  const supabase = createAdminClient();
   let inserted = 0;
 
   for (const program of results) {

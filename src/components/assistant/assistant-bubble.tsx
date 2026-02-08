@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare,
@@ -170,7 +172,13 @@ export function AssistantBubble() {
                   : "bg-gray-100 text-gray-800"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "user" ? (
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              ) : (
+                <div className="text-sm prose prose-sm prose-blue max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:my-1 [&>h2]:text-sm [&>h2]:font-bold [&>h2]:my-1.5">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -178,7 +186,9 @@ export function AssistantBubble() {
         {streamingText && (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl px-3 py-2 bg-gray-100 text-gray-800">
-              <p className="text-sm whitespace-pre-wrap">{streamingText}</p>
+              <div className="text-sm prose prose-sm prose-blue max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:my-1 [&>h2]:text-sm [&>h2]:font-bold [&>h2]:my-1.5">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
+              </div>
             </div>
           </div>
         )}

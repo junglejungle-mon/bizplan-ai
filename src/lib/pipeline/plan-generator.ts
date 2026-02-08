@@ -3,7 +3,7 @@
  * SSE 스트리밍으로 실시간 진행률 표시
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude, streamClaude } from "@/lib/ai/claude";
 import {
   SECTION_EXTRACTOR_SYSTEM,
@@ -34,7 +34,7 @@ export async function* generateBusinessPlan(
   type: "progress" | "section_start" | "section_chunk" | "section_done" | "complete" | "error";
   data: any;
 }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   try {
     // 1. 회사 정보 로드

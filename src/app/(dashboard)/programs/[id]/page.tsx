@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CreatePlanButton } from "@/components/programs/create-plan-button";
 import {
   ArrowLeft,
   Calendar,
@@ -193,9 +194,7 @@ export default async function ProgramDetailPage({
               <p className="mt-2 text-sm text-blue-700">
                 이 사업에 맞는 사업계획서를 AI가 자동 작성합니다
               </p>
-              <Button className="mt-4 w-full gap-2">
-                <FileText className="h-4 w-4" /> 사업계획서 작성 시작
-              </Button>
+              <CreatePlanButton programId={program.id} programTitle={program.title} />
             </CardContent>
           </Card>
 

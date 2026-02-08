@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, RefreshCw, Presentation } from "lucide-react";
 import Link from "next/link";
+import { PlanGeneratorButton } from "@/components/plans/plan-generator-button";
+import { SectionContent } from "@/components/plans/section-content";
 
 export default async function PlanEditorPage({
   params,
@@ -108,11 +110,7 @@ export default async function PlanEditorPage({
                 </CardHeader>
                 <CardContent>
                   {section.content ? (
-                    <div className="prose prose-sm max-w-none">
-                      <p className="whitespace-pre-wrap text-gray-700">
-                        {section.content}
-                      </p>
-                    </div>
+                    <SectionContent content={section.content} />
                   ) : (
                     <p className="text-sm text-gray-400 italic">
                       아직 생성되지 않았습니다
@@ -131,10 +129,10 @@ export default async function PlanEditorPage({
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center py-16">
-                <p className="text-gray-500">
+                <p className="text-gray-500 mb-4">
                   아직 섹션이 생성되지 않았습니다
                 </p>
-                <Button className="mt-4">AI 자동 생성 시작</Button>
+                <PlanGeneratorButton planId={id} hasContent={false} />
               </CardContent>
             </Card>
           )}

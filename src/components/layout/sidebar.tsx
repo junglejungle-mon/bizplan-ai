@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard,
   Search,
@@ -24,6 +26,37 @@ const sidebarItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [profileScore, setProfileScore] = useState<number>(0);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: company } = await supabase
+          .from("companies")
+          .select("profile_score")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
+
+        if (company) {
+          setProfileScore(company.profile_score || 0);
+        }
+      } catch (e) {
+        // 로그인 안 된 경우 무시
+      }
+    }
+    fetchProfile();
+  }, []);
+
+  const scoreLabel = profileScore >= 70
+    ? "고도화 완료!"
+    : profileScore >= 30
+      ? "인터뷰로 고도화하세요"
+      : "기본 정보를 입력하세요";
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r lg:border-gray-200 lg:bg-white lg:pt-16">
@@ -50,13 +83,24 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-gray-200 p-4">
-        <div className="rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 p-3">
+        <Link href="/company" className="block rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 p-3 hover:from-blue-100 hover:to-indigo-100 transition-colors">
           <p className="text-xs font-medium text-blue-800">프로필 완성도</p>
           <div className="mt-2 h-2 rounded-full bg-blue-100">
-            <div className="h-2 rounded-full bg-blue-600" style={{ width: "30%" }} />
+            <div
+              className={cn(
+                "h-2 rounded-full transition-all duration-500",
+                profileScore >= 70 ? "bg-green-500" : profileScore >= 30 ? "bg-blue-600" : "bg-orange-500"
+              )}
+              style={{ width: `${profileScore}%` }}
+            />
           </div>
-          <p className="mt-1 text-xs text-blue-600">30% — 인터뷰로 고도화하세요</p>
-        </div>
+          <p className={cn(
+            "mt-1 text-xs",
+            profileScore >= 70 ? "text-green-600" : profileScore >= 30 ? "text-blue-600" : "text-orange-600"
+          )}>
+            {profileScore}% — {scoreLabel}
+          </p>
+        </Link>
       </div>
     </aside>
   );

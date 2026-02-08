@@ -3,7 +3,7 @@
  * 수집된 programs ↔ 회사 프로필 매칭 분석
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude } from "@/lib/ai/claude";
 import {
   REGION_MATCH_SYSTEM,
@@ -28,7 +28,7 @@ export async function runMatchingPipeline(companyId: string): Promise<{
   skipped: number;
   errors: string[];
 }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const errors: string[] = [];
 
   // 1. 회사 정보 로드

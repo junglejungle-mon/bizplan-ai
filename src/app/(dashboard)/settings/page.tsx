@@ -6,11 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, Mail, MessageSquare, LogOut, Loader2 } from "lucide-react";
+import { Bell, Mail, MessageSquare, LogOut, Loader2, Check } from "lucide-react";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState({
+    email: true,
+    discord: false,
+  });
+  const [saved, setSaved] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -24,10 +29,29 @@ export default function SettingsPage() {
         return;
       }
       setUser(user);
+
+      // 저장된 설정 로드
+      const stored = localStorage.getItem(`notifications_${user.id}`);
+      if (stored) {
+        try {
+          setNotifications(JSON.parse(stored));
+        } catch {}
+      }
+
       setLoading(false);
     };
     loadUser();
   }, [router]);
+
+  const toggleNotification = (key: "email" | "discord") => {
+    const updated = { ...notifications, [key]: !notifications[key] };
+    setNotifications(updated);
+    if (user) {
+      localStorage.setItem(`notifications_${user.id}`, JSON.stringify(updated));
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -45,9 +69,16 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">설정</h1>
-        <p className="text-gray-500">알림 및 계정 설정</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">설정</h1>
+          <p className="text-gray-500">알림 및 계정 설정</p>
+        </div>
+        {saved && (
+          <div className="flex items-center gap-1 text-green-600 text-sm">
+            <Check className="h-4 w-4" /> 저장됨
+          </div>
+        )}
       </div>
 
       {/* 계정 정보 */}
@@ -84,35 +115,48 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {[
-            {
-              icon: Mail,
-              label: "이메일 알림",
-              desc: "새 매칭 공고, 마감 임박 알림",
-              enabled: true,
-            },
-            {
-              icon: MessageSquare,
-              label: "Discord 알림",
-              desc: "실시간 공고 알림 (Discord 채널 연동)",
-              enabled: false,
-            },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <item.icon className="h-5 w-5 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700">
-                    {item.label}
-                  </p>
-                  <p className="text-xs text-gray-500">{item.desc}</p>
-                </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Mail className="h-5 w-5 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-gray-700">이메일 알림</p>
+                <p className="text-xs text-gray-500">새 매칭 공고, 마감 임박 알림</p>
               </div>
-              <Button variant="outline" size="sm">
-                {item.enabled ? "켜짐" : "꺼짐"}
-              </Button>
             </div>
-          ))}
+            <button
+              onClick={() => toggleNotification("email")}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                notifications.email ? "bg-blue-600" : "bg-gray-200"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notifications.email ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-5 w-5 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-gray-700">Discord 알림</p>
+                <p className="text-xs text-gray-500">실시간 공고 알림 (Discord 채널 연동)</p>
+              </div>
+            </div>
+            <button
+              onClick={() => toggleNotification("discord")}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                notifications.discord ? "bg-blue-600" : "bg-gray-200"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notifications.discord ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
         </CardContent>
       </Card>
 
