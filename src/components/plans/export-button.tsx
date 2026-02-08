@@ -12,7 +12,7 @@ export function ExportButton({ planId }: ExportButtonProps) {
   const [exporting, setExporting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  const handleExport = async (format: "md" | "docx") => {
+  const handleExport = async (format: "md" | "docx" | "pdf") => {
     setExporting(true);
     setShowMenu(false);
 
@@ -35,7 +35,8 @@ export function ExportButton({ planId }: ExportButtonProps) {
       a.href = url;
       const disposition = response.headers.get("Content-Disposition");
       const filenameMatch = disposition?.match(/filename="(.+)"/);
-      const defaultName = format === "docx" ? "사업계획서.docx" : "사업계획서.md";
+      const extMap = { md: "사업계획서.md", docx: "사업계획서.docx", pdf: "사업계획서.pdf" };
+      const defaultName = extMap[format] || "사업계획서.md";
       a.download = filenameMatch
         ? decodeURIComponent(filenameMatch[1])
         : defaultName;
@@ -89,11 +90,11 @@ export function ExportButton({ planId }: ExportButtonProps) {
               DOCX (.docx)
             </button>
             <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed"
-              disabled
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+              onClick={() => handleExport("pdf")}
             >
-              <FileType className="h-4 w-4" />
-              PDF (준비중)
+              <FileType className="h-4 w-4 text-red-500" />
+              PDF (.pdf)
             </button>
           </div>
         </>

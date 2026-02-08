@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildDocx } from "@/lib/utils/docx-builder";
+import { buildPdf } from "@/lib/utils/pdf-builder";
 
 /**
  * POST /api/plans/[id]/export
@@ -97,8 +98,36 @@ export async function POST(
     });
   }
 
-  // PDF는 추후 지원
+  // ===== PDF 내보내기 =====
+  if (format === "pdf") {
+    try {
+      const pdfBuffer = await buildPdf({
+        title: plan.title,
+        companyName,
+        sections: sections.map((s: any) => ({
+          section_name: s.section_name,
+          content: s.content,
+          section_order: s.section_order,
+        })),
+      });
+
+      const filename = `${companyName}_사업계획서_${dateStr}.pdf`;
+      return new Response(pdfBuffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+        },
+      });
+    } catch (error) {
+      console.error("[Export] PDF 생성 실패:", error);
+      return Response.json(
+        { error: "PDF 생성 중 오류가 발생했습니다" },
+        { status: 500 }
+      );
+    }
+  }
+
   return Response.json({
-    message: "현재 마크다운과 DOCX 형식을 지원합니다. PDF는 곧 지원됩니다.",
+    message: "지원하는 형식: md, docx, pdf",
   });
 }
