@@ -35,7 +35,13 @@ export async function fetchBizinfoPrograms(pageIndex = 1, pageUnit = 100) {
 
   const response = await fetch(
     `https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do?${params}`,
-    { cache: "no-store" }
+    {
+      cache: "no-store",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; BizPlanAI/1.0)",
+        "Accept": "application/json",
+      },
+    }
   );
 
   if (!response.ok) {

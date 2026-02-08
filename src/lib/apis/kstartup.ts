@@ -33,8 +33,9 @@ export async function fetchKStartupPrograms(page = 1, perPage = 100) {
 
   const currentYear = new Date().getFullYear().toString();
 
+  // data.go.kr 서비스키는 URLSearchParams가 이중 인코딩하므로 직접 URL에 삽입
+  const encodedKey = encodeURIComponent(serviceKey);
   const params = new URLSearchParams({
-    ServiceKey: serviceKey,
     page: String(page),
     perPage: String(perPage),
     returnType: "json",
@@ -43,9 +44,12 @@ export async function fetchKStartupPrograms(page = 1, perPage = 100) {
   });
 
   const response = await fetch(
-    `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?${params}`,
+    `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?ServiceKey=${encodedKey}&${params}`,
     {
-      headers: { Accept: "application/json" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; BizPlanAI/1.0)",
+        "Accept": "application/json",
+      },
       cache: "no-store" as RequestCache,
     }
   );

@@ -7,15 +7,22 @@ export async function fetchMssBizPrograms(pageNo = 1, numOfRows = 100) {
   const serviceKey = process.env.DATA_GO_KR_SERVICE_KEY;
   if (!serviceKey) throw new Error("DATA_GO_KR_SERVICE_KEY not set");
 
+  // data.go.kr 서비스키는 URLSearchParams가 이중 인코딩하므로 직접 URL에 삽입
+  const encodedKey = encodeURIComponent(serviceKey);
   const params = new URLSearchParams({
-    serviceKey,
     pageNo: String(pageNo),
     numOfRows: String(numOfRows),
   });
 
   const response = await fetch(
-    `https://apis.data.go.kr/1421000/mssBizService_v2/getbizList_v2?${params}`,
-    { cache: "no-store" }
+    `https://apis.data.go.kr/1421000/mssBizService_v2/getbizList_v2?serviceKey=${encodedKey}&${params}`,
+    {
+      cache: "no-store",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; BizPlanAI/1.0)",
+        "Accept": "application/xml",
+      },
+    }
   );
 
   if (!response.ok) {
