@@ -21,6 +21,42 @@ interface BizinfoResponse {
   jsonArray?: BizinfoItem[];
 }
 
+/**
+ * 전체 페이지 수집 (페이지네이션 자동 순회)
+ * maxPages: 최대 순회 페이지 수 (기본 10 = 최대 1,000건)
+ */
+export async function fetchAllBizinfoPrograms(maxPages = 10) {
+  const allItems: ReturnType<typeof mapBizinfoItem>[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const items = await fetchBizinfoPrograms(page, 100);
+    allItems.push(...items);
+    console.log(`[Bizinfo] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
+    if (items.length < 100) break; // 마지막 페이지
+  }
+  return allItems;
+}
+
+function mapBizinfoItem(item: BizinfoItem) {
+  return {
+    source: "bizinfo" as const,
+    source_id: item.pblancId || item.pblancNm,
+    title: item.pblancNm,
+    summary: item.bsnsSumryCn,
+    target: item.trgetNm,
+    hashtags: item.hashtags
+      ? item.hashtags.split(",").map((h) => h.trim()).filter(Boolean)
+      : [],
+    apply_period: item.reqstBeginEndDe,
+    institution: item.jrsdInsttNm || item.excInsttNm,
+    detail_url: item.rceptEngnHmpgUrl,
+    attachment_urls: {
+      pdf: item.printFlpthNm,
+      file: item.flpthNm,
+    },
+    raw_data: item as unknown as Record<string, any>,
+  };
+}
+
 export async function fetchBizinfoPrograms(pageIndex = 1, pageUnit = 100) {
   const crtfcKey = process.env.BIZINFO_CRTFC_KEY;
   if (!crtfcKey) throw new Error("BIZINFO_CRTFC_KEY not set");
@@ -54,25 +90,5 @@ export async function fetchBizinfoPrograms(pageIndex = 1, pageUnit = 100) {
   const data: BizinfoResponse = await response.json();
   const items = data.jsonArray ?? [];
 
-  return items.map((item) => ({
-    source: "bizinfo" as const,
-    source_id: item.pblancId || item.pblancNm,
-    title: item.pblancNm,
-    summary: item.bsnsSumryCn,
-    target: item.trgetNm,
-    hashtags: item.hashtags
-      ? item.hashtags
-          .split(",")
-          .map((h) => h.trim())
-          .filter(Boolean)
-      : [],
-    apply_period: item.reqstBeginEndDe,
-    institution: item.jrsdInsttNm || item.excInsttNm,
-    detail_url: item.rceptEngnHmpgUrl,
-    attachment_urls: {
-      pdf: item.printFlpthNm,
-      file: item.flpthNm,
-    },
-    raw_data: item,
-  }));
+  return items.map(mapBizinfoItem);
 }

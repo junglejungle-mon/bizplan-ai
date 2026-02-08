@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
 import { collectAllPrograms } from "@/lib/pipeline/collector";
 
+// Vercel Serverless Function 타임아웃 확대 (Hobby: 최대 60초, Pro: 최대 300초)
+export const maxDuration = 300;
+
 /**
  * GET /api/programs/collect
- * Vercel Cron Job: 매일 09:00, 18:00 (KST) = 00:00, 09:00 (UTC)
+ * Vercel Cron Job: 매일 09:00 (KST) = 00:00 (UTC)
+ * 전체 페이지 수집 + 자동 매칭 트리거
  * 수동 호출도 가능 (인증 필요)
  */
 export async function GET(request: NextRequest) {

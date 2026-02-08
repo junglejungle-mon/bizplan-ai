@@ -27,6 +27,24 @@ interface KStartupResponse {
   totalCount?: number;
 }
 
+type KStartupResultItem = Awaited<ReturnType<typeof fetchKStartupPrograms>>[number];
+
+/**
+ * 전체 페이지 수집 (페이지네이션 자동 순회)
+ * K-Startup은 데이터가 많으므로 perPage=500으로 큰 단위 수집
+ * maxPages: 최대 순회 페이지 수 (기본 5 = 최대 2,500건)
+ */
+export async function fetchAllKStartupPrograms(maxPages = 5) {
+  const allItems: KStartupResultItem[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const items = await fetchKStartupPrograms(page, 500);
+    allItems.push(...items);
+    console.log(`[K-Startup] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
+    if (items.length < 500) break; // 마지막 페이지
+  }
+  return allItems;
+}
+
 export async function fetchKStartupPrograms(page = 1, perPage = 100) {
   const serviceKey = process.env.DATA_GO_KR_SERVICE_KEY;
   if (!serviceKey) throw new Error("DATA_GO_KR_SERVICE_KEY not set");

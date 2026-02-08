@@ -3,6 +3,23 @@
  * XML 응답 → 파싱하여 사용
  */
 
+type MssItem = Awaited<ReturnType<typeof fetchMssBizPrograms>>[number];
+
+/**
+ * 전체 페이지 수집 (페이지네이션 자동 순회)
+ * maxPages: 최대 순회 페이지 수 (기본 20 = 최대 2,000건)
+ */
+export async function fetchAllMssBizPrograms(maxPages = 20) {
+  const allItems: MssItem[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const items = await fetchMssBizPrograms(page, 100);
+    allItems.push(...items);
+    console.log(`[MSS] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
+    if (items.length < 100) break; // 마지막 페이지
+  }
+  return allItems;
+}
+
 export async function fetchMssBizPrograms(pageNo = 1, numOfRows = 100) {
   const serviceKey = process.env.DATA_GO_KR_SERVICE_KEY;
   if (!serviceKey) throw new Error("DATA_GO_KR_SERVICE_KEY not set");

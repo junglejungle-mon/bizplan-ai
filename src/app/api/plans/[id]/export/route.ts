@@ -49,6 +49,12 @@ export async function POST(
   const companyName = (plan as any).companies?.name || "회사명";
   const dateStr = new Date().toISOString().slice(0, 10);
 
+  // evaluation_criteria에서 chart_data, kpi_data 추출
+  const evalCriteria = (plan as any).evaluation_criteria || {};
+  const chartData = evalCriteria.chart_data || {};
+  const kpiData = evalCriteria.kpi_data || {};
+  const templateType = evalCriteria.template_type || "custom";
+
   // ===== DOCX 내보내기 =====
   if (format === "docx") {
     try {
@@ -60,6 +66,9 @@ export async function POST(
           content: s.content,
           section_order: s.section_order,
         })),
+        chartData,
+        kpiData,
+        templateType,
       });
 
       const filename = `${companyName}_사업계획서_${dateStr}.docx`;

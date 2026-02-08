@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
+import { MobileMenuButton } from "@/components/layout/sidebar";
 
 export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   const pathname = usePathname();
@@ -11,14 +12,17 @@ export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center space-x-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">
-            BP
-          </div>
-          <span className="text-xl font-bold text-gray-900">
-            BizPlan <span className="text-blue-600">AI</span>
-          </span>
-        </Link>
+        <div className="flex items-center gap-2">
+          {isLoggedIn && <MobileMenuButton />}
+          <Link href="/" className="flex items-center space-x-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">
+              BP
+            </div>
+            <span className="text-xl font-bold text-gray-900">
+              BizPlan <span className="text-blue-600">AI</span>
+            </span>
+          </Link>
+        </div>
 
         <nav className="hidden md:flex items-center space-x-1">
           {isLoggedIn ? (

@@ -1,6 +1,7 @@
 /**
- * 마크다운 → DOCX 변환 유틸리티
+ * 마크다운 → DOCX 변환 유틸리티 (v2 — 인포그래픽 강화)
  * docx 라이브러리를 사용하여 사업계획서를 DOCX 파일로 생성
+ * Stage 1.5에서 추출한 chart_data, kpi_data를 활용하여 시각적 요소 삽입
  */
 
 import {
@@ -19,7 +20,45 @@ import {
   Header,
   convertMillimetersToTwip,
   Packer,
+  ShadingType,
+  VerticalAlign,
 } from "docx";
+
+// ===== 색상 팔레트 (infographic-guide.md 기반) =====
+const COLORS = {
+  primary: "1E40AF",     // 딥블루
+  secondary: "3B82F6",   // 블루
+  accent: "F59E0B",      // 앰버/골드
+  background: "F8FAFC",  // 라이트그레이
+  textDark: "1E293B",    // 다크
+  positive: "22C55E",    // 그린
+  negative: "EF4444",    // 레드
+  neutral: "94A3B8",     // 그레이
+  headerBg: "1E40AF",    // 테이블 헤더 배경 (딥블루)
+  headerText: "FFFFFF",  // 테이블 헤더 텍스트 (흰색)
+  highlightBg: "EFF6FF", // 하이라이트 카드 배경
+  highlightBorder: "3B82F6",
+};
+
+// ===== chart_data 인터페이스 =====
+interface ChartDataItem {
+  type: "bar" | "pie" | "line" | "tam_sam_som" | "comparison_table" | "timeline" | "highlight_cards";
+  title: string;
+  data: Record<string, unknown>;
+}
+
+interface KpiData {
+  revenue?: string;
+  revenue_growth?: string;
+  employees?: string;
+  tam?: string;
+  sam?: string;
+  som?: string;
+  key_competitors?: string[];
+  patents?: string;
+  milestones?: Array<{ date: string; event: string }>;
+  [key: string]: unknown;
+}
 
 interface DocxOptions {
   title: string;
@@ -29,6 +68,9 @@ interface DocxOptions {
     content: string | null;
     section_order: number;
   }>;
+  chartData?: Record<string, ChartDataItem[]>;  // 섹션별 차트 데이터
+  kpiData?: KpiData;                              // 전체 KPI 데이터
+  templateType?: string;                          // 양식 유형
 }
 
 /**
@@ -46,9 +88,8 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
 
     // 빈 줄
     if (line.trim() === "") {
-      // 테이블 종료 처리
       if (inTable && tableRows.length > 0) {
-        paragraphs.push(...buildTable(tableHeaders, tableRows));
+        paragraphs.push(...buildStyledTable(tableHeaders, tableRows));
         inTable = false;
         tableRows = [];
         tableHeaders = [];
@@ -63,7 +104,7 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
         .slice(1, -1)
         .map((c) => c.trim());
 
-      // 구분선 (---|---) 건너뛰기
+      // 구분선 건너뛰기
       if (cells.every((c) => /^[-:]+$/.test(c))) {
         continue;
       }
@@ -77,9 +118,9 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
       continue;
     }
 
-    // 테이블 종료 (테이블 아닌 줄 도달)
+    // 테이블 종료
     if (inTable && tableRows.length > 0) {
-      paragraphs.push(...buildTable(tableHeaders, tableRows));
+      paragraphs.push(...buildStyledTable(tableHeaders, tableRows));
       inTable = false;
       tableRows = [];
       tableHeaders = [];
@@ -93,8 +134,9 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
             new TextRun({
               text: line.replace("### ", ""),
               bold: true,
-              size: 24, // 12pt
+              size: 24,
               font: "맑은 고딕",
+              color: COLORS.primary,
             }),
           ],
           spacing: { before: 240, after: 120 },
@@ -103,7 +145,7 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
       continue;
     }
 
-    // ## 중제목 (H2) - 보통 섹션 안에서 서브 타이틀
+    // ## 중제목 (H2)
     if (line.startsWith("## ")) {
       paragraphs.push(
         new Paragraph({
@@ -111,11 +153,15 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
             new TextRun({
               text: line.replace("## ", ""),
               bold: true,
-              size: 26, // 13pt
+              size: 26,
               font: "맑은 고딕",
+              color: COLORS.primary,
             }),
           ],
           spacing: { before: 300, after: 120 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: COLORS.secondary },
+          },
         })
       );
       continue;
@@ -135,7 +181,7 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
       continue;
     }
 
-    // 불릿 리스트 (-, *, •)
+    // 불릿 리스트
     if (/^[\s]*[-*•]\s/.test(line)) {
       const indent = line.match(/^(\s*)/)?.[1]?.length || 0;
       const text = line.replace(/^[\s]*[-*•]\s+/, "");
@@ -173,7 +219,7 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
 
   // 마지막 테이블 처리
   if (inTable && tableRows.length > 0) {
-    paragraphs.push(...buildTable(tableHeaders, tableRows));
+    paragraphs.push(...buildStyledTable(tableHeaders, tableRows));
   }
 
   return paragraphs;
@@ -184,7 +230,6 @@ function parseMarkdownToParagraphs(markdown: string): Paragraph[] {
  */
 function parseInlineFormatting(text: string): TextRun[] {
   const runs: TextRun[] = [];
-  // **bold** 와 일반 텍스트 분리
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
 
   for (const part of parts) {
@@ -193,8 +238,9 @@ function parseInlineFormatting(text: string): TextRun[] {
         new TextRun({
           text: part.slice(2, -2),
           bold: true,
-          size: 20, // 10pt
+          size: 20,
           font: "맑은 고딕",
+          color: COLORS.textDark,
         })
       );
     } else if (part.length > 0) {
@@ -216,16 +262,16 @@ function parseInlineFormatting(text: string): TextRun[] {
 }
 
 /**
- * 마크다운 테이블을 DOCX Table로 변환
+ * 인포그래픽 스타일 테이블 (헤더: 딥블루 배경 + 흰색 텍스트)
  */
-function buildTable(headers: string[], rows: string[][]): Paragraph[] {
+function buildStyledTable(headers: string[], rows: string[][]): Paragraph[] {
   const result: Paragraph[] = [];
 
   try {
     const table = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
-        // 헤더 행
+        // 헤더 행 — 딥블루 배경 + 흰색 텍스트
         new TableRow({
           tableHeader: true,
           children: headers.map(
@@ -239,18 +285,21 @@ function buildTable(headers: string[], rows: string[][]): Paragraph[] {
                         bold: true,
                         size: 18,
                         font: "맑은 고딕",
+                        color: COLORS.headerText,
                       }),
                     ],
                     alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60 },
                   }),
                 ],
-                shading: { color: "auto", fill: "E8EDF3" },
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.headerBg },
+                verticalAlign: VerticalAlign.CENTER,
               })
           ),
         }),
-        // 데이터 행
+        // 데이터 행 — 짝/홀수 줄 배경색
         ...rows.map(
-          (row) =>
+          (row, idx) =>
             new TableRow({
               children: row.map(
                 (cell) =>
@@ -261,6 +310,10 @@ function buildTable(headers: string[], rows: string[][]): Paragraph[] {
                         spacing: { before: 40, after: 40 },
                       }),
                     ],
+                    shading: idx % 2 === 0
+                      ? { type: ShadingType.CLEAR, color: "auto", fill: "FFFFFF" }
+                      : { type: ShadingType.CLEAR, color: "auto", fill: COLORS.background },
+                    verticalAlign: VerticalAlign.CENTER,
                   })
               ),
             })
@@ -269,19 +322,16 @@ function buildTable(headers: string[], rows: string[][]): Paragraph[] {
     });
 
     result.push(
-      new Paragraph({ children: [], spacing: { before: 120 } }), // 테이블 위 간격
-      table as unknown as Paragraph, // docx 라이브러리 타입 호환
-      new Paragraph({ children: [], spacing: { after: 120 } }) // 테이블 아래 간격
+      new Paragraph({ children: [], spacing: { before: 120 } }),
+      table as unknown as Paragraph,
+      new Paragraph({ children: [], spacing: { after: 120 } })
     );
   } catch {
-    // 테이블 변환 실패 시 일반 텍스트로 표시
     result.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: [headers.join(" | "), ...rows.map((r) => r.join(" | "))].join(
-              "\n"
-            ),
+            text: [headers.join(" | "), ...rows.map((r) => r.join(" | "))].join("\n"),
             size: 18,
             font: "맑은 고딕",
           }),
@@ -294,10 +344,453 @@ function buildTable(headers: string[], rows: string[][]): Paragraph[] {
 }
 
 /**
- * 사업계획서를 DOCX Buffer로 변환
+ * KPI 하이라이트 카드 (3~4열 테이블 형태)
+ * ┌─────────┬─────────┬─────────┐
+ * │   💰     │   📈    │   🏢    │
+ * │  30억    │  275%   │  15곳   │
+ * │  매출    │  성장률  │  고객사  │
+ * └─────────┴─────────┴─────────┘
+ */
+function buildKpiHighlightCards(kpiData: KpiData): Paragraph[] {
+  const result: Paragraph[] = [];
+  const cards: Array<{ icon: string; value: string; label: string }> = [];
+
+  if (kpiData.revenue) cards.push({ icon: "💰", value: kpiData.revenue, label: "매출" });
+  if (kpiData.revenue_growth) cards.push({ icon: "📈", value: kpiData.revenue_growth, label: "성장률" });
+  if (kpiData.employees) cards.push({ icon: "👥", value: kpiData.employees, label: "임직원" });
+  if (kpiData.tam) cards.push({ icon: "🌍", value: kpiData.tam, label: "TAM" });
+  if (kpiData.patents) cards.push({ icon: "📋", value: kpiData.patents, label: "특허" });
+
+  if (cards.length === 0) return result;
+
+  // 최대 4개까지만
+  const displayCards = cards.slice(0, 4);
+
+  try {
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        // 아이콘 행
+        new TableRow({
+          children: displayCards.map(
+            (card) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: card.icon,
+                        size: 28,
+                        font: "맑은 고딕",
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 80, after: 40 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.highlightBg },
+                borders: {
+                  top: { style: BorderStyle.SINGLE, size: 2, color: COLORS.highlightBorder },
+                  left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+        // 수치 행
+        new TableRow({
+          children: displayCards.map(
+            (card) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: card.value,
+                        bold: true,
+                        size: 28,
+                        font: "맑은 고딕",
+                        color: COLORS.primary,
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 40, after: 40 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.highlightBg },
+                borders: {
+                  left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                  bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+        // 라벨 행
+        new TableRow({
+          children: displayCards.map(
+            (card) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: card.label,
+                        size: 18,
+                        font: "맑은 고딕",
+                        color: COLORS.neutral,
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 40, after: 80 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.highlightBg },
+                borders: {
+                  bottom: { style: BorderStyle.SINGLE, size: 2, color: COLORS.highlightBorder },
+                  left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                  top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+      ],
+    });
+
+    result.push(
+      new Paragraph({ children: [], spacing: { before: 160 } }),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "핵심 성과 지표",
+            bold: true,
+            size: 24,
+            font: "맑은 고딕",
+            color: COLORS.primary,
+          }),
+        ],
+        spacing: { before: 80, after: 80 },
+      }),
+      table as unknown as Paragraph,
+      new Paragraph({ children: [], spacing: { after: 160 } }),
+    );
+  } catch {
+    // 하이라이트 카드 생성 실패 시 일반 텍스트로
+    const text = displayCards.map((c) => `${c.label}: ${c.value}`).join(" | ");
+    result.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text, bold: true, size: 20, font: "맑은 고딕" }),
+        ],
+        spacing: { before: 120, after: 120 },
+      })
+    );
+  }
+
+  return result;
+}
+
+/**
+ * TAM/SAM/SOM 텍스트 표현 (동심원은 DOCX에서 어려우므로 강조 테이블로)
+ */
+function buildTamSamSomTable(data: Record<string, unknown>): Paragraph[] {
+  const result: Paragraph[] = [];
+  const tam = (data as Record<string, string>).tam || "";
+  const sam = (data as Record<string, string>).sam || "";
+  const som = (data as Record<string, string>).som || "";
+  const cagr = (data as Record<string, string>).cagr || "";
+
+  if (!tam && !sam && !som) return result;
+
+  try {
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: ["구분", "시장 규모", "설명"].map(
+            (h) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: h, bold: true, size: 18, font: "맑은 고딕", color: COLORS.headerText })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.headerBg },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+        ...[
+          { label: "TAM", value: tam, desc: "전체 시장 규모 (Total Addressable Market)" },
+          { label: "SAM", value: sam, desc: "유효 시장 규모 (Serviceable Addressable Market)" },
+          { label: "SOM", value: som, desc: "초기 목표 시장 (Serviceable Obtainable Market)" },
+        ].map(
+          (row, idx) =>
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [new TextRun({ text: row.label, bold: true, size: 20, font: "맑은 고딕", color: COLORS.primary })],
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 40 },
+                    }),
+                  ],
+                  shading: { type: ShadingType.CLEAR, color: "auto", fill: idx % 2 === 0 ? "FFFFFF" : COLORS.background },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [new TextRun({ text: row.value, bold: true, size: 22, font: "맑은 고딕", color: COLORS.textDark })],
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 40 },
+                    }),
+                  ],
+                  shading: { type: ShadingType.CLEAR, color: "auto", fill: idx % 2 === 0 ? "FFFFFF" : COLORS.background },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [new TextRun({ text: row.desc, size: 18, font: "맑은 고딕", color: COLORS.neutral })],
+                      spacing: { before: 40, after: 40 },
+                    }),
+                  ],
+                  shading: { type: ShadingType.CLEAR, color: "auto", fill: idx % 2 === 0 ? "FFFFFF" : COLORS.background },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+              ],
+            })
+        ),
+      ],
+    });
+
+    result.push(
+      new Paragraph({ children: [], spacing: { before: 120 } }),
+      table as unknown as Paragraph,
+    );
+
+    if (cagr) {
+      result.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: "※ 시장 성장률 (CAGR): ", size: 18, font: "맑은 고딕", color: COLORS.neutral }),
+            new TextRun({ text: cagr, bold: true, size: 20, font: "맑은 고딕", color: COLORS.positive }),
+          ],
+          spacing: { before: 60, after: 120 },
+        })
+      );
+    }
+  } catch {
+    // fallback
+    result.push(
+      new Paragraph({
+        children: [new TextRun({ text: `TAM: ${tam} | SAM: ${sam} | SOM: ${som}`, bold: true, size: 20, font: "맑은 고딕" })],
+      })
+    );
+  }
+
+  return result;
+}
+
+/**
+ * 타임라인/로드맵 표 (Q1→Q2→Q3→Q4 형태)
+ */
+function buildTimelineTable(data: Record<string, unknown>): Paragraph[] {
+  const result: Paragraph[] = [];
+  const events = (data as { events?: Array<{ date: string; event: string }> }).events;
+  if (!events || events.length === 0) return result;
+
+  try {
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        // 기간 행
+        new TableRow({
+          children: events.map(
+            (e) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: e.date, bold: true, size: 18, font: "맑은 고딕", color: COLORS.headerText })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.secondary },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+        // 화살표 행
+        new TableRow({
+          children: events.map(
+            (_e, idx) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: idx < events.length - 1 ? "▼" : "★", size: 20, font: "맑은 고딕", color: COLORS.secondary })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 20, after: 20 },
+                  }),
+                ],
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+        // 이벤트 행
+        new TableRow({
+          children: events.map(
+            (e) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: e.event, size: 18, font: "맑은 고딕", color: COLORS.textDark })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 40, after: 60 },
+                  }),
+                ],
+                shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.highlightBg },
+                verticalAlign: VerticalAlign.CENTER,
+              })
+          ),
+        }),
+      ],
+    });
+
+    result.push(
+      new Paragraph({ children: [], spacing: { before: 120 } }),
+      table as unknown as Paragraph,
+      new Paragraph({ children: [], spacing: { after: 120 } }),
+    );
+  } catch {
+    // fallback
+    for (const e of events) {
+      result.push(
+        new Paragraph({
+          children: [new TextRun({ text: `${e.date}: ${e.event}`, size: 18, font: "맑은 고딕" })],
+          bullet: { level: 0 },
+        })
+      );
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 차트 데이터를 DOCX 시각 요소로 변환
+ * (DOCX에서는 실제 차트 렌더링이 어려우므로 강조 표/테이블로 표현)
+ */
+function buildChartElement(chart: ChartDataItem): Paragraph[] {
+  const result: Paragraph[] = [];
+
+  // 차트 제목
+  result.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `📊 ${chart.title}`,
+          bold: true,
+          size: 22,
+          font: "맑은 고딕",
+          color: COLORS.primary,
+        }),
+      ],
+      spacing: { before: 160, after: 80 },
+    })
+  );
+
+  switch (chart.type) {
+    case "tam_sam_som":
+      result.push(...buildTamSamSomTable(chart.data));
+      break;
+
+    case "timeline":
+      result.push(...buildTimelineTable(chart.data));
+      break;
+
+    case "highlight_cards": {
+      const items = (chart.data as { items?: Array<{ label: string; value: string }> }).items;
+      if (items && items.length > 0) {
+        const kpiLike: KpiData = {};
+        for (const item of items) {
+          if (item.label.includes("매출")) kpiLike.revenue = item.value;
+          else if (item.label.includes("성장")) kpiLike.revenue_growth = item.value;
+          else if (item.label.includes("직원") || item.label.includes("임직원")) kpiLike.employees = item.value;
+          else if (item.label.includes("특허")) kpiLike.patents = item.value;
+        }
+        if (Object.keys(kpiLike).length > 0) {
+          result.push(...buildKpiHighlightCards(kpiLike));
+        }
+      }
+      break;
+    }
+
+    case "comparison_table": {
+      const { headers, rows: tableRows } = chart.data as { headers?: string[]; rows?: string[][] };
+      if (headers && tableRows) {
+        result.push(...buildStyledTable(headers, tableRows));
+      }
+      break;
+    }
+
+    case "bar":
+    case "line": {
+      // 막대/선 차트 → 데이터 테이블로 표현
+      const { labels, values, unit } = chart.data as { labels?: string[]; values?: number[]; unit?: string };
+      if (labels && values) {
+        const unitStr = unit || "";
+        result.push(
+          ...buildStyledTable(
+            ["항목", "값"],
+            labels.map((l, i) => [l, `${values[i]?.toLocaleString() || "-"}${unitStr}`])
+          )
+        );
+      }
+      break;
+    }
+
+    case "pie": {
+      // 파이 차트 → 비율 테이블
+      const { items } = chart.data as { items?: Array<{ name: string; value: number; unit?: string }> };
+      if (items) {
+        const total = items.reduce((sum, item) => sum + (item.value || 0), 0);
+        result.push(
+          ...buildStyledTable(
+            ["항목", "값", "비율"],
+            items.map((item) => [
+              item.name,
+              `${item.value?.toLocaleString() || "-"}${item.unit || ""}`,
+              total > 0 ? `${((item.value / total) * 100).toFixed(1)}%` : "-",
+            ])
+          )
+        );
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+
+  return result;
+}
+
+/**
+ * 사업계획서를 DOCX Buffer로 변환 (v2 — 인포그래픽 강화)
  */
 export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
-  const { title, companyName, sections } = opts;
+  const { title, companyName, sections, chartData, kpiData } = opts;
   const today = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
@@ -315,9 +808,9 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
           new TextRun({
             text: `${section.section_order}. ${section.section_name}`,
             bold: true,
-            size: 28, // 14pt
+            size: 28,
             font: "맑은 고딕",
-            color: "1A365D",
+            color: COLORS.primary,
           }),
         ],
         heading: HeadingLevel.HEADING_2,
@@ -326,11 +819,16 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
           bottom: {
             style: BorderStyle.SINGLE,
             size: 2,
-            color: "3182CE",
+            color: COLORS.secondary,
           },
         },
       })
     );
+
+    // 첫 번째 섹션(개요)에 KPI 하이라이트 카드 삽입
+    if (section.section_order === 1 && kpiData) {
+      sectionParagraphs.push(...buildKpiHighlightCards(kpiData));
+    }
 
     // 섹션 콘텐츠
     if (section.content) {
@@ -350,6 +848,15 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
           ],
         })
       );
+    }
+
+    // 차트 데이터가 있으면 섹션 끝에 인포그래픽 삽입
+    const sectionKey = `section_${section.section_order}`;
+    const sectionCharts = chartData?.[sectionKey];
+    if (sectionCharts && sectionCharts.length > 0) {
+      for (const chart of sectionCharts) {
+        sectionParagraphs.push(...buildChartElement(chart));
+      }
     }
 
     // 섹션 간 여백
@@ -428,9 +935,9 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
               new TextRun({
                 text: title,
                 bold: true,
-                size: 52, // 26pt
+                size: 52,
                 font: "맑은 고딕",
-                color: "1A365D",
+                color: COLORS.primary,
               }),
             ],
             alignment: AlignmentType.CENTER,
@@ -440,7 +947,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
             children: [
               new TextRun({
                 text: companyName,
-                size: 32, // 16pt
+                size: 32,
                 font: "맑은 고딕",
                 color: "4A5568",
               }),
@@ -466,7 +973,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
               bottom: {
                 style: BorderStyle.SINGLE,
                 size: 3,
-                color: "3182CE",
+                color: COLORS.secondary,
               },
             },
             spacing: { after: 200 },
@@ -498,7 +1005,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
                 bold: true,
                 size: 36,
                 font: "맑은 고딕",
-                color: "1A365D",
+                color: COLORS.primary,
               }),
             ],
             alignment: AlignmentType.CENTER,
