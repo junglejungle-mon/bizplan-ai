@@ -23,28 +23,26 @@ export function ExportButton({ planId }: ExportButtonProps) {
         body: JSON.stringify({ format }),
       });
 
-      if (!response.ok) throw new Error("내보내기 실패");
-
-      if (format === "md") {
-        // 마크다운 파일 다운로드
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const disposition = response.headers.get("Content-Disposition");
-        const filenameMatch = disposition?.match(/filename="(.+)"/);
-        a.download = filenameMatch
-          ? decodeURIComponent(filenameMatch[1])
-          : "사업계획서.md";
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
-      } else {
-        // DOCX/기타 미지원 포맷
-        const data = await response.json();
-        alert(data.message || "해당 형식은 아직 지원되지 않습니다.");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "내보내기 실패");
       }
+
+      // 파일 다운로드 (md, docx 모두 동일 처리)
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition");
+      const filenameMatch = disposition?.match(/filename="(.+)"/);
+      const defaultName = format === "docx" ? "사업계획서.docx" : "사업계획서.md";
+      a.download = filenameMatch
+        ? decodeURIComponent(filenameMatch[1])
+        : defaultName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
     } catch (err) {
       alert(`내보내기 오류: ${err}`);
     }
@@ -84,11 +82,11 @@ export function ExportButton({ planId }: ExportButtonProps) {
               마크다운 (.md)
             </button>
             <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed"
-              disabled
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+              onClick={() => handleExport("docx")}
             >
-              <FileType className="h-4 w-4" />
-              DOCX (준비중)
+              <FileType className="h-4 w-4 text-blue-500" />
+              DOCX (.docx)
             </button>
             <button
               className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed"
