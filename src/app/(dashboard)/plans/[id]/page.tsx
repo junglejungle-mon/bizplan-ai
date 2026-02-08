@@ -3,10 +3,11 @@ import { redirect, notFound } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, RefreshCw, Presentation } from "lucide-react";
+import { ArrowLeft, Presentation } from "lucide-react";
 import Link from "next/link";
 import { PlanGeneratorButton } from "@/components/plans/plan-generator-button";
-import { SectionContent } from "@/components/plans/section-content";
+import { SectionCard } from "@/components/plans/section-card";
+import { ExportButton } from "@/components/plans/export-button";
 
 export default async function PlanEditorPage({
   params,
@@ -71,9 +72,7 @@ export default async function PlanEditorPage({
               <Presentation className="h-4 w-4" /> IR PPT 생성
             </Button>
           </Link>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="h-4 w-4" /> 내보내기
-          </Button>
+          <ExportButton planId={id} />
         </div>
       </div>
 
@@ -99,32 +98,12 @@ export default async function PlanEditorPage({
         <div className="lg:col-span-2 space-y-6">
           {sections && sections.length > 0 ? (
             sections.map((section: any, i: number) => (
-              <Card key={section.id} id={`section-${section.id}`}>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-base">
-                    {i + 1}. {section.section_name}
-                  </CardTitle>
-                  <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                    <RefreshCw className="h-3 w-3" /> AI 재생성
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {section.content ? (
-                    <SectionContent content={section.content} />
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">
-                      아직 생성되지 않았습니다
-                    </p>
-                  )}
-                  {section.guidelines && (
-                    <div className="mt-4 rounded-lg bg-gray-50 p-3">
-                      <p className="text-xs text-gray-500">
-                        <strong>작성 지침:</strong> {section.guidelines}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <SectionCard
+                key={section.id}
+                planId={id}
+                section={section}
+                index={i}
+              />
             ))
           ) : (
             <Card>
