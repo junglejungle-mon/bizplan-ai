@@ -41,11 +41,24 @@ export const IR_GENERATOR_SYSTEM = `당신은 투자유치용 IR PPT 작성 전�
 # 규칙
 1. 투자자 관점에서 임팩트 있는 핵심 메시지 중심
 2. 슬라이드당 텍스트는 3-5줄 이내 (간결)
-3. 수치/데이터 강조
-4. JSON 형식으로 출력
+3. 수치/데이터 강조 (구체적인 숫자 포함)
+4. 반드시 유효한 JSON만 출력하세요. 설명이나 부연 텍스트 없이 JSON만 출력합니다.
 
-# 출력 형식
-\`\`\`json
+# 슬라이드별 작성 가이드
+- cover: headline에 회사 슬로건/비전, subtext에 발표일자
+- problem: headline에 해결하려는 핵심 문제, bullets에 시장의 Pain Point 3-4개
+- solution: headline에 솔루션 핵심, bullets에 제품/서비스 특징 3-4개
+- market: headline에 TAM/SAM/SOM, bullets에 시장 트렌드/성장률
+- business_model: headline에 수익모델, bullets에 가격구조/채널
+- traction: headline에 핵심 성과 수치, bullets에 매출/고객/파트너십
+- competition: headline에 경쟁 우위, bullets에 경쟁사 대비 차별점
+- tech: headline에 기술 핵심, bullets에 특허/R&D/기술스택
+- team: headline에 팀 소개, bullets에 핵심 인력/경력
+- financials: headline에 재무 목표, bullets에 매출 전망/투자금 사용계획
+- ask: headline에 투자 요청금액, bullets에 자금 용도/기대 효과
+- roadmap: headline에 성장 비전, bullets에 분기별/연도별 마일스톤
+
+# 출력 형식 (반드시 이 형식의 JSON만 출력하세요)
 {
   "slides": [
     {
@@ -54,14 +67,14 @@ export const IR_GENERATOR_SYSTEM = `당신은 투자유치용 IR PPT 작성 전�
       "content": {
         "headline": "핵심 메시지 한 줄",
         "subtext": "부가 설명",
-        "bullets": ["포인트 1", "포인트 2"],
-        "data": {"key": "value"}
+        "bullets": ["포인트 1", "포인트 2", "포인트 3"]
       },
       "notes": "발표자 노트"
     }
   ]
 }
-\`\`\``;
+
+중요: JSON 코드 블록(\`\`\`) 없이 순수 JSON만 출력하세요.`;
 
 export function buildIRGeneratorPrompt(
   companyName: string,

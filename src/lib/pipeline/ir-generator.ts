@@ -76,11 +76,12 @@ export async function* generateIRPresentation(
     };
 
     // 3. Claude로 슬라이드 콘텐츠 생성
+    // 입력 크기를 줄여서 응답 속도 향상 (각 섹션 최대 800자)
     const planSections = (sections ?? [])
       .filter((s: any) => s.content)
       .map((s: any) => ({
         section_name: s.section_name,
-        content: s.content,
+        content: s.content.substring(0, 800),
       }));
 
     const irResult = await callClaude({
@@ -91,7 +92,7 @@ export async function* generateIRPresentation(
           role: "user",
           content: buildIRGeneratorPrompt(
             company.name,
-            company.business_content,
+            company.business_content.substring(0, 1500),
             planSections
           ),
         },
@@ -105,15 +106,38 @@ export async function* generateIRPresentation(
       data: { step: "슬라이드 콘텐츠 생성", progress: 60 },
     };
 
-    // 4. JSON 파싱
+    // 4. JSON 파싱 (Claude 응답에서 JSON 추출)
     let slides: any[] = [];
     try {
-      const jsonMatch = irResult.match(/\{[\s\S]*"slides"[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      let jsonStr = "";
+
+      // 방법 1: ```json ... ``` 코드 블록에서 추출
+      const codeBlockMatch = irResult.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      } else {
+        // 방법 2: 첫번째 { 부터 마지막 } 까지
+        const firstBrace = irResult.indexOf("{");
+        const lastBrace = irResult.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          jsonStr = irResult.substring(firstBrace, lastBrace + 1);
+        }
+      }
+
+      if (jsonStr) {
+        const parsed = JSON.parse(jsonStr);
         slides = parsed.slides || [];
       }
-    } catch {
+
+      if (slides.length === 0) {
+        throw new Error("슬라이드 데이터가 비어있습니다");
+      }
+    } catch (parseError) {
+      console.error("[IR Generator] JSON 파싱 실패:", parseError);
+      console.error(
+        "[IR Generator] Claude 원본 응답 (처음 500자):",
+        irResult.substring(0, 500)
+      );
       // 파싱 실패 시 기본 슬라이드 생성
       slides = IR_SLIDE_TYPES.map((type, i) => ({
         slide_type: type,
