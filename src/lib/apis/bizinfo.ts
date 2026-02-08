@@ -45,7 +45,10 @@ export async function fetchBizinfoPrograms(pageIndex = 1, pageUnit = 100) {
   );
 
   if (!response.ok) {
-    throw new Error(`Bizinfo API error: ${response.status}`);
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(
+      `Bizinfo API error: ${response.status} — ${errorBody.substring(0, 200)}`
+    );
   }
 
   const data: BizinfoResponse = await response.json();
