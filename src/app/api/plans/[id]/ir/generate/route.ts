@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateIRPresentation } from "@/lib/pipeline/ir-generator";
 
+// Vercel serverless function 타임아웃 확장 (SSE 스트리밍 — 최대 300초)
+export const maxDuration = 300;
+
 /**
  * POST /api/plans/[id]/ir/generate
  * IR PPT 자동 생성 (SSE 스트리밍)

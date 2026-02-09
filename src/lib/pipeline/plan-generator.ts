@@ -1,11 +1,13 @@
 /**
- * 사업계획서 자동 생성 파이프라인 — 3단계 공정 v3
+ * 사업계획서 자동 생성 파이프라인 — 3단계 공정 v4
  * Stage 0: 양식 인식 + 자동 분류 + 평가 기준 추출
  * Stage 1: 텍스트 초안 (선정 패턴 + 리서치 + 섹션별 작성)
  * Stage 1.5: 품질 검증 + 차트 데이터 추출
  * Stage 2: DOCX/PDF 내보내기 시 인포그래픽 반영 (export 단에서 처리)
  *
  * SSE 스트리밍으로 실시간 진행률 표시
+ * ★ v4: 이어쓰기(Resume) 지원 — Vercel 60초 타임아웃 대응
+ *   이미 작성된 섹션은 건너뛰고 미완성 섹션부터 이어서 생성
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -92,51 +94,95 @@ export async function* generateBusinessPlan(
     }
 
     // ========================================
-    // Stage 0: 양식 인식 + 자동 분류
+    // ★ 이어쓰기(Resume) 체크 — 기존 섹션 존재 시 건너뛰기
     // ========================================
-    yield {
-      type: "progress",
-      data: { step: "Stage 0: 양식 분류", progress: 3 },
-    };
+    const { data: existingSections } = await supabase
+      .from("plan_sections")
+      .select("section_order, section_name, guidelines, content, evaluation_weight")
+      .eq("plan_id", opts.planId)
+      .order("section_order");
 
-    let templateType: TemplateType = "custom";
+    const isResume = existingSections && existingSections.length > 0;
+    const completedSections = new Set<number>();
+    let previousSections = "";
 
-    if (opts.templateOcrText) {
-      // 0-1. 양식 자동 분류 (Haiku — 빠름)
-      try {
-        const classifyResult = await callClaude({
-          model: "claude-3-5-haiku-20241022",
-          system: TEMPLATE_CLASSIFIER_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: buildTemplateClassifierPrompt(opts.templateOcrText),
-            },
-          ],
-          temperature: 0,
-        });
-
-        try {
-          const jsonMatch = classifyResult.match(
-            /\{[\s\S]*"template_type"[\s\S]*\}/
-          );
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            templateType = parsed.template_type as TemplateType;
-            console.log(
-              `[PlanGen] 양식 분류: ${templateType} (confidence: ${parsed.confidence})`
-            );
-          }
-        } catch {}
-      } catch (e) {
-        console.error("[PlanGen] 양식 분류 실패:", e);
+    if (isResume) {
+      // 이미 작성된 섹션 식별
+      for (const es of existingSections!) {
+        if (es.content && es.content.length > 100) {
+          completedSections.add(es.section_order);
+          previousSections += `\n## ${es.section_name}\n${es.content}\n`;
+        }
       }
+      console.log(`[PlanGen] 이어쓰기 모드: ${completedSections.size}/${existingSections!.length} 섹션 완료됨`);
     }
 
-    yield {
-      type: "progress",
-      data: { step: `양식 유형: ${templateType}`, progress: 5 },
-    };
+    // ========================================
+    // Stage 0: 양식 인식 + 자동 분류
+    // ========================================
+    let templateType: TemplateType = "custom";
+
+    // 이어쓰기 모드에서는 Stage 0 건너뛰기 (이미 분류됨)
+    if (isResume) {
+      // evaluation_criteria에서 template_type 복원
+      const { data: planData } = await supabase
+        .from("business_plans")
+        .select("evaluation_criteria")
+        .eq("id", opts.planId)
+        .single();
+
+      const evalCrit = (planData as any)?.evaluation_criteria;
+      if (evalCrit?.template_type) {
+        templateType = evalCrit.template_type as TemplateType;
+      }
+
+      yield {
+        type: "progress",
+        data: { step: `이어쓰기: ${completedSections.size}개 섹션 완료됨`, progress: 5 },
+      };
+    } else {
+      yield {
+        type: "progress",
+        data: { step: "Stage 0: 양식 분류", progress: 3 },
+      };
+
+      if (opts.templateOcrText) {
+        // 0-1. 양식 자동 분류 (Haiku — 빠름)
+        try {
+          const classifyResult = await callClaude({
+            model: "claude-haiku-4-5-20251001",
+            system: TEMPLATE_CLASSIFIER_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: buildTemplateClassifierPrompt(opts.templateOcrText),
+              },
+            ],
+            temperature: 0,
+          });
+
+          try {
+            const jsonMatch = classifyResult.match(
+              /\{[\s\S]*"template_type"[\s\S]*\}/
+            );
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              templateType = parsed.template_type as TemplateType;
+              console.log(
+                `[PlanGen] 양식 분류: ${templateType} (confidence: ${parsed.confidence})`
+              );
+            }
+          } catch {}
+        } catch (e) {
+          console.error("[PlanGen] 양식 분류 실패:", e);
+        }
+      }
+
+      yield {
+        type: "progress",
+        data: { step: `양식 유형: ${templateType}`, progress: 5 },
+      };
+    }
 
     // ========================================
     // Stage 0-2: 섹션 추출
@@ -147,7 +193,14 @@ export async function* generateBusinessPlan(
       section_order: number;
     }>;
 
-    if (opts.templateOcrText) {
+    if (isResume) {
+      // 이어쓰기: DB에서 섹션 구조 복원
+      sections = existingSections!.map((es: any) => ({
+        section_name: es.section_name,
+        guidelines: es.guidelines || "",
+        section_order: es.section_order,
+      }));
+    } else if (opts.templateOcrText) {
       // OCR된 양식에서 섹션 추출
       const extractResult = await callClaude({
         model: "claude-sonnet-4-20250514",
@@ -169,7 +222,6 @@ export async function* generateBusinessPlan(
           const parsed = JSON.parse(jsonMatch[0]);
           sections = parsed.sections;
         } else {
-          // OCR 실패 → 양식유형별 기본 섹션 사용
           sections =
             TEMPLATE_SECTIONS[templateType] || DEFAULT_SECTIONS;
         }
@@ -178,7 +230,6 @@ export async function* generateBusinessPlan(
           TEMPLATE_SECTIONS[templateType] || DEFAULT_SECTIONS;
       }
     } else {
-      // OCR 없음 → 양식유형별 기본 섹션 또는 범용 기본
       sections =
         TEMPLATE_SECTIONS[templateType] || DEFAULT_SECTIONS;
     }
@@ -186,7 +237,7 @@ export async function* generateBusinessPlan(
     yield {
       type: "progress",
       data: {
-        step: "섹션 구조 확정",
+        step: isResume ? `이어쓰기: 미완성 ${sections.length - completedSections.size}개 섹션 생성 시작` : "섹션 구조 확정",
         progress: 10,
         totalSections: sections.length,
         templateType,
@@ -194,55 +245,70 @@ export async function* generateBusinessPlan(
     };
 
     // ========================================
-    // Stage 0-3: 평가 기준 분석
+    // Stage 0-3: 평가 기준 분석 (이어쓰기 시 건너뛰기)
     // ========================================
-    if (programInfo) {
-      try {
-        const evalResult = await callClaude({
-          model: "claude-sonnet-4-20250514",
-          system: EVALUATION_EXTRACTOR_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: `공고 정보:\n${programInfo}\n\n${opts.templateOcrText ? `양식:\n${opts.templateOcrText.slice(0, 3000)}` : ""}`,
-            },
-          ],
-          temperature: 0.2,
-        });
-
+    if (!isResume) {
+      if (programInfo) {
         try {
-          const jsonMatch = evalResult.match(
-            /\{[\s\S]*"criteria"[\s\S]*\}/
-          );
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            evaluationCriteria = parsed.criteria || [];
-          }
+          const evalResult = await callClaude({
+            model: "claude-sonnet-4-20250514",
+            system: EVALUATION_EXTRACTOR_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: `공고 정보:\n${programInfo}\n\n${opts.templateOcrText ? `양식:\n${opts.templateOcrText.slice(0, 3000)}` : ""}`,
+              },
+            ],
+            temperature: 0.2,
+          });
+
+          try {
+            const jsonMatch = evalResult.match(
+              /\{[\s\S]*"criteria"[\s\S]*\}/
+            );
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              evaluationCriteria = parsed.criteria || [];
+            }
+          } catch {}
         } catch {}
-      } catch {}
-    }
+      }
 
-    // 평가기준 추출 실패 시 → 양식유형별 기본 배점 사용
-    if (evaluationCriteria.length === 0) {
-      evaluationCriteria = DEFAULT_EVAL_WEIGHTS[templateType] || [];
-    }
+      // 평가기준 추출 실패 시 → 양식유형별 기본 배점 사용
+      if (evaluationCriteria.length === 0) {
+        evaluationCriteria = DEFAULT_EVAL_WEIGHTS[templateType] || [];
+      }
 
-    // 섹션을 plan_sections 테이블에 저장
-    for (const section of sections) {
-      const evalWeight =
-        evaluationCriteria.find(
-          (c: any) =>
-            section.section_name.includes(c.항목) ||
-            c.항목.includes(section.section_name)
-        )?.배점 || null;
+      // 섹션을 plan_sections 테이블에 저장
+      for (const section of sections) {
+        const evalWeight =
+          evaluationCriteria.find(
+            (c: any) =>
+              section.section_name.includes(c.항목) ||
+              c.항목.includes(section.section_name)
+          )?.배점 || null;
 
-      await supabase.from("plan_sections").insert({
-        plan_id: opts.planId,
-        section_name: section.section_name,
-        guidelines: section.guidelines,
-        section_order: section.section_order,
-        evaluation_weight: evalWeight,
-      });
+        await supabase.from("plan_sections").insert({
+          plan_id: opts.planId,
+          section_name: section.section_name,
+          guidelines: section.guidelines,
+          section_order: section.section_order,
+          evaluation_weight: evalWeight,
+        });
+      }
+    } else {
+      // 이어쓰기: evaluation_criteria 복원
+      const { data: planData } = await supabase
+        .from("business_plans")
+        .select("evaluation_criteria")
+        .eq("id", opts.planId)
+        .single();
+      const evalCrit = (planData as any)?.evaluation_criteria;
+      if (evalCrit?.criteria) {
+        evaluationCriteria = evalCrit.criteria;
+      } else if (Array.isArray(evalCrit)) {
+        evaluationCriteria = evalCrit;
+      }
     }
 
     // 사업계획서 상태 업데이트
@@ -250,21 +316,36 @@ export async function* generateBusinessPlan(
       .from("business_plans")
       .update({
         status: "generating",
-        evaluation_criteria: evaluationCriteria,
-        template_ocr_text: opts.templateOcrText || null,
+        ...(!isResume ? {
+          evaluation_criteria: evaluationCriteria,
+          template_ocr_text: opts.templateOcrText || null,
+        } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", opts.planId);
 
     // ========================================
-    // Stage 1: 텍스트 초안 작성 (섹션별)
+    // Stage 1: 텍스트 초안 작성 (섹션별) — 이어쓰기 지원
     // ========================================
-    let previousSections = "";
     const allChartData: any[] = [];
 
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
       const progress = Math.round(12 + (i / sections.length) * 65);
+
+      // ★ 이어쓰기: 이미 완료된 섹션 건너뛰기
+      if (completedSections.has(section.section_order)) {
+        yield {
+          type: "section_done",
+          data: {
+            sectionName: section.section_name,
+            sectionOrder: section.section_order,
+            progress: Math.round(12 + ((i + 1) / sections.length) * 65),
+            skipped: true,
+          },
+        };
+        continue;
+      }
 
       yield {
         type: "section_start",
@@ -283,7 +364,7 @@ export async function* generateBusinessPlan(
 
       try {
         const judgeResult = await callClaude({
-          model: "claude-3-5-haiku-20241022",
+          model: "claude-haiku-4-5-20251001",
           system: RESEARCH_JUDGE_SYSTEM,
           messages: [
             {
@@ -313,7 +394,7 @@ export async function* generateBusinessPlan(
       if (needsResearch) {
         try {
           const queryResult = await callClaude({
-            model: "claude-3-5-haiku-20241022",
+            model: "claude-haiku-4-5-20251001",
             system: SEARCH_QUERY_SYSTEM,
             messages: [
               {
@@ -400,7 +481,7 @@ export async function* generateBusinessPlan(
           },
         ],
         temperature: 0.5,
-        maxTokens: 3000, // 분량 확대 (기존 2000 → 3000)
+        maxTokens: 8000, // 분량 대폭 확대 v4 (기존 3000 → 8000, 섹션당 3,500~6,000자 지원)
       })) {
         sectionContent += chunk;
         yield {
@@ -433,7 +514,7 @@ export async function* generateBusinessPlan(
       const [validationResult, chartResult] = await Promise.allSettled([
         // 품질 검증
         callClaude({
-          model: "claude-3-5-haiku-20241022",
+          model: "claude-haiku-4-5-20251001",
           system: QUALITY_VALIDATOR_SYSTEM,
           messages: [
             {
@@ -449,7 +530,7 @@ export async function* generateBusinessPlan(
         }),
         // 차트 데이터 추출
         callClaude({
-          model: "claude-3-5-haiku-20241022",
+          model: "claude-haiku-4-5-20251001",
           system: CHART_DATA_EXTRACTOR_SYSTEM,
           messages: [
             {
@@ -545,12 +626,12 @@ export async function* generateBusinessPlan(
     let kpiData: any = null;
     try {
       const kpiResult = await callClaude({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-haiku-4-5-20251001",
         system: KPI_EXTRACTOR_SYSTEM,
         messages: [
           {
             role: "user",
-            content: `## 전체 사업계획서\n${previousSections.slice(0, 8000)}`,
+            content: `## 전체 사업계획서\n${previousSections.slice(0, 16000)}`,
           },
         ],
         temperature: 0,

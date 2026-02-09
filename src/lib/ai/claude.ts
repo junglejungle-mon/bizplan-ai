@@ -4,7 +4,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
 
-export type ClaudeModel = "claude-3-5-haiku-20241022" | "claude-sonnet-4-20250514" | "claude-opus-4-20250514";
+export type ClaudeModel = "claude-haiku-4-5-20251001" | "claude-sonnet-4-20250514" | "claude-opus-4-20250514";
 
 export interface ClaudeMessage {
   role: "user" | "assistant";
