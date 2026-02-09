@@ -42,7 +42,7 @@ const COLORS = {
 
 // ===== chart_data 인터페이스 =====
 interface ChartDataItem {
-  type: "bar" | "pie" | "line" | "tam_sam_som" | "comparison_table" | "timeline" | "highlight_cards";
+  type: "bar" | "pie" | "line" | "tam_sam_som" | "comparison_table" | "timeline" | "highlight_cards" | "pain_points" | "tco_comparison" | "revenue_model" | "org_chart" | "ecosystem_map" | "esg_cards" | "step_roadmap";
   title: string;
   data: Record<string, unknown>;
 }
@@ -773,6 +773,140 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
               `${item.value?.toLocaleString() || "-"}${item.unit || ""}`,
               total > 0 ? `${((item.value / total) * 100).toFixed(1)}%` : "-",
             ])
+          )
+        );
+      }
+      break;
+    }
+
+    case "pain_points": {
+      // 페인포인트 다이어그램 → KPI 카드 형태로 표현
+      const { points } = chart.data as { points?: Array<{ icon: string; title: string; value: string; description: string }> };
+      if (points && points.length > 0) {
+        const kpiLike: KpiData = {};
+        points.forEach((p, i) => {
+          const key = `pain_${i}` as keyof KpiData;
+          (kpiLike as Record<string, string>)[`custom_${i}`] = `${p.icon} ${p.value}`;
+        });
+        // 테이블로 표현
+        result.push(
+          ...buildStyledTable(
+            ["문제점", "핵심 수치", "설명"],
+            points.map((p) => [`${p.icon} ${p.title}`, p.value, p.description])
+          )
+        );
+      }
+      break;
+    }
+
+    case "tco_comparison": {
+      // TCO 비교 → 기존 vs 도입 후 테이블
+      const tcoData = chart.data as {
+        before?: { label: string; total: string; items: Array<{ name: string; value: string }> };
+        after?: { label: string; total: string; items: Array<{ name: string; value: string }> };
+        saving_rate?: string;
+      };
+      if (tcoData.before && tcoData.after) {
+        const headers = ["비용 항목", tcoData.before.label, tcoData.after.label, "절감 효과"];
+        const rows: string[][] = [];
+        const beforeItems = tcoData.before.items || [];
+        const afterItems = tcoData.after.items || [];
+        const maxLen = Math.max(beforeItems.length, afterItems.length);
+        for (let i = 0; i < maxLen; i++) {
+          rows.push([
+            beforeItems[i]?.name || afterItems[i]?.name || "",
+            beforeItems[i]?.value || "-",
+            afterItems[i]?.value || "-",
+            "↓ 절감",
+          ]);
+        }
+        rows.push([`**합계**`, tcoData.before.total, tcoData.after.total, `**${tcoData.saving_rate || ""} 절감**`]);
+        result.push(...buildStyledTable(headers, rows));
+      }
+      break;
+    }
+
+    case "step_roadmap": {
+      // 단계별 로드맵 → 테이블
+      const { steps } = chart.data as { steps?: Array<{ step: number; title: string; period: string; target: string; goal: string }> };
+      if (steps && steps.length > 0) {
+        result.push(
+          ...buildStyledTable(
+            ["단계", "전략", "기간", "대상", "목표"],
+            steps.map((s) => [`${s.step}단계`, s.title, s.period, s.target, s.goal])
+          )
+        );
+      }
+      break;
+    }
+
+    case "revenue_model": {
+      // 수익 모델 구조도 → 테이블
+      const { tracks } = chart.data as { tracks?: Array<{ name: string; subtitle: string; price: string; features: string[] }> };
+      if (tracks && tracks.length > 0) {
+        result.push(
+          ...buildStyledTable(
+            ["Track", "모델", "가격", "특징"],
+            tracks.map((t) => [t.name, t.subtitle, t.price, t.features.join(", ")])
+          )
+        );
+      }
+      break;
+    }
+
+    case "org_chart": {
+      // 조직도 → 테이블
+      const { members } = chart.data as { members?: Array<{ role: string; name: string; title: string; detail: string }> };
+      if (members && members.length > 0) {
+        result.push(
+          ...buildStyledTable(
+            ["구분", "성명", "직위/역할", "주요 역량"],
+            members.map((m) => [m.role, m.name, m.title, m.detail])
+          )
+        );
+      }
+      break;
+    }
+
+    case "ecosystem_map": {
+      // 협력 생태계 → 테이블
+      const { center, partners } = chart.data as { center?: string; partners?: Array<{ name: string; role: string; detail: string; period: string }> };
+      if (partners && partners.length > 0) {
+        result.push(
+          ...buildStyledTable(
+            ["협력기관", "역할", "협력 내용", "기간"],
+            partners.map((p) => [p.name, p.role, p.detail, p.period])
+          )
+        );
+      }
+      break;
+    }
+
+    case "esg_cards": {
+      // ESG 카드 → 3컬럼 테이블
+      const esgData = chart.data as {
+        environment?: { title: string; items: string[] };
+        social?: { title: string; items: string[] };
+        governance?: { title: string; items: string[] };
+      };
+      if (esgData.environment || esgData.social || esgData.governance) {
+        const maxRows = Math.max(
+          esgData.environment?.items?.length || 0,
+          esgData.social?.items?.length || 0,
+          esgData.governance?.items?.length || 0
+        );
+        const rows: string[][] = [];
+        for (let i = 0; i < maxRows; i++) {
+          rows.push([
+            esgData.environment?.items?.[i] || "",
+            esgData.social?.items?.[i] || "",
+            esgData.governance?.items?.[i] || "",
+          ]);
+        }
+        result.push(
+          ...buildStyledTable(
+            ["🌱 Environment", "🤝 Social", "⚖️ Governance"],
+            rows
           )
         );
       }

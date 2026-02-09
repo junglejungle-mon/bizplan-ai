@@ -7,7 +7,7 @@ import PptxGenJS from "pptxgenjs";
 import { SlideType, SLIDE_LABELS } from "@/lib/ai/prompts/ir";
 
 interface ChartDataItem {
-  type: "bar" | "pie" | "line" | "tam_sam_som" | "comparison_table" | "timeline" | "highlight_cards";
+  type: "bar" | "pie" | "line" | "tam_sam_som" | "comparison_table" | "timeline" | "highlight_cards" | "pain_points" | "tco_comparison" | "revenue_model" | "org_chart" | "ecosystem_map" | "esg_cards" | "step_roadmap";
   title: string;
   data: Record<string, unknown>;
 }
@@ -508,6 +508,163 @@ function addChartToSlide(
       }
       return yPos;
     }
+    case "pain_points": {
+      // 페인포인트 다이어그램 → stats cards로 표현
+      const { points } = chart.data as { points?: Array<{ icon: string; title: string; value: string; description: string }> };
+      if (points && points.length > 0) {
+        return addStatsCards(
+          slide,
+          points.map((p) => ({ icon: p.icon, value: p.value, label: `${p.title}\n${p.description}` })),
+          colors,
+          yPos
+        );
+      }
+      return yPos;
+    }
+
+    case "tco_comparison": {
+      // TCO 비교 → 비교 테이블
+      const tcoData = chart.data as {
+        before?: { label: string; total: string; items: Array<{ name: string; value: string }> };
+        after?: { label: string; total: string; items: Array<{ name: string; value: string }> };
+        saving_rate?: string;
+      };
+      if (tcoData.before && tcoData.after) {
+        const compChart: ChartDataItem = {
+          type: "comparison_table",
+          title: chart.title,
+          data: {
+            headers: ["비용 항목", tcoData.before.label, tcoData.after.label],
+            rows: [
+              ...(tcoData.before.items || []).map((item, i) => [
+                item.name,
+                item.value,
+                tcoData.after?.items?.[i]?.value || "-",
+              ]),
+              ["합계", tcoData.before.total, tcoData.after.total],
+            ],
+          },
+        };
+        return addComparisonTable(slide, compChart, colors, yPos);
+      }
+      return yPos;
+    }
+
+    case "step_roadmap": {
+      // 단계별 로드맵 → 가로 플로우
+      const { steps } = chart.data as { steps?: Array<{ step: number; title: string; period: string; target: string; goal: string }> };
+      if (steps && steps.length > 0) {
+        const count = Math.min(steps.length, 4);
+        const stepW = 9 / count;
+        for (let i = 0; i < count; i++) {
+          const x = 0.5 + i * stepW;
+          // 박스
+          slide.addShape("roundRect", {
+            x: x + 0.1,
+            y: yPos,
+            w: stepW - 0.2,
+            h: 1.8,
+            fill: { color: i === 0 ? colors.primary : i === 1 ? colors.accent : colors.secondary || "4A90D9" },
+            rectRadius: 0.1,
+          });
+          // 단계 번호
+          slide.addText(`${steps[i].step}단계`, {
+            x: x + 0.1, y: yPos + 0.05, w: stepW - 0.2, h: 0.3,
+            fontSize: 10, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+          // 제목
+          slide.addText(steps[i].title, {
+            x: x + 0.1, y: yPos + 0.35, w: stepW - 0.2, h: 0.3,
+            fontSize: 9, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+          // 기간
+          slide.addText(steps[i].period, {
+            x: x + 0.1, y: yPos + 0.65, w: stepW - 0.2, h: 0.25,
+            fontSize: 7, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+          // 대상 + 목표
+          slide.addText(`${steps[i].target}\n${steps[i].goal}`, {
+            x: x + 0.1, y: yPos + 0.95, w: stepW - 0.2, h: 0.7,
+            fontSize: 7, color: "FFFFFF", align: "center", fontFace: "Arial",
+          });
+          // 화살표
+          if (i < count - 1) {
+            slide.addText("→", {
+              x: x + stepW - 0.15, y: yPos + 0.7, w: 0.3, h: 0.4,
+              fontSize: 18, bold: true, color: colors.textDark, align: "center", fontFace: "Arial",
+            });
+          }
+        }
+        return yPos + 2.0;
+      }
+      return yPos;
+    }
+
+    case "revenue_model": {
+      // 수익 모델 → stats cards로 표현
+      const { tracks } = chart.data as { tracks?: Array<{ name: string; subtitle: string; price: string; features: string[] }> };
+      if (tracks && tracks.length > 0) {
+        return addStatsCards(
+          slide,
+          tracks.map((t) => ({ value: t.price, label: `${t.name}\n${t.subtitle}` })),
+          colors,
+          yPos
+        );
+      }
+      return yPos;
+    }
+
+    case "esg_cards": {
+      // ESG 카드 → stats cards로 표현
+      const esgData = chart.data as {
+        environment?: { title: string; items: string[] };
+        social?: { title: string; items: string[] };
+        governance?: { title: string; items: string[] };
+      };
+      const esgCards: Array<{ icon?: string; value: string; label: string }> = [];
+      if (esgData.environment) esgCards.push({ icon: "🌱", value: "Environment", label: esgData.environment.items?.join("\n") || "" });
+      if (esgData.social) esgCards.push({ icon: "🤝", value: "Social", label: esgData.social.items?.join("\n") || "" });
+      if (esgData.governance) esgCards.push({ icon: "⚖️", value: "Governance", label: esgData.governance.items?.join("\n") || "" });
+      if (esgCards.length > 0) {
+        return addStatsCards(slide, esgCards, colors, yPos);
+      }
+      return yPos;
+    }
+
+    case "org_chart":
+    case "ecosystem_map": {
+      // 조직도/생태계 맵 → 비교 테이블로
+      const tableData = chart.data as { headers?: string[]; rows?: string[][] };
+      if (tableData.headers && tableData.rows) {
+        const compChart: ChartDataItem = { type: "comparison_table", title: chart.title, data: tableData };
+        return addComparisonTable(slide, compChart, colors, yPos);
+      }
+      // members 또는 partners 형식
+      const membersData = chart.data as { members?: Array<{ role: string; name: string; title: string; detail: string }> };
+      const partnersData = chart.data as { partners?: Array<{ name: string; role: string; detail: string; period: string }> };
+      if (membersData.members) {
+        const compChart: ChartDataItem = {
+          type: "comparison_table", title: chart.title,
+          data: {
+            headers: ["구분", "성명", "직위/역할", "주요 역량"],
+            rows: membersData.members.map((m) => [m.role, m.name, m.title, m.detail]),
+          },
+        };
+        return addComparisonTable(slide, compChart, colors, yPos);
+      }
+      if (partnersData.partners) {
+        const compChart: ChartDataItem = {
+          type: "comparison_table", title: chart.title,
+          data: {
+            headers: ["협력기관", "역할", "협력 내용", "기간"],
+            rows: partnersData.partners.map((p) => [p.name, p.role, p.detail, p.period]),
+          },
+        };
+        return addComparisonTable(slide, compChart, colors, yPos);
+      }
+      return yPos;
+    }
+
     default:
       return yPos;
   }
