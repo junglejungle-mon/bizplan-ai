@@ -1,24 +1,22 @@
 /**
- * 매칭 분석 프롬프트 (기존 GPT → Claude 이식)
+ * 매칭 분석 프롬프트 v3 — 근거 기반 엄격 평가
  * 원본: gpt-prompts.json (Make.com 시나리오 5431064)
+ * v2: 2026-02-08 — 인터뷰 데이터 활용 극대화
+ * v3: 2026-02-08 — 점수 엄격화 (80점+ 비율 5~8%로 축소)
  */
 
-// 1. 지역 매칭 판단 (Haiku) — true/false
-export const REGION_MATCH_SYSTEM = `You are a highly skilled data analyst tasked with comparing regional information. Your goal is to determine if the region mentioned in the provided support information matches our region.
+// 1. 지역 매칭 판단 (Haiku) — true/false (엄격 기준)
+export const REGION_MATCH_SYSTEM = `당신은 지역 매칭 판단 전문가입니다. 회사 소재지와 지원사업의 지역 제한을 비교합니다.
 
-Compare the region mentioned in the provided support information with our region. Determine if they match exactly.
+## 판단 기준 (엄격하게 판단)
+- 전국 사업이거나 지역 제한이 없으면 "true"
+- 공고 제목/내용에 [서울], [경기], [수도권] 등 회사 소재지가 포함되면 "true"
+- 공고 제목에 [부산], [충남], [경북], [전북], [제주], [대구], [인천], [광주], [강원], [충북], [경남], [전남], [대전], [울산], [세종] 등 **회사 소재지와 다른 지역**이 명시되면 → "false"
+- 예: 제목이 "[충남] 2026년 ..."이고 회사가 "서울, 경기"이면 → "false"
+- 예: 제목이 "[경기] 성남시 ..."이고 회사가 "서울, 경기"이면 → "true"
+- 지역 정보가 불명확한 중앙부처 사업 → "true"
 
-Output your result as follows:
-- If the regions match exactly, output "true"
-- If the regions do not match exactly, output "false"
-- If there is no region restriction (전국 or no region mentioned), output "true"
-
-Remember:
-- Do not use any XML tags in your output
-- Provide only the result (true or false)
-- Do not include any additional explanation or justification
-
-Your output should be a single word: either "true" or "false".`;
+결과를 "true" 또는 "false" 한 단어로만 출력하세요. 추가 설명 없이.`;
 
 export function buildRegionMatchPrompt(
   region: string,
@@ -26,46 +24,93 @@ export function buildRegionMatchPrompt(
   hashtags: string,
   summary: string
 ) {
-  return `First, here is our region information:
-<our_region>
-${region}
-</our_region>
+  return `회사 소재지: ${region}
 
-Now, here is the provided support information:
-<provided_support_info>
-* 지원사업 이름: ${programTitle}
+지원사업 정보:
+* 공고명: ${programTitle}
 * 해시태그: ${hashtags}
-* 요약: ${summary}
-</provided_support_info>`;
+* 요약: ${summary}`;
 }
 
-// 2. 회사 적합성 분석 (Sonnet) — 0-100점 + 근거
-export const COMPANY_MATCH_SYSTEM = `당신은 세계적으로 유능한 데이터 분석가입니다. 주어진 회사 정보와 지원사업 정보를 깊이 있게 분석하여 지원사업이 해당 회사에 도움이 되는지 판단해야 합니다.
+// 2. 회사 적합성 분석 (Haiku) — 근거 기반 엄격 평가
+export const COMPANY_MATCH_SYSTEM = `당신은 정부지원사업 매칭 전문 컨설턴트입니다. 회사의 AI 인터뷰 데이터와 지원사업 공고를 분석하여 **근거 기반으로 엄격하게** 매칭합니다.
 
-다음 지침에 따라 분석을 수행하세요:
+## 핵심 원칙 — 엄격한 평가
+1. **업종/분야 직접 관련성이 핵심**: 회사의 핵심 사업(업종, 제품, 기술)과 공고의 지원 분야가 직접 관련되지 않으면 절대 60점을 넘길 수 없습니다.
+2. **일반적인 "중소기업 지원"은 높은 점수가 아닙니다**: 중소기업이기만 하면 지원 가능한 일반 사업은 최대 50점입니다. 분야 특화 매칭이 있어야 60점 이상입니다.
+3. **지역은 이미 필터링됨**: 지역 불일치 공고는 사전에 제외되므로, 자격요건은 업종/규모/업력을 중심으로 평가합니다.
+4. **점수와 사유는 반드시 일치**: 긍정적 사유를 쓰면서 낮은 점수를 주거나, 부정적 사유를 쓰면서 높은 점수를 주지 마세요.
+5. **80점 이상은 "이 회사가 꼭 지원해야 하는 사업"입니다**: 회사의 핵심 역량과 공고의 지원 분야가 정확히 맞아떨어질 때만 80점 이상을 부여하세요.
 
-1. 회사 정보와 지원사업 정보를 철저히 비교 분석하세요.
-2. 지원사업이 회사의 현재 상황, 필요, 목표와 얼마나 잘 부합하는지 고려하세요.
-3. 회사가 지원사업의 요구사항을 충족시킬 수 있는지 평가하세요.
-4. 지원사업이 회사에 제공할 수 있는 구체적인 이점을 식별하세요.
-5. 잠재적인 불일치 또는 문제점도 고려하세요.
+## 점수 분포 가이드 (엄격 기준)
+- 300개 공고 중 80점+: 약 15-25개 (5~8%)
+- 300개 공고 중 60-79점: 약 40-60개 (15~20%)
+- 300개 공고 중 40-59점: 약 50-80개 (20~25%)
+- 300개 공고 중 40점 미만: 나머지 (50%+)
+→ 대부분의 공고는 분야가 맞지 않으므로 40점 미만이 정상입니다.
 
-분석을 완료한 후, 다음 형식으로 결과를 JSON으로 출력하세요:
+## 5개 영역 평가 (가중 합산 = 100점)
+
+### 1. 키워드 연관도 (30점) — 분야 직접 관련성
+- 회사의 **핵심 업종/제품/기술** 키워드와 공고의 **지원 분야** 키워드를 비교
+- 핵심 분야 직접 일치 (예: 반려동물 회사 ↔ 반려동물/펫 관련 공고): 25-30점
+- 핵심 기술/산업 관련 (예: 헬스케어 ↔ 바이오/의료기기 공고): 18-24점
+- 간접 관련 (예: 제조업 ↔ 스마트제조 공고): 10-17점
+- 일반적 중소기업 지원 (분야 무관): 3-9점
+- 전혀 다른 분야 (예: 반려동물 ↔ 수산업/방송영상/원자력): 0-2점
+
+### 2. 사업방향 일치도 (25점) — 전략적 부합
+- 회사의 중장기 전략(수출, R&D, 제품개발 등)과 지원사업 목적의 부합도
+- 전략 방향 정확히 일치: 20-25점
+- 전략 방향 부분 일치: 12-19점
+- 간접적 도움 가능: 5-11점
+- 전략과 무관: 0-4점
+
+### 3. 자격요건 부합도 (20점) — 지원 가능성
+- 기업 규모, 업력, 업종 등이 공고 요건에 맞는지 (지역은 이미 필터링됨)
+- 특정 업종만 대상인데 회사 업종이 다르면: 0-5점
+- 요건 불명확하면: 10점 (보수적 판단)
+- 완전 부합: 17-20점 / 대부분 부합: 11-16점 / 부분 부합: 5-10점
+
+### 4. 필요성 & 활용도 (15점) — 실질적 도움
+- 회사의 현재 단계에서 이 지원사업이 실질적으로 필요한지
+- 핵심 필요 (전략 목표와 직결): 12-15점
+- 도움 가능: 7-11점
+- 부분적 도움: 3-6점
+- 불필요: 0-2점
+
+### 5. 선정 가능성 (10점) — 경쟁력
+- 회사의 실적, 기술력, 팀 역량으로 선정 경쟁에서 가능성이 있는지
+- 높음 (해당 분야 전문): 8-10점
+- 보통: 4-7점
+- 낮음 (분야 비전문): 0-3점
+
+## 출력 (JSON만, 추가 설명 없이)
 
 \`\`\`json
 {
   "match_score": 0,
-  "match_reason": ""
+  "match_keywords": ["키워드1", "키워드2", "키워드3"],
+  "match_reason": "카드에 표시할 핵심 매칭 사유 1-2줄",
+  "match_detail": "상세 분석 3-5줄. 강점과 주의사항 모두 포함.",
+  "score_breakdown": {
+    "keyword_relevance": 0,
+    "direction_fit": 0,
+    "eligibility": 0,
+    "necessity": 0,
+    "competitiveness": 0
+  },
+  "fit_level": "매우적합"
 }
 \`\`\`
 
-"match_score"는 지원사업 정보와 회사의 적합성을 0에서 100 사이의 점수로 나타냅니다.
-"match_reason"에는 이 점수를 부여한 상세한 이유를 2-3문장으로 설명하세요.
+- match_score: 5개 영역 합산 (0-100)
+- match_keywords: 회사-공고 간 연결 키워드 3-5개 (예: "반려동물", "수출바우처", "R&D")
+- match_reason: 지원사업 목록에서 보여줄 1-2줄 사유 (구체적으로, 왜 높은/낮은 점수인지)
+- match_detail: 상세 페이지에서 보여줄 분석 (강점/약점/활용방안)
+- fit_level: 80+: "매우적합", 60-79: "적합", 40-59: "검토추천", 20-39: "참고", 0-19: "부적합"
 
-주의사항:
-- JSON만 출력하세요. 추가적인 설명이나 소개는 하지 마세요.
-- 한국어로 출력하세요.
-- XML 태그를 사용하지 마세요.`;
+한국어. XML 태그 사용 금지.`;
 
 export function buildCompanyMatchPrompt(
   businessContent: string,
@@ -74,43 +119,54 @@ export function buildCompanyMatchPrompt(
   programTarget: string,
   hashtags: string
 ) {
-  return `<company_info>
+  return `## 회사 프로필 (AI 인터뷰 기반)
 ${businessContent}
-</company_info>
 
-<support_program_info>
+## 지원사업 공고
 * 공고명: ${programTitle}
 * 공고 내용: ${programSummary || "정보 없음"}
-* 지원 대상: ${programTarget || "정보 없음"}
-* 해시태그: ${hashtags || "없음"}
-</support_program_info>`;
+* 지원 대상: ${programTarget || "제한 없음 (일반 기업)"}
+* 해시태그/키워드: ${hashtags || "없음"}`;
 }
 
-// 3. 심층 분석 보고서 (Opus) — 매칭 보고서 생성
-export const DEEP_ANALYSIS_SYSTEM = `당신은 정부지원사업 분석 전문가입니다. 회사 정보와 지원사업 공고문을 깊이 분석하여 매칭 보고서를 작성합니다.`;
+// 3. 심층 분석 보고서 (Sonnet) — 상세 매칭 보고서
+export const DEEP_ANALYSIS_SYSTEM = `당신은 정부지원사업 컨설턴트입니다. 회사 프로필과 지원사업 공고를 깊이 분석하여 **실전 활용 가능한** 매칭 보고서를 작성합니다.
+
+## 보고서 구조
+
+1. **적합성 종합 판단** (2-3줄)
+   - 이 사업에 지원하는 것이 전략적으로 옳은지 결론
+
+2. **핵심 매칭 포인트** (3-5개)
+   - 회사의 어떤 강점이 이 공고의 평가 기준과 맞는지
+   - 구체적 데이터/실적/키워드로 근거 제시
+
+3. **보완 필요사항** (2-3개)
+   - 지원서 작성 시 추가로 준비/강조해야 할 부분
+   - 부족한 영역과 보완 전략
+
+4. **지원 전략 제안** (2-3줄)
+   - 사업계획서에서 어떤 관점으로 접근하면 좋을지
+   - 평가위원이 주목할 포인트
+
+5. **종합 점수** (0-100)
+
+마크다운으로 보기 좋게 작성. 한국어. 3000자 이내.`;
 
 export function buildDeepAnalysisPrompt(
   businessContent: string,
   programFullText: string
 ) {
-  return `아래 데이터를 깊게 분석하여 회사와 지원사업 매칭 분석 보고서를 출력하라
-
-<결과>
-* 전체적인 지원사업과 회사와의 매칭 점수 100점 만점의 점수
-* 매칭 결과의 근거
-* 종합 매칭 분석 보고서
-</결과>
-
-<회사정보>
+  return `## 회사 프로필
 ${businessContent}
-</회사정보>
 
-<지원사업정보>
+## 지원사업 정보
 ${programFullText}
-</지원사업정보>`;
+
+위 정보를 바탕으로 매칭 분석 보고서를 작성하세요.`;
 }
 
-// 4. 보고서에서 점수/근거 추출 (Sonnet)
+// 4. 보고서에서 점수/근거 추출 (사용하지 않음 — deep_analysis에서 직접 점수 포함)
 export const SCORE_EXTRACT_SYSTEM = `매칭 분석 보고서에서 매칭 점수와 근거를 추출하세요. JSON만 출력하세요.
 
 \`\`\`json
