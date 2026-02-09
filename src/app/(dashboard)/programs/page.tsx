@@ -34,6 +34,12 @@ export default async function ProgramsPage() {
     ...m.programs,
     matchScore: m.match_score,
     matchReason: m.match_reason,
+    matchKeywords: m.match_keywords || [],
+    matchDetail: m.match_detail || "",
+    scoreBreakdown: m.score_breakdown || null,
+    fitLevel: m.fit_level || "",
+    deepReport: m.deep_report || "",
+    deepScore: m.deep_score || null,
     matchingId: m.id,
   })) ?? [];
 

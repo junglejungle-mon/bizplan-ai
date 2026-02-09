@@ -27,6 +27,8 @@ interface Program {
   hashtags?: string[];
   matchScore?: number;
   matchReason?: string;
+  matchKeywords?: string[];
+  fitLevel?: string;
 }
 
 interface ProgramListProps {
@@ -333,14 +335,32 @@ export function ProgramList({ matchedPrograms, allPrograms }: ProgramListProps) 
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-3">
-                    <Badge variant="outline" className="text-xs">
-                      {program.source === "bizinfo"
-                        ? "기업마당"
-                        : program.source === "mss"
-                        ? "중소벤처"
-                        : "K-Startup"}
-                    </Badge>
-                    {program.matchScore && (
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-xs">
+                        {program.source === "bizinfo"
+                          ? "기업마당"
+                          : program.source === "mss"
+                          ? "중소벤처"
+                          : "K-Startup"}
+                      </Badge>
+                      {program.fitLevel && (
+                        <Badge
+                          className={cn(
+                            "text-xs",
+                            program.fitLevel === "매우적합"
+                              ? "bg-green-100 text-green-700 hover:bg-green-100"
+                              : program.fitLevel === "적합"
+                              ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                              : program.fitLevel === "검토추천"
+                              ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-100"
+                          )}
+                        >
+                          {program.fitLevel}
+                        </Badge>
+                      )}
+                    </div>
+                    {program.matchScore != null && program.matchScore > 0 && (
                       <div
                         className={cn(
                           "flex items-center justify-center h-10 w-10 rounded-full font-bold text-sm",
@@ -360,18 +380,29 @@ export function ProgramList({ matchedPrograms, allPrograms }: ProgramListProps) 
                   <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">
                     {program.title}
                   </h3>
-                  {program.summary && (
+                  {/* 매칭 키워드 (있으면 우선 표시) */}
+                  {program.matchKeywords && program.matchKeywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {program.matchKeywords.slice(0, 4).map((kw, i) => (
+                        <Badge key={i} className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
+                          {kw}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : program.hashtags && program.hashtags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {program.hashtags.slice(0, 3).map((tag, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  {program.summary && !program.matchReason && (
                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">
                       {program.summary}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {program.hashtags?.slice(0, 3).map((tag, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
                   <div className="flex items-center justify-between text-xs text-gray-400">
                     <span>{program.institution}</span>
                     {program.apply_end && (

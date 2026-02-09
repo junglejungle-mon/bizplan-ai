@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { MobileMenuButton } from "@/components/layout/sidebar";
+import { createClient } from "@/lib/supabase/client";
 
 export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
@@ -61,11 +69,9 @@ export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
 
         <div className="flex items-center space-x-3">
           {isLoggedIn ? (
-            <form action="/api/auth/signout" method="post">
-              <Button variant="ghost" size="sm">
-                로그아웃
-              </Button>
-            </form>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              로그아웃
+            </Button>
           ) : (
             <>
               <Link href="/login">

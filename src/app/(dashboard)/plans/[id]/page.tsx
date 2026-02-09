@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Presentation } from "lucide-react";
+import { ArrowLeft, Presentation, Download, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { PlanGeneratorButton } from "@/components/plans/plan-generator-button";
 import { SectionCard } from "@/components/plans/section-card";
@@ -68,7 +68,7 @@ export default async function PlanEditorPage({
         </div>
         <div className="flex gap-2">
           <Link href={`/plans/${id}/ir`}>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
               <Presentation className="h-4 w-4" /> IR PPT 생성
             </Button>
           </Link>
@@ -97,14 +97,33 @@ export default async function PlanEditorPage({
         {/* 중앙: 에디터 */}
         <div className="lg:col-span-2 space-y-6">
           {sections && sections.length > 0 ? (
-            sections.map((section: any, i: number) => (
-              <SectionCard
-                key={section.id}
-                planId={id}
-                section={section}
-                index={i}
-              />
-            ))
+            <>
+              {/* 미완성 섹션이 있으면 이어쓰기 버튼 표시 */}
+              {sections.some((s: any) => !s.content || s.content.length < 100) && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">
+                        {sections.filter((s: any) => s.content && s.content.length >= 100).length}/{sections.length}개 섹션 완성
+                      </p>
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        이어쓰기를 클릭하면 미완성 섹션부터 이어서 생성합니다
+                      </p>
+                    </div>
+                    <PlanGeneratorButton planId={id} hasContent={true} label="이어쓰기" />
+                  </CardContent>
+                </Card>
+              )}
+              {sections.map((section: any, i: number) => (
+                <SectionCard
+                  key={section.id}
+                  planId={id}
+                  section={section}
+                  index={i}
+                />
+              ))}
+
+            </>
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center py-16">
@@ -117,32 +136,58 @@ export default async function PlanEditorPage({
           )}
         </div>
 
-        {/* 우측: AI 어시스턴트 */}
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">AI 어시스턴트</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-500">
-              <p>사업계획서 작성 중 궁금한 점을 물어보세요.</p>
-              <div className="mt-4 space-y-2">
-                {[
-                  "이 섹션 더 구체적으로",
-                  "평가 기준 분석",
-                  "리서치 추가",
-                ].map((tip, i) => (
-                  <Button
-                    key={i}
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs justify-start"
-                  >
-                    {tip}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {/* 우측: IR PPT + AI 어시스턴트 (sticky로 따라다님) */}
+        <div className="hidden lg:block">
+          <div className="sticky top-6 space-y-4">
+            {/* IR PPT 생성 카드 */}
+            <Card className="border-2 border-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <CardContent className="py-5">
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100">
+                    <Presentation className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">IR PPT 자동 생성</h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      사업계획서 기반 투자자용 PPT
+                    </p>
+                  </div>
+                  <Link href={`/plans/${id}/ir`} className="w-full">
+                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                      <Sparkles className="h-4 w-4" /> PPT 만들기
+                    </Button>
+                  </Link>
+                  <ExportButton planId={id} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI 어시스턴트 카드 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">AI 어시스턴트</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-500">
+                <p>사업계획서 작성 중 궁금한 점을 물어보세요.</p>
+                <div className="mt-4 space-y-2">
+                  {[
+                    "이 섹션 더 구체적으로",
+                    "평가 기준 분석",
+                    "리서치 추가",
+                  ].map((tip, i) => (
+                    <Button
+                      key={i}
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs justify-start"
+                    >
+                      {tip}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

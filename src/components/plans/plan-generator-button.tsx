@@ -9,6 +9,7 @@ import { Loader2, Sparkles, CheckCircle2 } from "lucide-react";
 interface PlanGeneratorButtonProps {
   planId: string;
   hasContent: boolean;
+  label?: string;
 }
 
 interface ProgressEvent {
@@ -24,7 +25,7 @@ interface ProgressEvent {
   };
 }
 
-export function PlanGeneratorButton({ planId, hasContent }: PlanGeneratorButtonProps) {
+export function PlanGeneratorButton({ planId, hasContent, label }: PlanGeneratorButtonProps) {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
@@ -100,6 +101,13 @@ export function PlanGeneratorButton({ planId, hasContent }: PlanGeneratorButtonP
 
     if (!done) {
       setGenerating(false);
+      // 스트림이 끊겼지만 에러가 없으면 → 타임아웃 (이어쓰기 필요)
+      if (!error && progress > 0 && progress < 100) {
+        setCurrentStep("서버 연결이 끊겼습니다. 페이지를 새로고침하면 이어쓰기가 가능합니다.");
+        setTimeout(() => {
+          router.refresh();
+        }, 3000);
+      }
     }
   };
 
@@ -144,13 +152,13 @@ export function PlanGeneratorButton({ planId, hasContent }: PlanGeneratorButtonP
     );
   }
 
-  if (hasContent) {
-    return null; // 이미 내용이 있으면 버튼 숨김
+  if (hasContent && !label) {
+    return null; // 이미 내용이 있고 label이 없으면 버튼 숨김
   }
 
   return (
-    <Button className="gap-2" onClick={handleGenerate}>
-      <Sparkles className="h-4 w-4" /> AI 자동 생성 시작
+    <Button className="gap-2" onClick={handleGenerate} size={label ? "sm" : "default"}>
+      <Sparkles className="h-4 w-4" /> {label || "AI 자동 생성 시작"}
     </Button>
   );
 }
