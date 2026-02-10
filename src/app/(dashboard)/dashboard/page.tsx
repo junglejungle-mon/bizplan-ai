@@ -13,6 +13,7 @@ import {
   Clock,
   CheckCircle2,
 } from "lucide-react";
+import { AssistantCard } from "@/components/assistant/assistant-card";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -178,6 +179,9 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI 사업 비서 */}
+      <AssistantCard />
 
       {/* Profile Score */}
       {company.profile_score < 70 && (
