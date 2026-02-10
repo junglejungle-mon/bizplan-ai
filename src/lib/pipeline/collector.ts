@@ -10,6 +10,7 @@ import { fetchAllMssBizPrograms } from "@/lib/apis/mss-biz";
 import { fetchAllKStartupPrograms } from "@/lib/apis/kstartup";
 import { parseDateRange } from "@/lib/ai/prompts/matching";
 import { runMatchingPipeline } from "@/lib/pipeline/matcher";
+import { downloadAndCacheTemplate, extractFormUrls } from "@/lib/hwpx/template-manager";
 
 interface CollectedProgram {
   source: "bizinfo" | "mss" | "kstartup";
@@ -30,6 +31,7 @@ interface CollectedProgram {
 export async function collectAllPrograms(): Promise<{
   total: number;
   inserted: number;
+  formsCached: number;
   matching: { companyId: string; matched: number; skipped: number }[];
   errors: string[];
 }> {
@@ -111,6 +113,33 @@ export async function collectAllPrograms(): Promise<{
     `[Collector] 수집 완료: 전체 ${results.length}건 중 ${inserted}건 저장`
   );
 
+  // === 양식폼 자동 캐싱 (HWPX 첨부파일이 있는 공고) ===
+  let formsCached = 0;
+  try {
+    // attachment_urls에 양식이 있는 신규/기존 프로그램 조회
+    const { data: programsWithForms } = await supabase
+      .from("programs")
+      .select("id, attachment_urls")
+      .not("attachment_urls", "is", null);
+
+    if (programsWithForms && programsWithForms.length > 0) {
+      for (const prog of programsWithForms) {
+        const urls = extractFormUrls(prog.attachment_urls as Record<string, unknown>);
+        if (urls.length > 0) {
+          try {
+            const tmpl = await downloadAndCacheTemplate(supabase, prog.id);
+            if (tmpl && tmpl.status === "downloaded") formsCached++;
+          } catch (e) {
+            // 양식 캐싱 실패는 무시 (수집 파이프라인 중단하지 않음)
+          }
+        }
+      }
+      console.log(`[Collector] 양식 캐싱: ${formsCached}건`);
+    }
+  } catch (e) {
+    console.warn("[Collector] 양식 캐싱 단계 오류:", e);
+  }
+
   // === 자동 매칭 파이프라인 트리거 ===
   const matchingResults: { companyId: string; matched: number; skipped: number }[] = [];
 
@@ -152,8 +181,8 @@ export async function collectAllPrograms(): Promise<{
 
   const totalMatched = matchingResults.reduce((s, r) => s + r.matched, 0);
   console.log(
-    `[Collector] 전체 완료: ${results.length}건 수집, ${inserted}건 저장, ${totalMatched}건 매칭`
+    `[Collector] 전체 완료: ${results.length}건 수집, ${inserted}건 저장, ${formsCached}건 양식캐시, ${totalMatched}건 매칭`
   );
 
-  return { total: results.length, inserted, matching: matchingResults, errors };
+  return { total: results.length, inserted, formsCached, matching: matchingResults, errors };
 }
