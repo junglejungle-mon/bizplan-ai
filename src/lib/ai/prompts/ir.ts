@@ -79,19 +79,29 @@ export const IR_GENERATOR_SYSTEM = `당신은 투자유치용 IR PPT 작성 전�
 export function buildIRGeneratorPrompt(
   companyName: string,
   businessContent: string,
-  planSections: Array<{ section_name: string; content: string }>
+  planSections: Array<{ section_name: string; content: string }>,
+  referenceExamples?: string
 ) {
   const planText = planSections
     .map((s) => `## ${s.section_name}\n${s.content}`)
     .join("\n\n");
 
-  return `# 회사 정보
+  let prompt = `# 회사 정보
 회사명: ${companyName}
 ${businessContent}
 
 # 사업계획서 내용
-${planText}
+${planText}`;
 
-위 사업계획서 내용을 기반으로 투자유치용 IR PPT 슬라이드 12장을 생성하세요.
+  if (referenceExamples) {
+    prompt += `\n\n# 선정된 IR 레퍼런스 (실제 선정 사례)
+아래는 실제 선정된 IR/PPT에서 유사한 내용입니다. 구조와 임팩트를 참고하세요.
+
+${referenceExamples}`;
+  }
+
+  prompt += `\n\n위 사업계획서 내용을 기반으로 투자유치용 IR PPT 슬라이드 12장을 생성하세요.
 각 슬라이드 타입: cover, problem, solution, market, business_model, traction, competition, tech, team, financials, ask, roadmap`;
+
+  return prompt;
 }

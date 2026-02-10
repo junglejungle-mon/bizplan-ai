@@ -13,6 +13,7 @@ import {
   DEEP_ANALYSIS_SYSTEM,
   buildDeepAnalysisPrompt,
 } from "@/lib/ai/prompts/matching";
+import { sendKakaoNotification } from "@/lib/notification/notification-service";
 
 interface MatchResult {
   programId: string;
@@ -265,6 +266,32 @@ export async function runMatchingPipeline(companyId: string): Promise<{
   console.log(
     `[Matcher] 완료: ${matched}건 매칭, ${skipped}건 지역 스킵, ${deepAnalyzed}건 심층분석`
   );
+
+  // 매칭 결과 카카오 알림톡 발송 (1건 이상 매칭 시)
+  if (matched > 0) {
+    try {
+      // 최고 점수 조회
+      const { data: topMatch } = await supabase
+        .from("matchings")
+        .select("match_score")
+        .eq("company_id", companyId)
+        .order("match_score", { ascending: false })
+        .limit(1)
+        .single();
+
+      await sendKakaoNotification({
+        userId: company.user_id,
+        type: "matching",
+        variables: {
+          "#{회사명}": company.name,
+          "#{매칭건수}": String(matched),
+          "#{최고점수}": String(topMatch?.match_score ?? 0),
+        },
+      });
+    } catch (e) {
+      console.error("[Matcher] 알림 발송 실패:", e);
+    }
+  }
 
   return { matched, skipped, deepAnalyzed, errors };
 }

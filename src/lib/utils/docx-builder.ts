@@ -22,23 +22,33 @@ import {
   Packer,
   ShadingType,
   VerticalAlign,
+  ImageRun,
 } from "docx";
+import { chartsToImages, ChartImageResult } from "@/lib/charts/chart-to-image";
+import { getThemeForTemplate, ChartTheme } from "@/lib/charts/themes";
 
-// ===== 색상 팔레트 (infographic-guide.md 기반) =====
-const COLORS = {
-  primary: "1E40AF",     // 딥블루
-  secondary: "3B82F6",   // 블루
-  accent: "F59E0B",      // 앰버/골드
-  background: "F8FAFC",  // 라이트그레이
-  textDark: "1E293B",    // 다크
-  positive: "22C55E",    // 그린
-  negative: "EF4444",    // 레드
-  neutral: "94A3B8",     // 그레이
-  headerBg: "1E40AF",    // 테이블 헤더 배경 (딥블루)
-  headerText: "FFFFFF",  // 테이블 헤더 텍스트 (흰색)
-  highlightBg: "EFF6FF", // 하이라이트 카드 배경
-  highlightBorder: "3B82F6",
-};
+// ===== 색상 팔레트 (테마 기반 + 폴백) =====
+function getColors(templateType?: string) {
+  const theme = getThemeForTemplate(templateType);
+  const stripHash = (c: string) => c.replace("#", "");
+  return {
+    primary: stripHash(theme.primary),
+    secondary: stripHash(theme.chartColors[1] || theme.accent),
+    accent: stripHash(theme.accent),
+    background: stripHash(theme.background),
+    textDark: stripHash(theme.textDark),
+    positive: stripHash(theme.positive),
+    negative: stripHash(theme.negative),
+    neutral: stripHash(theme.textLight),
+    headerBg: stripHash(theme.headerBg),
+    headerText: stripHash(theme.headerText),
+    highlightBg: stripHash(theme.background),
+    highlightBorder: stripHash(theme.chartColors[1] || theme.accent),
+  };
+}
+
+// 기본 COLORS (하위 호환)
+const COLORS = getColors();
 
 // ===== chart_data 인터페이스 =====
 interface ChartDataItem {
@@ -720,18 +730,15 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
       break;
 
     case "highlight_cards": {
-      const items = (chart.data as { items?: Array<{ label: string; value: string }> }).items;
-      if (items && items.length > 0) {
-        const kpiLike: KpiData = {};
-        for (const item of items) {
-          if (item.label.includes("매출")) kpiLike.revenue = item.value;
-          else if (item.label.includes("성장")) kpiLike.revenue_growth = item.value;
-          else if (item.label.includes("직원") || item.label.includes("임직원")) kpiLike.employees = item.value;
-          else if (item.label.includes("특허")) kpiLike.patents = item.value;
-        }
-        if (Object.keys(kpiLike).length > 0) {
-          result.push(...buildKpiHighlightCards(kpiLike));
-        }
+      // data.items 또는 data.cards 형태 모두 지원
+      const rawItems = (chart.data as any).items || (chart.data as any).cards;
+      if (rawItems && rawItems.length > 0) {
+        result.push(
+          ...buildStyledTable(
+            rawItems.map((item: any) => `${item.icon || ""} ${item.label}`),
+            [rawItems.map((item: any) => item.value || "")]
+          )
+        );
       }
       break;
     }
@@ -747,13 +754,20 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
     case "bar":
     case "line": {
       // 막대/선 차트 → 데이터 테이블로 표현
-      const { labels, values, unit } = chart.data as { labels?: string[]; values?: number[]; unit?: string };
-      if (labels && values) {
-        const unitStr = unit || "";
+      // data.datasets 형태 (실제 AI 출력) 또는 data.labels+values 형태 모두 지원
+      const chartDataTyped = chart.data as { labels?: string[]; values?: number[]; datasets?: Array<{ label: string; values: number[] }>; unit?: string };
+      if (chartDataTyped.labels && chartDataTyped.datasets && chartDataTyped.datasets.length > 0) {
+        const headers = ["항목", ...chartDataTyped.datasets.map((ds) => ds.label)];
+        const rows = chartDataTyped.labels.map((l, i) =>
+          [l, ...chartDataTyped.datasets!.map((ds) => `${ds.values[i]?.toLocaleString() || "-"}`)]
+        );
+        result.push(...buildStyledTable(headers, rows));
+      } else if (chartDataTyped.labels && chartDataTyped.values) {
+        const unitStr = chartDataTyped.unit || "";
         result.push(
           ...buildStyledTable(
             ["항목", "값"],
-            labels.map((l, i) => [l, `${values[i]?.toLocaleString() || "-"}${unitStr}`])
+            chartDataTyped.labels.map((l, i) => [l, `${chartDataTyped.values![i]?.toLocaleString() || "-"}${unitStr}`])
           )
         );
       }
@@ -762,13 +776,25 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
 
     case "pie": {
       // 파이 차트 → 비율 테이블
-      const { items } = chart.data as { items?: Array<{ name: string; value: number; unit?: string }> };
-      if (items) {
-        const total = items.reduce((sum, item) => sum + (item.value || 0), 0);
+      // data.items 형태 또는 data.labels+values 형태 모두 지원
+      const pieData = chart.data as { items?: Array<{ name: string; value: number; unit?: string }>; labels?: string[]; values?: number[] };
+      if (pieData.labels && pieData.values) {
+        const total = pieData.values.reduce((sum, v) => sum + (v || 0), 0);
+        result.push(
+          ...buildStyledTable(
+            ["항목", "비율"],
+            pieData.labels.map((label, i) => [
+              label,
+              total > 0 ? `${pieData.values![i]}% (${((pieData.values![i] / total) * 100).toFixed(1)}%)` : `${pieData.values![i]}%`,
+            ])
+          )
+        );
+      } else if (pieData.items) {
+        const total = pieData.items.reduce((sum, item) => sum + (item.value || 0), 0);
         result.push(
           ...buildStyledTable(
             ["항목", "값", "비율"],
-            items.map((item) => [
+            pieData.items.map((item) => [
               item.name,
               `${item.value?.toLocaleString() || "-"}${item.unit || ""}`,
               total > 0 ? `${((item.value / total) * 100).toFixed(1)}%` : "-",
@@ -921,21 +947,82 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
 }
 
 /**
- * 사업계획서를 DOCX Buffer로 변환 (v2 — 인포그래픽 강화)
+ * 차트 이미지를 DOCX Paragraph로 변환
+ * PNG 버퍼 → ImageRun → 155mm 너비로 삽입
+ */
+function buildChartImage(imageResult: ChartImageResult, chartTitle: string): Paragraph[] {
+  const result: Paragraph[] = [];
+
+  // 차트 제목
+  result.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: chartTitle,
+          bold: true,
+          size: 22,
+          font: "맑은 고딕",
+          color: COLORS.primary,
+        }),
+      ],
+      spacing: { before: 160, after: 80 },
+    })
+  );
+
+  // 이미지 삽입 (155mm 너비, 비율 유지)
+  const targetWidthMm = 155;
+  const aspectRatio = imageResult.height / imageResult.width;
+  const targetHeightMm = targetWidthMm * aspectRatio;
+
+  result.push(
+    new Paragraph({
+      children: [
+        new ImageRun({
+          data: imageResult.pngBuffer,
+          transformation: {
+            width: convertMillimetersToTwip(targetWidthMm) / 15, // EMU → DXA → approx points
+            height: convertMillimetersToTwip(targetHeightMm) / 15,
+          },
+          type: "png",
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 40, after: 120 },
+    })
+  );
+
+  return result;
+}
+
+/**
+ * 사업계획서를 DOCX Buffer로 변환 (v3 — 차트 이미지 삽입)
  */
 export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
-  const { title, companyName, sections, chartData, kpiData } = opts;
+  const { title, companyName, sections, chartData, kpiData, templateType } = opts;
   const today = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
+  // 테마 색상 적용
+  const colors = getColors(templateType);
+
+  // 차트 이미지 사전 생성 (chartData가 있을 때만)
+  let chartImages: Record<string, ChartImageResult[]> = {};
+  if (chartData && Object.keys(chartData).length > 0) {
+    try {
+      chartImages = await chartsToImages(chartData, templateType);
+    } catch (error) {
+      console.warn("[docx-builder] 차트 이미지 생성 실패, 테이블 폴백 사용:", error);
+    }
+  }
+
   // 섹션별 콘텐츠를 Paragraph로 변환
   const sectionParagraphs: Paragraph[] = [];
 
   for (const section of sections) {
-    // 섹션 제목
+    // 섹션 제목 (테마 색상 적용)
     sectionParagraphs.push(
       new Paragraph({
         children: [
@@ -944,7 +1031,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
             bold: true,
             size: 28,
             font: "맑은 고딕",
-            color: COLORS.primary,
+            color: colors.primary,
           }),
         ],
         heading: HeadingLevel.HEADING_2,
@@ -953,7 +1040,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
           bottom: {
             style: BorderStyle.SINGLE,
             size: 2,
-            color: COLORS.secondary,
+            color: colors.secondary,
           },
         },
       })
@@ -984,12 +1071,21 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
       );
     }
 
-    // 차트 데이터가 있으면 섹션 끝에 인포그래픽 삽입
+    // 차트 데이터가 있으면 섹션 끝에 차트 이미지 삽입 (실패 시 테이블 폴백)
     const sectionKey = `section_${section.section_order}`;
     const sectionCharts = chartData?.[sectionKey];
+    const sectionImages = chartImages[sectionKey];
     if (sectionCharts && sectionCharts.length > 0) {
-      for (const chart of sectionCharts) {
-        sectionParagraphs.push(...buildChartElement(chart));
+      for (let ci = 0; ci < sectionCharts.length; ci++) {
+        const chart = sectionCharts[ci];
+        const img = sectionImages?.[ci];
+        if (img && img.pngBuffer.length > 0) {
+          // 차트 이미지 삽입
+          sectionParagraphs.push(...buildChartImage(img, chart.title));
+        } else {
+          // 이미지 실패 시 기존 테이블 폴백
+          sectionParagraphs.push(...buildChartElement(chart));
+        }
       }
     }
 
@@ -1071,7 +1167,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
                 bold: true,
                 size: 52,
                 font: "맑은 고딕",
-                color: COLORS.primary,
+                color: colors.primary,
               }),
             ],
             alignment: AlignmentType.CENTER,
@@ -1107,7 +1203,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
               bottom: {
                 style: BorderStyle.SINGLE,
                 size: 3,
-                color: COLORS.secondary,
+                color: colors.secondary,
               },
             },
             spacing: { after: 200 },
@@ -1139,7 +1235,7 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
                 bold: true,
                 size: 36,
                 font: "맑은 고딕",
-                color: COLORS.primary,
+                color: colors.primary,
               }),
             ],
             alignment: AlignmentType.CENTER,

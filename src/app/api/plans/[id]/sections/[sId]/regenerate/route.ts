@@ -6,6 +6,7 @@ import {
   SECTION_WRITER_SYSTEM,
   buildSectionWriterPrompt,
 } from "@/lib/ai/prompts/writing";
+import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
 
 /**
  * POST /api/plans/[id]/sections/[sId]/regenerate
@@ -78,6 +79,25 @@ export async function POST(
   const company = (plan as any).companies;
   const evaluationWeight = section.evaluation_weight || undefined;
 
+  // RAG 레퍼런스 검색
+  let referenceExamples: string | undefined;
+  try {
+    const ragQuery = `${section.section_name} ${(section.guidelines || "").slice(0, 200)}`;
+    const evalCrit = (plan as any).evaluation_criteria;
+    const templateType = evalCrit?.template_type || undefined;
+    const ragResults = await searchReferences({
+      query: ragQuery,
+      templateType,
+      referenceType: "business_plan",
+      topK: 3,
+    });
+    if (ragResults.length > 0) {
+      referenceExamples = formatReferenceExamples(ragResults);
+    }
+  } catch (e) {
+    console.warn("[Regenerate] RAG 검색 실패 (계속 진행):", e);
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -99,6 +119,7 @@ export async function POST(
                 evaluationWeight,
                 researchKo: section.research_result_ko || undefined,
                 researchEn: section.research_result_en || undefined,
+                referenceExamples,
               }),
             },
           ],

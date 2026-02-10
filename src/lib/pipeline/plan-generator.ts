@@ -12,6 +12,13 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude, streamClaude } from "@/lib/ai/claude";
+import { sendKakaoNotification } from "@/lib/notification/notification-service";
+import {
+  extractPdfUrlFromProgram,
+  downloadPdfAsBase64,
+  ocrProgramPdf,
+} from "@/lib/ocr/program-pdf-ocr";
+import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
 import {
   // Stage 0
   TEMPLATE_CLASSIFIER_SYSTEM,
@@ -80,6 +87,7 @@ export async function* generateBusinessPlan(
     // 2. 프로그램 정보 로드 (있는 경우)
     let programInfo = "";
     let evaluationCriteria: any[] = [];
+    let programAttachmentUrls: Record<string, any> | null = null;
 
     if (opts.programId) {
       const { data: program } = await supabase
@@ -90,6 +98,52 @@ export async function* generateBusinessPlan(
 
       if (program) {
         programInfo = `공고명: ${program.title}\n요약: ${program.summary || ""}\n대상: ${program.target || ""}`;
+        programAttachmentUrls = (program as any).attachment_urls;
+      }
+    }
+
+    // ========================================
+    // Pre-Stage: 양식 PDF 자동 OCR
+    // ========================================
+    if (!opts.templateOcrText && opts.programId && programAttachmentUrls) {
+      try {
+        const pdfUrl = extractPdfUrlFromProgram(programAttachmentUrls);
+        if (pdfUrl) {
+          yield {
+            type: "progress",
+            data: { step: "공고 양식 PDF 다운로드 중...", progress: 1 },
+          };
+
+          const pdfData = await downloadPdfAsBase64(pdfUrl);
+          if (pdfData) {
+            yield {
+              type: "progress",
+              data: { step: `양식 OCR 처리 중... (${(pdfData.sizeBytes / 1024).toFixed(0)}KB)`, progress: 2 },
+            };
+
+            const ocrText = await ocrProgramPdf(pdfData.base64);
+            if (ocrText && ocrText.length > 100) {
+              opts.templateOcrText = ocrText;
+              console.log(`[PlanGen] 양식 OCR 완료: ${ocrText.length}자 추출`);
+
+              // DB에 캐시 저장
+              await supabase
+                .from("business_plans")
+                .update({ template_ocr_text: ocrText })
+                .eq("id", opts.planId);
+
+              yield {
+                type: "progress",
+                data: { step: `양식 OCR 완료 (${ocrText.length}자)`, progress: 3 },
+              };
+            } else {
+              console.warn("[PlanGen] OCR 결과가 너무 짧음, 기본 섹션 사용");
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[PlanGen] 양식 OCR 실패 (계속 진행):", e);
+        // OCR 실패는 비치명적 — 기본 섹션으로 폴백
       }
     }
 
@@ -448,6 +502,24 @@ export async function* generateBusinessPlan(
         }
       }
 
+      // Step B-2: RAG 레퍼런스 검색
+      let referenceExamples: string | undefined;
+      try {
+        const ragQuery = `${section.section_name} ${(section.guidelines || "").slice(0, 200)}`;
+        const ragResults = await searchReferences({
+          query: ragQuery,
+          templateType,
+          referenceType: "business_plan",
+          topK: 3,
+        });
+        if (ragResults.length > 0) {
+          referenceExamples = formatReferenceExamples(ragResults);
+          console.log(`[PlanGen] RAG search: ${ragResults.length}개 레퍼런스 (${section.section_name})`);
+        }
+      } catch (e) {
+        console.warn(`[PlanGen] RAG 검색 실패 (계속 진행):`, e);
+      }
+
       // Step C: 섹션 작성 (Sonnet — SSE 스트리밍 + templateType 전달)
       const evalWeight =
         evaluationCriteria.find(
@@ -477,6 +549,7 @@ export async function* generateBusinessPlan(
               researchKo: researchKo || undefined,
               researchEn: researchEn || undefined,
               templateType,
+              referenceExamples,
             }),
           },
         ],
@@ -698,6 +771,25 @@ export async function* generateBusinessPlan(
             ) / allChartData.length
           )
         : null;
+
+    // 사업계획서 완료 카카오 알림톡 발송
+    try {
+      const { data: plan } = await supabase
+        .from("business_plans")
+        .select("title")
+        .eq("id", opts.planId)
+        .single();
+
+      await sendKakaoNotification({
+        userId: company.user_id,
+        type: "plan_complete",
+        variables: {
+          "#{계획서명}": plan?.title || "사업계획서",
+        },
+      });
+    } catch (e) {
+      console.error("[PlanGen] 알림 발송 실패:", e);
+    }
 
     yield {
       type: "complete",
