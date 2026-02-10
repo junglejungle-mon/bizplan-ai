@@ -196,3 +196,32 @@ VALUES
  '투자자가 다음 미팅을 잡고 싶게 만드는 마지막 슬라이드.', 8, true)
 
 ON CONFLICT (template_type, section_name) DO NOTHING;
+
+-- ============================================================
+-- 3. 슬라이드 레퍼런스 테이블 (Few-shot 학습용)
+-- 실제 선정된 PPT에서 슬라이드 단위로 추출한 텍스트
+-- ============================================================
+CREATE TABLE IF NOT EXISTS slide_references (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_file TEXT NOT NULL,
+  slide_number INT NOT NULL,
+  slide_type TEXT NOT NULL,
+  title TEXT,
+  full_text TEXT NOT NULL,
+  char_count INT,
+  line_count INT,
+  quality_rating INT DEFAULT 0,  -- 0~5, 수동/자동 평점
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(source_file, slide_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_slide_refs_type ON slide_references(slide_type);
+
+ALTER TABLE slide_references ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role access slide_references" ON slide_references
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
