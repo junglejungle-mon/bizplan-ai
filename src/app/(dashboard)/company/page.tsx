@@ -14,6 +14,9 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  Upload,
+  FileText,
+  CheckCircle2,
 } from "lucide-react";
 
 interface CompanyData {
@@ -43,6 +46,8 @@ export default function CompanyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showInterviews, setShowInterviews] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -103,6 +108,52 @@ export default function CompanyPage() {
     setSaving(false);
   };
 
+  const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setOcrLoading(true);
+    setOcrResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("autoSave", "false"); // 사용자 확인 후 저장
+
+      const res = await fetch("/api/company/ocr-registration", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "OCR 실패");
+        return;
+      }
+
+      const result = await res.json();
+      setOcrResult(result.data);
+
+      // 추출된 정보를 폼에 자동 채움
+      if (company && result.data) {
+        const d = result.data;
+        setCompany({
+          ...company,
+          ...(d.company_name && { name: d.company_name }),
+          ...(d.industry && { industry: d.industry }),
+          ...(d.region && { region: d.region }),
+          ...(d.established_date && { established_date: d.established_date }),
+        });
+      }
+    } catch {
+      alert("OCR 처리 중 오류가 발생했습니다");
+    } finally {
+      setOcrLoading(false);
+      // input 초기화
+      e.target.value = "";
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -144,6 +195,77 @@ export default function CompanyPage() {
             <p className="mt-2 text-xs text-gray-500">
               추가 인터뷰를 통해 프로필을 고도화할 수 있습니다
             </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 사업자등록증 OCR */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <FileText className="h-5 w-5 text-blue-600" />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">사업자등록증 자동 입력</h3>
+              <p className="text-xs text-gray-500">사업자등록증을 업로드하면 회사 정보가 자동으로 채워집니다</p>
+            </div>
+          </div>
+          <label className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+            ocrLoading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"
+          }`}>
+            {ocrLoading ? (
+              <div className="flex items-center gap-2 text-blue-600">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm font-medium">사업자등록증 분석 중...</span>
+              </div>
+            ) : ocrResult ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">
+                  {ocrResult.company_name || "정보"} 추출 완료 (신뢰도 {Math.round((ocrResult.confidence || 0) * 100)}%)
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-gray-400">
+                <Upload className="h-6 w-6" />
+                <span className="text-xs">사업자등록증 이미지 또는 PDF</span>
+                <span className="text-[10px]">JPG, PNG, PDF (10MB 이하)</span>
+              </div>
+            )}
+            <input
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={handleOcrUpload}
+              disabled={ocrLoading}
+            />
+          </label>
+          {ocrResult && (
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              {ocrResult.business_number && (
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">사업자번호</span>
+                  <div className="font-mono font-medium text-gray-800">{ocrResult.business_number}</div>
+                </div>
+              )}
+              {ocrResult.representative && (
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">대표자</span>
+                  <div className="font-medium text-gray-800">{ocrResult.representative}</div>
+                </div>
+              )}
+              {ocrResult.business_type && (
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">종목</span>
+                  <div className="font-medium text-gray-800">{ocrResult.business_type}</div>
+                </div>
+              )}
+              {ocrResult.address && (
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">소재지</span>
+                  <div className="font-medium text-gray-800 truncate">{ocrResult.address}</div>
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
