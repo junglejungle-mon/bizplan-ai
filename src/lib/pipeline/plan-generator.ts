@@ -19,6 +19,8 @@ import {
   ocrProgramPdf,
 } from "@/lib/ocr/program-pdf-ocr";
 import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
+import { scoreAndSave } from "@/lib/quality/scorer";
+import { buildDynamicWriterContext } from "@/lib/quality/pattern-loader";
 import {
   // Stage 0
   TEMPLATE_CLASSIFIER_SYSTEM,
@@ -381,6 +383,15 @@ export async function* generateBusinessPlan(
     // ========================================
     // Stage 1: 텍스트 초안 작성 (섹션별) — 이어쓰기 지원
     // ========================================
+
+    // DB에서 선정패턴 + 평가기준 로드 (프롬프트 주입용)
+    let dynamicWriterContext = "";
+    try {
+      dynamicWriterContext = await buildDynamicWriterContext(templateType);
+    } catch (e) {
+      console.warn("[PlanGen] DB 패턴 로드 실패 (하드코딩 폴백 사용):", e);
+    }
+
     const allChartData: any[] = [];
 
     for (let i = 0; i < sections.length; i++) {
@@ -530,9 +541,14 @@ export async function* generateBusinessPlan(
 
       let sectionContent = "";
 
+      // 시스템 프롬프트에 DB 패턴 동적 주입
+      const writerSystem = dynamicWriterContext
+        ? `${SECTION_WRITER_SYSTEM}\n\n${dynamicWriterContext}`
+        : SECTION_WRITER_SYSTEM;
+
       for await (const chunk of streamClaude({
         model: "claude-sonnet-4-20250514",
-        system: SECTION_WRITER_SYSTEM,
+        system: writerSystem,
         messages: [
           {
             role: "user",
@@ -567,7 +583,7 @@ export async function* generateBusinessPlan(
       }
 
       // DB에 작성된 내용 저장
-      await supabase
+      const { data: savedSection } = await supabase
         .from("plan_sections")
         .update({
           content: sectionContent,
@@ -576,15 +592,19 @@ export async function* generateBusinessPlan(
           updated_at: new Date().toISOString(),
         })
         .eq("plan_id", opts.planId)
-        .eq("section_order", section.section_order);
+        .eq("section_order", section.section_order)
+        .select("id")
+        .single();
 
       previousSections += `\n## ${section.section_name}\n${sectionContent}\n`;
 
       // ========================================
-      // Stage 1.5: 품질 검증 + 차트 데이터 추출 (비동기 병렬)
+      // Stage 1.5: 품질 검증 + 차트 데이터 추출 + 자동 채점 (비동기 병렬)
       // ========================================
-      // 품질 검증과 차트 추출을 병렬로 실행 (Haiku — 빠르고 저렴)
-      const [validationResult, chartResult] = await Promise.allSettled([
+      // 품질 검증, 차트 추출, 자동 채점을 병렬로 실행
+      const sectionId = savedSection?.id;
+
+      const [validationResult, chartResult, scorerResult] = await Promise.allSettled([
         // 품질 검증
         callClaude({
           model: "claude-haiku-4-5-20251001",
@@ -616,6 +636,10 @@ export async function* generateBusinessPlan(
           ],
           temperature: 0,
         }),
+        // 자동 채점 (regex 기반, DB 저장)
+        sectionId
+          ? scoreAndSave(opts.planId, sectionId, sectionContent, section.section_name)
+          : Promise.resolve(null),
       ]);
 
       // 품질 점수 파싱 + DB 저장
@@ -639,6 +663,15 @@ export async function* generateBusinessPlan(
               .eq("section_order", section.section_order);
           }
         } catch {}
+      }
+
+      // 자동 채점 결과 로깅
+      let autoScore: number | null = null;
+      if (scorerResult.status === "fulfilled" && scorerResult.value) {
+        autoScore = scorerResult.value.total_score;
+        console.log(`[PlanGen] 자동 채점: ${section.section_name} = ${autoScore}점/100`);
+      } else if (scorerResult.status === "rejected") {
+        console.warn(`[PlanGen] 자동 채점 실패 [${section.section_name}]:`, scorerResult.reason);
       }
 
       // 차트 데이터 파싱
@@ -671,6 +704,7 @@ export async function* generateBusinessPlan(
           qualityScore: qualityScore
             ? { total: qualityScore.total, grade: qualityScore.grade }
             : null,
+          autoScore,
           chartCount: sectionCharts.length,
         },
       };
@@ -761,16 +795,15 @@ export async function* generateBusinessPlan(
         .eq("id", opts.planId);
     }
 
-    // 전체 품질 점수 계산
-    const avgScore =
-      allChartData.length > 0
-        ? Math.round(
-            allChartData.reduce(
-              (sum: number, c: any) => sum + (c.qualityScore?.total || 0),
-              0
-            ) / allChartData.length
-          )
-        : null;
+    // 전체 품질 점수 계산 (scorer로 전체 플랜 평균 계산 + DB 저장)
+    try {
+      const { scorePlan } = await import("@/lib/quality/scorer");
+      const scoreResults = await scorePlan(opts.planId);
+      const avgTotal = scoreResults.reduce((s, r) => s + r.total_score, 0) / scoreResults.length;
+      console.log(`[PlanGen] 전체 품질 점수: ${Math.round(avgTotal)}점 (${scoreResults.length}개 섹션)`);
+    } catch (e) {
+      console.warn("[PlanGen] 전체 품질 점수 계산 실패:", e);
+    }
 
     // 사업계획서 완료 카카오 알림톡 발송
     try {
