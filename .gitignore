@@ -36,6 +36,15 @@ yarn-error.log*
 # scripts (contain test secrets)
 /scripts
 
+# test output
+/test-output
+
+# supabase temp
+supabase/.temp/
+
+# NAS references (local only)
+references/NAS/
+
 # vercel
 .vercel
 
