@@ -4,6 +4,10 @@
     {
       "path": "/api/programs/collect",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/programs/collect",
+      "schedule": "0 6 * * *"
     }
   ]
 }

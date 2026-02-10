@@ -5,6 +5,7 @@ import {
   ASSISTANT_SYSTEM,
   buildAssistantPrompt,
 } from "@/lib/ai/prompts/assistant";
+import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
 
 /**
  * POST /api/assistant/chat
@@ -92,6 +93,21 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // RAG 검색 (사업계획서 관련 질문일 때)
+  let ragContext: string | undefined;
+  try {
+    const ragResults = await searchReferences({
+      query: message,
+      topK: 3,
+      threshold: 0.3,
+    });
+    if (ragResults.length > 0) {
+      ragContext = formatReferenceExamples(ragResults);
+    }
+  } catch (e) {
+    console.warn("[Assistant] RAG 검색 실패 (무시):", e);
+  }
+
   // SSE 스트리밍 응답
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -103,10 +119,11 @@ export async function POST(request: NextRequest) {
           userMessage: message,
           companyProfile,
           currentContext,
+          ragContext,
         });
 
         for await (const chunk of streamClaude({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-haiku-4-5-20251001",
           system: ASSISTANT_SYSTEM,
           messages: [
             ...previousMessages,

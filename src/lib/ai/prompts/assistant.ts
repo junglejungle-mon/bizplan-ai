@@ -30,6 +30,7 @@ export function buildAssistantPrompt(opts: {
     title?: string;
     details?: string;
   };
+  ragContext?: string;
 }) {
   let context = "";
 
@@ -49,6 +50,10 @@ export function buildAssistantPrompt(opts: {
       context += `제목: ${opts.currentContext.title}\n`;
     if (opts.currentContext.details)
       context += `상세: ${opts.currentContext.details}\n`;
+  }
+
+  if (opts.ragContext) {
+    context += `\n[참고 레퍼런스 - 실제 사업계획서 사례]\n${opts.ragContext}\n`;
   }
 
   return `${context}\n사용자 질문: ${opts.userMessage}`;
