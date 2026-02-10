@@ -63,6 +63,11 @@ export default async function PlanEditorPage({
                   {plan.programs.title}
                 </span>
               )}
+              {plan.template_ocr_text && (
+                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                  양식 OCR 적용
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -72,7 +77,7 @@ export default async function PlanEditorPage({
               <Presentation className="h-4 w-4" /> IR PPT 생성
             </Button>
           </Link>
-          <ExportButton planId={id} />
+          <ExportButton planId={id} hasProgramForm={!!plan.program_id} />
         </div>
       </div>
 
@@ -157,7 +162,7 @@ export default async function PlanEditorPage({
                       <Sparkles className="h-4 w-4" /> PPT 만들기
                     </Button>
                   </Link>
-                  <ExportButton planId={id} />
+                  <ExportButton planId={id} hasProgramForm={!!plan.program_id} />
                 </div>
               </CardContent>
             </Card>

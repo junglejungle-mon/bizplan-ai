@@ -7,18 +7,27 @@ export interface Database {
           id: string;
           email: string;
           name: string | null;
+          phone: string | null;
+          phone_verified: boolean;
+          kakao_id: string | null;
           created_at: string;
         };
         Insert: {
           id: string;
           email: string;
           name?: string | null;
+          phone?: string | null;
+          phone_verified?: boolean;
+          kakao_id?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           email?: string;
           name?: string | null;
+          phone?: string | null;
+          phone_verified?: boolean;
+          kakao_id?: string | null;
           created_at?: string;
         };
       };
@@ -168,6 +177,8 @@ export interface Database {
           status: string;
           template_ocr_text: string | null;
           evaluation_criteria: Record<string, unknown> | null;
+          form_template_id: string | null;
+          fill_strategy: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -180,6 +191,8 @@ export interface Database {
           status?: string;
           template_ocr_text?: string | null;
           evaluation_criteria?: Record<string, unknown> | null;
+          form_template_id?: string | null;
+          fill_strategy?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["business_plans"]["Insert"]>;
       };
@@ -313,6 +326,149 @@ export interface Database {
           context_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["assistant_chats"]["Insert"]>;
+      };
+      notification_settings: {
+        Row: {
+          id: string;
+          user_id: string;
+          channel: "kakao" | "email" | "discord";
+          enabled: boolean;
+          notify_matching: boolean;
+          notify_deadline: boolean;
+          notify_plan_complete: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          channel: "kakao" | "email" | "discord";
+          enabled?: boolean;
+          notify_matching?: boolean;
+          notify_deadline?: boolean;
+          notify_plan_complete?: boolean;
+        };
+        Update: {
+          enabled?: boolean;
+          notify_matching?: boolean;
+          notify_deadline?: boolean;
+          notify_plan_complete?: boolean;
+          updated_at?: string;
+        };
+      };
+      reference_documents: {
+        Row: {
+          id: string;
+          title: string;
+          file_name: string;
+          file_url: string | null;
+          reference_type: string;
+          template_type: string;
+          status: "pending" | "processing" | "completed" | "failed";
+          ocr_text: string | null;
+          metadata: Record<string, unknown> | null;
+          chunk_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          file_name: string;
+          file_url?: string | null;
+          reference_type?: string;
+          template_type?: string;
+          status?: string;
+          ocr_text?: string | null;
+          metadata?: Record<string, unknown> | null;
+          chunk_count?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["reference_documents"]["Insert"]>;
+      };
+      reference_chunks: {
+        Row: {
+          id: string;
+          document_id: string;
+          content: string;
+          section_name: string | null;
+          chunk_index: number;
+          embedding: number[] | null;
+          token_count: number;
+          template_type: string | null;
+          reference_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          document_id: string;
+          content: string;
+          section_name?: string | null;
+          chunk_index?: number;
+          embedding?: number[] | null;
+          token_count?: number;
+          template_type?: string | null;
+          reference_type?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reference_chunks"]["Insert"]>;
+      };
+      notification_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          channel: "kakao" | "email" | "discord";
+          notification_type: "matching" | "deadline" | "plan_complete";
+          template_id: string | null;
+          recipient: string | null;
+          variables: Record<string, unknown> | null;
+          status: "pending" | "sent" | "failed";
+          error_message: string | null;
+          sent_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          channel: "kakao" | "email" | "discord";
+          notification_type: "matching" | "deadline" | "plan_complete";
+          template_id?: string | null;
+          recipient?: string | null;
+          variables?: Record<string, unknown> | null;
+          status?: "pending" | "sent" | "failed";
+          error_message?: string | null;
+          sent_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["notification_logs"]["Insert"]>;
+      };
+      form_templates: {
+        Row: {
+          id: string;
+          program_id: string;
+          source_url: string;
+          file_type: "hwpx" | "hwp";
+          file_size: number | null;
+          storage_path: string | null;
+          parsed_structure: Record<string, unknown> | null;
+          field_mappings: Record<string, unknown>[] | null;
+          form_title: string | null;
+          status: "pending" | "downloaded" | "parsed" | "mapped" | "failed";
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          program_id: string;
+          source_url: string;
+          file_type?: "hwpx" | "hwp";
+          file_size?: number | null;
+          storage_path?: string | null;
+          parsed_structure?: Record<string, unknown> | null;
+          field_mappings?: Record<string, unknown>[] | null;
+          form_title?: string | null;
+          status?: string;
+          error_message?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["form_templates"]["Insert"]>;
       };
     };
   };
