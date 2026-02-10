@@ -35,14 +35,14 @@ export default async function PlanEditorPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/plans" className="text-gray-400 hover:text-gray-600">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/plans" className="text-gray-400 hover:text-gray-600 shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{plan.title}</h1>
-            <div className="flex items-center gap-2 mt-1">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">{plan.title}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge
                 variant={
                   plan.status === "completed"
@@ -59,7 +59,7 @@ export default async function PlanEditorPage({
                   : "초안"}
               </Badge>
               {plan.programs?.title && (
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 truncate max-w-[200px]">
                   {plan.programs.title}
                 </span>
               )}
@@ -71,10 +71,10 @@ export default async function PlanEditorPage({
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <Link href={`/plans/${id}/ir`}>
             <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-              <Presentation className="h-4 w-4" /> IR PPT 생성
+              <Presentation className="h-4 w-4" /> <span className="hidden sm:inline">IR PPT 생성</span><span className="sm:hidden">IR</span>
             </Button>
           </Link>
           <ExportButton planId={id} hasProgramForm={!!plan.program_id} />
@@ -82,8 +82,8 @@ export default async function PlanEditorPage({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        {/* 좌측: 섹션 목차 */}
-        <div className="space-y-2">
+        {/* 좌측: 섹션 목차 (모바일에서 숨김) */}
+        <div className="hidden lg:block space-y-2">
           <h3 className="text-sm font-medium text-gray-500 px-3">목차</h3>
           {sections?.map((section: any, i: number) => (
             <a
