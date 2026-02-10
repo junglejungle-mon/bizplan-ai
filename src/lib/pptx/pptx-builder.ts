@@ -34,39 +34,47 @@ interface PptxOptions {
 }
 
 // 템플릿별 색상 설정
+// SKILL.md 스펙 + NAS 실제 선정 PPT 색상 분석 반영
+// - 선정 PPT 주요색: #023793(네이비), #003366(다크블루), #FF0000(강조레드)
+// - 폰트: KoPub돋움, 에스코어드림, 맑은고딕
 const TEMPLATES = {
   minimal: {
-    primary: "2563EB",
-    secondary: "1E40AF",
-    accent: "3B82F6",
+    // SKILL.md: #1a1a2e(다크네이비) + #4361ee(블루포인트)
+    // NAS 분석: #023793 + #003366 계열
+    primary: "1A1A2E",
+    secondary: "023793",
+    accent: "4361EE",
     bg: "FFFFFF",
-    textDark: "1F2937",
+    textDark: "1A1A2E",
     textLight: "6B7280",
     positive: "22C55E",
     negative: "EF4444",
-    chartColors: ["2563EB", "3B82F6", "60A5FA", "93C5FD", "BFDBFE"],
+    chartColors: ["023793", "4361EE", "6C8EF2", "A0B4F5", "D0DBF9"],
   },
   tech: {
-    primary: "7C3AED",
-    secondary: "5B21B6",
-    accent: "8B5CF6",
-    bg: "0F172A",
+    // SKILL.md: #58a6ff(라이트블루) + #7ee787(그린) on dark
+    primary: "58A6FF",
+    secondary: "388BFD",
+    accent: "7EE787",
+    bg: "0D1117",
     textDark: "FFFFFF",
-    textLight: "94A3B8",
-    positive: "34D399",
-    negative: "F87171",
-    chartColors: ["7C3AED", "8B5CF6", "A78BFA", "C4B5FD", "DDD6FE"],
+    textLight: "8B949E",
+    positive: "7EE787",
+    negative: "F85149",
+    chartColors: ["58A6FF", "388BFD", "7EE787", "D2A8FF", "F778BA"],
   },
   classic: {
-    primary: "DC2626",
-    secondary: "991B1B",
-    accent: "EF4444",
-    bg: "FFFFFF",
-    textDark: "1F2937",
+    // SKILL.md: #2c3e50(네이비) + #e74c3c(레드포인트)
+    // NAS 분석: #003366 + #FF0000 조합 (정글몬스터 표준안)
+    primary: "2C3E50",
+    secondary: "003366",
+    accent: "E74C3C",
+    bg: "F8F9FA",
+    textDark: "2C3E50",
     textLight: "6B7280",
-    positive: "22C55E",
-    negative: "EF4444",
-    chartColors: ["DC2626", "EF4444", "F87171", "FCA5A5", "FECACA"],
+    positive: "27AE60",
+    negative: "E74C3C",
+    chartColors: ["2C3E50", "E74C3C", "3498DB", "2ECC71", "F39C12"],
   },
 };
 

@@ -116,3 +116,78 @@ export async function buildDynamicWriterContext(
 
   return parts.join("\n\n");
 }
+
+// ---------------------------------------------------------------------------
+// PPT 전용: loadPptPatterns — category가 'ppt_*'인 패턴만 로드
+// ---------------------------------------------------------------------------
+let pptPatternCache: { data: string; loadedAt: number } | null = null;
+
+export async function loadPptPatterns(): Promise<string> {
+  if (pptPatternCache && Date.now() - pptPatternCache.loadedAt < CACHE_TTL) {
+    return pptPatternCache.data;
+  }
+
+  const supabase = createAdminClient();
+  const { data: patterns, error } = await supabase
+    .from("winning_patterns")
+    .select("title, description, good_examples, bad_examples, weight, category, subcategory")
+    .eq("is_active", true)
+    .like("category", "ppt_%")
+    .order("weight", { ascending: false });
+
+  if (error || !patterns || patterns.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = [
+    "# IR PPT 필수 패턴 (DB 기반, NAS 실제 선정 PPT + SKILL.md 분석)",
+  ];
+
+  // 카테고리별 그룹핑
+  const groups = new Map<string, typeof patterns>();
+  for (const p of patterns) {
+    const group = groups.get(p.category) || [];
+    group.push(p);
+    groups.set(p.category, group);
+  }
+
+  const categoryLabels: Record<string, string> = {
+    ppt_structure: "구조 패턴",
+    ppt_content: "콘텐츠 패턴",
+    ppt_design: "디자인 패턴",
+    ppt_slide_type: "슬라이드별 패턴",
+  };
+
+  for (const [cat, items] of groups) {
+    lines.push(`\n## ${categoryLabels[cat] || cat}`);
+    for (const p of items) {
+      lines.push(`- **${p.title}** (${p.weight}점): ${p.description}`);
+      if (p.good_examples?.length > 0) {
+        lines.push(`  ✅ ${p.good_examples[0]}`);
+      }
+      if (p.bad_examples?.length > 0) {
+        lines.push(`  ❌ ${p.bad_examples[0]}`);
+      }
+    }
+  }
+
+  const result = lines.join("\n");
+  pptPatternCache = { data: result, loadedAt: Date.now() };
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// buildDynamicIRContext — IR PPT 생성 프롬프트에 주입할 컨텍스트
+// ---------------------------------------------------------------------------
+export async function buildDynamicIRContext(): Promise<string> {
+  const [pptPatterns, criteria] = await Promise.all([
+    loadPptPatterns(),
+    loadEvaluationCriteria("ir_pitch"),
+  ]);
+
+  const parts: string[] = [];
+  if (pptPatterns) parts.push(pptPatterns);
+  if (criteria) parts.push(criteria);
+
+  return parts.join("\n\n");
+}

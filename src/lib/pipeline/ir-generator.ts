@@ -9,6 +9,8 @@ import {
   buildIRGeneratorPrompt,
   IR_SLIDE_TYPES,
 } from "@/lib/ai/prompts/ir";
+import { buildDynamicIRContext } from "@/lib/quality/pattern-loader";
+import { scoreAndSavePpt } from "@/lib/quality/ppt-scorer";
 
 interface IRGenerateOptions {
   planId: string;
@@ -72,7 +74,20 @@ export async function* generateIRPresentation(
 
     yield {
       type: "progress",
-      data: { step: "슬라이드 구조 설계", progress: 20 },
+      data: { step: "슬라이드 구조 설계", progress: 15 },
+    };
+
+    // 2.5. DB에서 PPT 패턴/평가기준 동적 로드
+    let dynamicIRContext = "";
+    try {
+      dynamicIRContext = await buildDynamicIRContext();
+    } catch (e) {
+      console.warn("[IR Gen] DB 패턴 로드 실패 (하드코딩 폴백 사용):", e);
+    }
+
+    yield {
+      type: "progress",
+      data: { step: "선정 패턴 분석", progress: 20 },
     };
 
     // 3. Claude로 슬라이드 콘텐츠 생성
@@ -84,9 +99,14 @@ export async function* generateIRPresentation(
         content: s.content.substring(0, 800),
       }));
 
+    // DB 패턴이 있으면 시스템 프롬프트에 주입
+    const irSystem = dynamicIRContext
+      ? `${IR_GENERATOR_SYSTEM}\n\n${dynamicIRContext}`
+      : IR_GENERATOR_SYSTEM;
+
     const irResult = await callClaude({
       model: "claude-sonnet-4-20250514",
-      system: IR_GENERATOR_SYSTEM,
+      system: irSystem,
       messages: [
         {
           role: "user",
@@ -174,7 +194,16 @@ export async function* generateIRPresentation(
       };
     }
 
-    // 6. 완성
+    // 6. 자동 품질 채점
+    let pptScore = 0;
+    try {
+      const scoreResult = await scoreAndSavePpt(presentation.id, slides);
+      pptScore = scoreResult.total_score;
+    } catch (e) {
+      console.warn("[IR Gen] PPT 자동 채점 실패:", e);
+    }
+
+    // 7. 완성
     await supabase
       .from("ir_presentations")
       .update({
@@ -189,6 +218,7 @@ export async function* generateIRPresentation(
         presentationId: presentation.id,
         totalSlides: slides.length,
         progress: 100,
+        qualityScore: pptScore,
       },
     };
   } catch (error) {
