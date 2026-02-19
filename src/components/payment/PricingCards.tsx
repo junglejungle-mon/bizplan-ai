@@ -157,7 +157,7 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
                 </button>
               ) : isEnterprise ? (
                 <a
-                  href="mailto:support@kkuddu.org"
+                  href="mailto:dktkghdeh@jmnc.co.kr"
                   className="w-full py-2.5 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium text-center hover:bg-gray-50 transition-colors"
                 >
                   문의하기

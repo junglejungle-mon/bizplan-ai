@@ -10,7 +10,7 @@ export const openApiSpec = {
     title: "BizPlan AI API",
     description: "정글몬스터 사업계획서 AI 생성 플랫폼 API 문서",
     version: "1.0.0",
-    contact: { name: "정글몬스터", url: "https://bizplan.kkuddu.org" },
+    contact: { name: "정글몬스터", url: "https://bizplanai.co.kr" },
   },
   servers: [
     { url: "/api", description: "현재 서버" },
