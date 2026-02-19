@@ -54,6 +54,16 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      {
+        // 정적 자산 캐싱 (JS, CSS, 폰트, 이미지)
+        source: "/:path*.(js|css|woff|woff2|ttf|otf|ico|png|jpg|jpeg|svg|webp)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
     ];
   },
 };

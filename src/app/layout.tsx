@@ -62,6 +62,32 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              name: "BizPlan AI",
+              url: siteUrl,
+              description:
+                "정부지원사업 AI 매칭부터 사업계획서 자동 작성, IR PPT 생성까지",
+              applicationCategory: "BusinessApplication",
+              operatingSystem: "Web",
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "KRW",
+                description: "무료 체험 가능",
+              },
+              creator: {
+                "@type": "Organization",
+                name: "정글몬스터",
+                url: "https://bizplanai.co.kr",
+              },
+            }),
+          }}
+        />
         {gaId && (
           <>
             <Script
