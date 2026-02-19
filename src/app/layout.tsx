@@ -38,20 +38,13 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     url: siteUrl,
     siteName: "BizPlan AI",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "BizPlan AI — AI 사업계획서 자동 작성 서비스",
-      },
-    ],
+    // opengraph-image.tsx에서 자동 생성
   },
   twitter: {
     card: "summary_large_image",
     title: "BizPlan AI — AI 사업계획서 자동 작성 서비스",
     description: "정부지원사업 AI 매칭 + 사업계획서 원스톱 자동 작성",
-    images: ["/og-image.png"],
+    // opengraph-image.tsx에서 자동 생성
   },
   robots: {
     index: true,
