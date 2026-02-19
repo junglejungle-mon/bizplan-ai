@@ -70,7 +70,6 @@ export async function GET(request: NextRequest) {
 
     for (const company of companies) {
       try {
-        console.log(`[AutoMatch] ${company.name} (${company.id}) 매칭 시작...`);
         const result = await runMatchingPipeline(company.id);
         results.push({
           companyId: company.id,

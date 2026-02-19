@@ -284,7 +284,6 @@ ${analysisPrompt}
           console.error("[AnalyzeFile] Company auto-update error:", updateError);
         } else {
           autoUpdated = true;
-          console.log("[AnalyzeFile] Company auto-updated with:", Object.keys(updateData), "score:", newScore);
         }
       }
     }

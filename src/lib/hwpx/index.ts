@@ -144,15 +144,9 @@ async function trySmartFill(
     console.log("[hwpx] Smart Fill: HWPX 다운로드 실패");
     return null;
   }
-  console.log(`[hwpx] HWPX 다운로드 완료: ${(hwpxBuffer.length / 1024).toFixed(1)}KB (${Date.now() - t0}ms)`);
 
   // 3. 로컬 스킬 정보 확인 (parsed.json)
   const localSkill = await tryLoadLocalSkill(supabase, plan.programId!);
-  if (localSkill) {
-    console.log(
-      `[hwpx] 로컬 스킬 로드 성공: ${localSkill.fields.length}개 필드 힌트`
-    );
-  }
 
   // 4. 양식 파싱 (스킬 정보 or DB 캐시 or 새로 파싱)
   const t1 = Date.now();
@@ -184,9 +178,6 @@ async function trySmartFill(
       .eq("id", template.id);
   }
 
-  console.log(
-    `[hwpx] 파싱 완료 (${parseSource}): 필드 ${parsedForm.fields.length}개, 섹션 ${parsedForm.structure.length}개, 복잡도=${parsedForm.metadata.complexity} (${Date.now() - t1}ms)`
-  );
 
   // 필드가 없으면 smart fill 불가
   if (parsedForm.fields.length === 0) {
@@ -221,16 +212,6 @@ async function trySmartFill(
       .eq("id", template.id);
   }
 
-  const skipCount = mappings.filter((m) => m.strategy === "skip").length;
-  const avgConfidence =
-    mappings.length > 0
-      ? Math.round(
-          mappings.reduce((sum, m) => sum + m.confidence, 0) / mappings.length
-        )
-      : 0;
-  console.log(
-    `[hwpx] 매핑 완료 (${mappingSource}): ${mappings.length}개 매핑, skip=${skipCount}개, 평균신뢰도=${avgConfidence}% (${Date.now() - t2}ms)`
-  );
 
   // 6. 필드별 내용 생성 (스킬의 maxLength 정보 활용)
   const t3 = Date.now();
@@ -239,16 +220,10 @@ async function trySmartFill(
     plan.sections,
     localSkill || undefined
   );
-  console.log(
-    `[hwpx] 콘텐츠 생성 완료: ${Object.keys(fieldContents).length}개 필드 (${Date.now() - t3}ms)`
-  );
 
   // 7. 양식에 내용 삽입
   const t4 = Date.now();
   const result = await fillForm(hwpxBuffer, parsedForm, fieldContents);
-  console.log(
-    `[hwpx] 양식 채우기 완료: filled=${result.filledCount}, skipped=${result.skippedCount} (${Date.now() - t4}ms)`
-  );
 
   // 8. business_plans 업데이트
   await supabase

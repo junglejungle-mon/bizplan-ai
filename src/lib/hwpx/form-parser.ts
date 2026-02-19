@@ -548,17 +548,6 @@ export async function parseForm(
     );
   }
 
-  // 필드별 상세 로그 (디버그용)
-  if (fields.length > 0) {
-    console.log(
-      `[form-parser] 필드 목록:\n${fields
-        .map(
-          (f, i) =>
-            `  ${i + 1}. [${f.type}] "${f.label}" (${f.sectionFile}, p${f.xpath}${f.isInTable ? ", 테이블" : ""})`
-        )
-        .join("\n")}`
-    );
-  }
 
   // 3. 섹션 구조 추출
   const structure = extractStructure(allNodes, fields);

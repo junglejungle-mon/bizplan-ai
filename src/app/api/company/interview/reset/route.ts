@@ -62,8 +62,6 @@ export async function POST(request: NextRequest) {
     console.error("[Interview Reset] 회사 업데이트 실패:", updateError.message);
   }
 
-  console.log("[Interview Reset] 완료:", companyId);
-
   return Response.json({
     success: true,
     message: "인터뷰가 초기화되었습니다. 처음부터 다시 시작합니다.",
