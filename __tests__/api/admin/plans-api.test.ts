@@ -3,6 +3,27 @@
  * Proxy 기반 Supabase mock으로 체이닝 문제 해결
  */
 
+// requireAdmin mock: 인증을 항상 통과시킴
+jest.mock("@/lib/admin/auth", () => ({
+  requireAdmin: jest.fn().mockResolvedValue(null),
+}));
+
+// logger mock: 테스트 중 로깅 억제
+jest.mock("@/lib/logger", () => ({
+  adminLogger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+  createLogger: () => ({
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  }),
+}));
+
 // Proxy 기반 Supabase mock: 모든 메서드 호출을 체이닝하고 await 시 결과 반환
 function createSupabaseMock(tableResults: Record<string, any>) {
   const callLog: Array<{ table: string; method: string; args: any[] }> = [];
