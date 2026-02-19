@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = "https://bizplan-ai.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr";
 
 export const metadata: Metadata = {
   title: "BizPlan AI — AI가 정부지원사업을 찾고 사업계획서까지 써주는 서비스",
