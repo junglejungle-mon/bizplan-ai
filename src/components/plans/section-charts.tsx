@@ -233,6 +233,8 @@ export function SectionCharts({
             <div
               key={`${chart.chart_type}-${i}`}
               className="rounded-lg border border-orange-100 bg-white overflow-hidden"
+              role="figure"
+              aria-label={`${CHART_TYPE_LABELS[chart.chart_type] || chart.chart_type} 차트: ${chart.title}`}
             >
               {/* 차트 타입 라벨 */}
               <div className="flex items-center justify-between px-3 py-1.5 bg-orange-50 border-b border-orange-100">
@@ -249,6 +251,8 @@ export function SectionCharts({
               {/* SVG 렌더링 */}
               <div
                 className="p-2 flex justify-center bg-white"
+                role="img"
+                aria-hidden="true"
                 dangerouslySetInnerHTML={{ __html: sanitizeSvg(chart.svg) }}
                 style={{
                   maxWidth: "100%",

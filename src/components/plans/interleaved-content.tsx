@@ -200,6 +200,8 @@ export function InterleavedContent({
     <div
       key={`chart-${chart.chart_type}-${idx}`}
       className="my-4 rounded-lg border border-orange-100 bg-white overflow-hidden"
+      role="figure"
+      aria-label={`${CHART_TYPE_LABELS[chart.chart_type] || chart.chart_type} 차트: ${chart.title}`}
     >
       <div className="flex items-center justify-between px-3 py-1.5 bg-orange-50 border-b border-orange-100">
         <div className="flex items-center gap-1.5">
@@ -212,6 +214,8 @@ export function InterleavedContent({
       </div>
       <div
         className="p-2 flex justify-center bg-white [&_svg]:max-w-full [&_svg]:h-auto"
+        role="img"
+        aria-hidden="true"
         dangerouslySetInnerHTML={{ __html: sanitizeSvg(chart.svg) }}
         style={{ maxWidth: "100%", overflow: "hidden" }}
       />
