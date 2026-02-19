@@ -11,6 +11,7 @@ import {
   Image,
 } from "lucide-react";
 import { SectionContent } from "./section-content";
+import { sanitizeSvg } from "@/lib/utils/svg-sanitizer";
 
 interface ChartItem {
   chart_type: string;
@@ -211,7 +212,7 @@ export function InterleavedContent({
       </div>
       <div
         className="p-2 flex justify-center bg-white [&_svg]:max-w-full [&_svg]:h-auto"
-        dangerouslySetInnerHTML={{ __html: chart.svg }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(chart.svg) }}
         style={{ maxWidth: "100%", overflow: "hidden" }}
       />
     </div>

@@ -12,6 +12,7 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
+import { sanitizeSvg } from "@/lib/utils/svg-sanitizer";
 
 interface ChartItem {
   chart_type: string;
@@ -248,7 +249,7 @@ export function SectionCharts({
               {/* SVG 렌더링 */}
               <div
                 className="p-2 flex justify-center bg-white"
-                dangerouslySetInnerHTML={{ __html: chart.svg }}
+                dangerouslySetInnerHTML={{ __html: sanitizeSvg(chart.svg) }}
                 style={{
                   maxWidth: "100%",
                   overflow: "hidden",

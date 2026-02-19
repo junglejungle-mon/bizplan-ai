@@ -37,6 +37,15 @@ export async function GET(
   return Response.json({ plan, sections });
 }
 
+/** 업데이트 허용 필드 화이트리스트 (임의 필드 주입 방지) */
+const ALLOWED_UPDATE_FIELDS = new Set([
+  "title",
+  "status",
+  "program_id",
+  "metadata",
+  "generation_config",
+]);
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,12 +58,46 @@ export async function PUT(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const updates = await request.json();
+  // 소유권 확인
+  const { data: existing } = await supabase
+    .from("business_plans")
+    .select("id, company_id, companies(user_id)")
+    .eq("id", id)
+    .single();
+
+  if (!existing) {
+    return Response.json({ error: "계획서를 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ownerUserId = (existing.companies as any)?.user_id;
+  if (ownerUserId !== user.id) {
+    return Response.json({ error: "수정 권한이 없습니다" }, { status: 403 });
+  }
+
+  // 입력값 검증: JSON 파싱 + 허용 필드만 추출
+  let rawBody: Record<string, unknown>;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return Response.json({ error: "잘못된 JSON 형식입니다" }, { status: 400 });
+  }
+
+  const filtered: Record<string, unknown> = {};
+  for (const key of Object.keys(rawBody)) {
+    if (ALLOWED_UPDATE_FIELDS.has(key)) {
+      filtered[key] = rawBody[key];
+    }
+  }
+
+  if (Object.keys(filtered).length === 0) {
+    return Response.json({ error: "수정할 항목이 없습니다" }, { status: 400 });
+  }
 
   const { data: plan, error } = await supabase
     .from("business_plans")
     .update({
-      ...updates,
+      ...filtered,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
