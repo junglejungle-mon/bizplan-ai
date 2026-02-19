@@ -11,7 +11,7 @@
 1. 애플리케이션 추가하기 → 앱 이름: `BizPlan AI`
 2. **앱 설정 > 플랫폼** → Web 도메인 추가:
    ```
-   https://bizplan-ai-kappa.vercel.app
+   https://bizplanai.co.kr
    ```
 3. **카카오 로그인** → 활성화 ON
 4. **카카오 로그인 > Redirect URI** 추가:
@@ -84,7 +84,7 @@ echo "실제값" | NODE_TLS_REJECT_UNAUTHORIZED=0 vercel env add SOLAPI_API_KEY 
 
   ▶ 매칭 결과 확인하기
   ```
-- 버튼: 웹링크 `https://bizplan-ai-kappa.vercel.app/programs`
+- 버튼: 웹링크 `https://bizplanai.co.kr/programs`
 
 ### 템플릿 2: 마감 임박
 - 템플릿 이름: `bizplan_deadline`
@@ -96,7 +96,7 @@ echo "실제값" | NODE_TLS_REJECT_UNAUTHORIZED=0 vercel env add SOLAPI_API_KEY 
 
   ▶ 공고 확인하기
   ```
-- 버튼: 웹링크 `https://bizplan-ai-kappa.vercel.app/programs`
+- 버튼: 웹링크 `https://bizplanai.co.kr/programs`
 
 ### 템플릿 3: 사업계획서 완료
 - 템플릿 이름: `bizplan_plan_complete`
@@ -108,7 +108,7 @@ echo "실제값" | NODE_TLS_REJECT_UNAUTHORIZED=0 vercel env add SOLAPI_API_KEY 
 
   ▶ 사업계획서 확인하기
   ```
-- 버튼: 웹링크 `https://bizplan-ai-kappa.vercel.app/plans`
+- 버튼: 웹링크 `https://bizplanai.co.kr/plans`
 
 ### 심사 통과 후 실행할 명령어
 
