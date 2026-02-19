@@ -170,7 +170,6 @@ export async function POST(request: NextRequest) {
           // 매칭을 기다리지 않고 백그라운드에서 실행
           runMatchingPipeline(companyId)
             .then((result) => {
-              console.log(`[Insights] 백그라운드 매칭 완료: ${result.matched}건 매칭`);
             })
             .catch((err) => {
               console.error("[Insights] 백그라운드 매칭 실패:", err);

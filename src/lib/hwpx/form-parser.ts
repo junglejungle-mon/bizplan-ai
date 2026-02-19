@@ -532,20 +532,10 @@ export async function parseForm(
   let fields = detectFields(allNodes);
   const ruleBasedCount = fields.length;
 
-  console.log(
-    `[form-parser] 파싱 결과: 섹션파일 ${sectionFiles.length}개, 텍스트노드 ${allNodes.length}개, 빈노드 ${allNodes.filter((n) => n.isEmpty).length}개, 규칙기반 필드 ${ruleBasedCount}개`
-  );
-
   // 2. AI 보조 파싱 (필드가 부족하고 AI 사용 가능한 경우)
   if (useAI && fields.length < 3 && allNodes.length > 10) {
-    console.log(
-      `[form-parser] AI 보조 파싱 시작 (규칙기반 ${ruleBasedCount}개 < 3 → AI 보조)`
-    );
     const aiFields = await aiAssistedParse(xmlTexts, fields);
     fields = [...fields, ...aiFields];
-    console.log(
-      `[form-parser] AI 보조 파싱 완료: +${aiFields.length}개 추가 → 총 ${fields.length}개`
-    );
   }
 
 

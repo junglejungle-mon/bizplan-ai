@@ -227,10 +227,6 @@ export async function runMeetingPipeline(
       })
       .eq('id', meetingId);
 
-    console.log(
-      `[Meeting Pipeline] Completed in ${Math.round(durationMs / 1000)}s, ` +
-      `${totalTokens} tokens, $${totalCost.toFixed(4)}, ${allMissions.length} missions`
-    );
   } catch (error) {
     console.error('[Meeting Pipeline] Failed:', error);
 

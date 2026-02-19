@@ -298,7 +298,6 @@ export async function runMatchingPipeline(companyId: string): Promise<{
   const regionPassedPrograms = unmatchedPrograms.filter((p: any) => regionPassedIds.has(p.id));
   skipped = unmatchedPrograms.length - regionPassedPrograms.length;
 
-  console.log(`[Matcher] 지역 매칭: ${unmatchedPrograms.length}개 중 ${regionPassedPrograms.length}개 통과, ${skipped}개 스킵`);
 
   // ========================================
   // Step 2: 배치 적합성 분석 (5개씩 묶어서)
@@ -365,7 +364,6 @@ export async function runMatchingPipeline(companyId: string): Promise<{
     }
   }
 
-  console.log(`[Matcher] 적합성 분석: ${regionPassedPrograms.length}개 완료, 80점+: ${deepAnalysisCandidates.length}개`);
 
   // ========================================
   // Step 3: 심층 분석 (80점 이상, 최대 10개)

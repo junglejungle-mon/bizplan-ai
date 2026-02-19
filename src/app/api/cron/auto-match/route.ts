@@ -76,9 +76,6 @@ export async function GET(request: NextRequest) {
           companyName: company.name,
           ...result,
         });
-        console.log(
-          `[AutoMatch] ${company.name}: ${result.matched}건 매칭, ${result.deepAnalyzed}건 심층분석`
-        );
       } catch (e) {
         console.error(`[AutoMatch] ${company.name} 매칭 실패:`, e);
         results.push({

@@ -21,24 +21,37 @@ export default function ContactPage() {
   });
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
-    // DB에 문의 저장
     try {
-      await fetch("/api/contact", {
+      const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-    } catch {
-      // 실패해도 문의 접수로 처리
-    }
 
-    setSent(true);
-    setLoading(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (res.status === 429) {
+          setError("너무 많은 요청을 보내셨습니다. 잠시 후 다시 시도해주세요.");
+        } else {
+          setError(data?.error || "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      setSent(true);
+    } catch {
+      setError("네트워크 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (sent) {
@@ -192,6 +205,12 @@ export default function ContactPage() {
                 required
               />
             </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             <button
               type="submit"

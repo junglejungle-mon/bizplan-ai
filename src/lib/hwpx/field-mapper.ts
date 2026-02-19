@@ -46,22 +46,12 @@ export async function mapFieldsToPlan(
   const mappedIds = new Set(ruleMappings.map((m) => m.formFieldId));
   const unmappedFields = formFields.filter((f) => !mappedIds.has(f.id));
 
-  console.log(
-    `[field-mapper] 규칙 매핑 ${ruleMappings.length}개 / 미매핑 ${unmappedFields.length}개 (전체 ${formFields.length}개)`
-  );
-
   if (unmappedFields.length === 0) {
     return ruleMappings;
   }
 
   // AI 매핑 (스킬 힌트 전달)
-  console.log(
-    `[field-mapper] AI 매핑 시작: ${unmappedFields.map((f) => `"${f.label}"`).join(", ")}`
-  );
   const aiMappings = await aiMapping(unmappedFields, planSections, skillHints);
-  console.log(
-    `[field-mapper] AI 매핑 완료: ${aiMappings.length}개 (skip ${aiMappings.filter((m) => m.strategy === "skip").length}개)`
-  );
 
   return [...ruleMappings, ...aiMappings];
 }

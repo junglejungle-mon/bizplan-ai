@@ -131,17 +131,12 @@ async function trySmartFill(
   }
 
   if (!template || template.status === "failed") {
-    console.log(`[hwpx] Smart Fill: 양식 없음 (programId=${plan.programId})`);
     return null;
   }
-  console.log(
-    `[hwpx] Smart Fill 시작: template=${template.id}, status=${template.status}`
-  );
 
   // 2. HWPX 파일 가져오기
   const hwpxBuffer = await downloadTemplateBuffer(supabase, template);
   if (!hwpxBuffer) {
-    console.log("[hwpx] Smart Fill: HWPX 다운로드 실패");
     return null;
   }
 
@@ -181,7 +176,6 @@ async function trySmartFill(
 
   // 필드가 없으면 smart fill 불가
   if (parsedForm.fields.length === 0) {
-    console.log("[hwpx] Smart Fill 중단: 필드 0개 탐지됨");
     return null;
   }
 
@@ -233,10 +227,6 @@ async function trySmartFill(
       fill_strategy: "smart_fill",
     })
     .eq("id", plan.planId);
-
-  console.log(
-    `[hwpx] ✅ Smart Fill 전체 완료: ${Date.now() - t0}ms`
-  );
 
   return {
     success: true,

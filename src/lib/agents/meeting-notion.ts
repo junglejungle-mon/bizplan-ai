@@ -99,7 +99,6 @@ export async function uploadMeetingToNotion(
       return null;
     }
 
-    console.log(`[Meeting Notion] Report page created: ${reportPage.url}`);
 
     // 2. 미션 보드에 미션 아이템 추가
     const allMissions: MissionForNotion[] = teamReports.flatMap((r) =>
@@ -126,7 +125,6 @@ export async function uploadMeetingToNotion(
       }
     }
 
-    console.log(`[Meeting Notion] ${missionCount}/${allMissions.length} missions created in Mission Board`);
 
     return {
       url: reportPage.url,
