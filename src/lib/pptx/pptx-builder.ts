@@ -14,7 +14,7 @@ interface ChartDataItem {
 
 interface SlideData {
   slide_type: SlideType;
-  title: string;
+  title?: string;
   content: {
     headline?: string;
     subtext?: string;
@@ -27,10 +27,20 @@ interface SlideData {
 }
 
 interface PptxOptions {
+  title?: string;
   companyName: string;
-  template?: "minimal" | "tech" | "classic";
+  template?: "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci";
   slides: SlideData[];
   kpiData?: Record<string, unknown>;
+  customColors?: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    bg?: string;
+    textDark?: string;
+    textLight?: string;
+    chartColors?: string[];
+  };
 }
 
 // 템플릿별 색상 설정
@@ -76,6 +86,30 @@ const TEMPLATES = {
     negative: "E74C3C",
     chartColors: ["2C3E50", "E74C3C", "3498DB", "2ECC71", "F39C12"],
   },
+  professional: {
+    // 기업형 IR: 차분한 틸블루 + 골드 액센트
+    primary: "0F2B46",
+    secondary: "1B4F72",
+    accent: "D4A843",
+    bg: "FFFFFF",
+    textDark: "0F2B46",
+    textLight: "5D6D7E",
+    positive: "1E8449",
+    negative: "C0392B",
+    chartColors: ["0F2B46", "1B4F72", "D4A843", "2E86C1", "85929E"],
+  },
+  vibrant: {
+    // 스타트업 감성: 퍼플-코랄 그라데이션
+    primary: "2D1B69",
+    secondary: "6C3CE0",
+    accent: "FF6B6B",
+    bg: "FFFFFF",
+    textDark: "2D1B69",
+    textLight: "7B8794",
+    positive: "06D6A0",
+    negative: "EF476F",
+    chartColors: ["6C3CE0", "FF6B6B", "06D6A0", "FFD166", "118AB2"],
+  },
 };
 
 type TemplateColors = (typeof TEMPLATES)["minimal"];
@@ -89,11 +123,66 @@ function addBarChart(
   colors: TemplateColors,
   yPos: number
 ) {
-  const { labels, values, unit } = chart.data as {
+  const raw = chart.data as {
     labels?: string[];
     values?: number[];
+    datasets?: Array<{ label?: string; data?: number[]; values?: number[]; color?: string }>;
     unit?: string;
   };
+  const labels = raw.labels;
+  const unit = raw.unit;
+
+  // datasets 형식 → 멀티시리즈 bar 차트 지원
+  if (raw.datasets && raw.datasets.length > 0 && labels) {
+    const chartData = raw.datasets.map((ds) => ({
+      name: ds.label || "데이터",
+      labels: labels,
+      values: ds.values || ds.data || [],
+    }));
+
+    // 차트 배경 카드
+    slide.addShape("roundRect", {
+      x: 0.3, y: yPos - 0.1, w: 9.4, h: 3.4,
+      fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+      rectRadius: 0.15,
+      shadow: { type: "outer", blur: 4, offset: 2, color: "00000015" },
+    });
+
+    // 카테고리 라벨이 긴 경우 자동 회전
+    const maxLabelLen = Math.max(...labels.map((l) => l.length));
+    const catRotate = maxLabelLen > 8 ? 15 : 0;
+
+    slide.addChart("bar", chartData, {
+      x: 0.5, y: yPos, w: 9, h: 3.0,
+      showTitle: true,
+      title: chart.title.length > 30 ? chart.title.slice(0, 28) + "…" : chart.title,
+      titleColor: colors.textDark,
+      titleFontSize: 11,
+      titleFontFace: "Pretendard",
+      showValue: true,
+      dataLabelFontSize: 8,
+      dataLabelColor: colors.textDark,
+      catAxisLabelColor: colors.textDark,
+      catAxisLabelFontSize: maxLabelLen > 12 ? 7 : 9,
+      catAxisLabelFontFace: "Pretendard",
+      catAxisLabelRotate: catRotate,
+      valAxisLabelColor: colors.textLight,
+      valAxisLabelFontSize: 8,
+      chartColors: colors.chartColors.slice(0, raw.datasets.length),
+      showLegend: true,
+      legendPos: "b",
+      legendColor: colors.textDark,
+      legendFontSize: 8,
+      plotArea: { fill: { color: "FFFFFF", transparency: 0 } },
+      catGridLine: { color: "F1F5F9", size: 1 },
+      valGridLine: { color: "F1F5F9", size: 1 },
+    });
+
+    return yPos + 3.5;
+  }
+
+  // 단순 values 형식
+  const values = raw.values;
   if (!labels || !values) return yPos;
 
   const chartData = [
@@ -104,24 +193,46 @@ function addBarChart(
     },
   ];
 
+  // 차트 배경 카드
+  slide.addShape("roundRect", {
+    x: 0.3, y: yPos - 0.1, w: 9.4, h: 3.4,
+    fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+    rectRadius: 0.15,
+    shadow: { type: "outer", blur: 4, offset: 2, color: "00000015" },
+  });
+
+  // 카테고리 라벨이 긴 경우 자동 회전 + 폰트 축소
+  const maxCatLen = Math.max(...labels.map((l) => l.length));
+  const singleRotate = maxCatLen > 8 ? 15 : 0;
+
   slide.addChart("bar", chartData, {
     x: 0.5,
     y: yPos,
     w: 9,
     h: 3.0,
     showTitle: true,
-    title: chart.title,
+    title: chart.title.length > 30 ? chart.title.slice(0, 28) + "…" : chart.title,
     titleColor: colors.textDark,
-    titleFontSize: 10,
+    titleFontSize: 11,
+    titleFontFace: "Pretendard",
     showValue: true,
-    dataLabelFontSize: 8,
+    dataLabelFontSize: 9,
+    dataLabelFontBold: true,
+    dataLabelColor: colors.textDark,
     catAxisLabelColor: colors.textDark,
+    catAxisLabelFontSize: maxCatLen > 12 ? 7 : 9,
+    catAxisLabelFontFace: "Pretendard",
+    catAxisLabelRotate: singleRotate,
     valAxisLabelColor: colors.textLight,
+    valAxisLabelFontSize: 8,
     chartColors: colors.chartColors,
     valAxisLabelFormatCode: unit === "%" ? "0.0%" : "#,##0",
+    plotArea: { fill: { color: "FFFFFF", transparency: 0 } },
+    catGridLine: { color: "F1F5F9", size: 1 },
+    valGridLine: { color: "F1F5F9", size: 1 },
   });
 
-  return yPos + 3.2;
+  return yPos + 3.5;
 }
 
 /**
@@ -133,37 +244,82 @@ function addPieChart(
   colors: TemplateColors,
   yPos: number
 ) {
-  const { items } = chart.data as {
+  const raw = chart.data as {
     items?: Array<{ name: string; value: number }>;
+    labels?: string[];
+    values?: number[];
   };
-  if (!items || items.length === 0) return yPos;
+
+  // items 형식 또는 labels/values 형식 모두 지원
+  let pieLabels: string[];
+  let pieValues: number[];
+
+  if (raw.items && raw.items.length > 0) {
+    pieLabels = raw.items.map((i) => i.name);
+    pieValues = raw.items.map((i) => i.value);
+  } else if (raw.labels && raw.values && raw.labels.length > 0) {
+    pieLabels = raw.labels;
+    pieValues = raw.values;
+  } else {
+    return yPos;
+  }
 
   const chartData = [
     {
       name: chart.title || "데이터",
-      labels: items.map((i) => i.name),
-      values: items.map((i) => i.value),
+      labels: pieLabels,
+      values: pieValues,
     },
   ];
 
+  // 차트 배경 카드 + 우측 범례 레이아웃
+  slide.addShape("roundRect", {
+    x: 0.3, y: yPos - 0.1, w: 9.4, h: 2.1,
+    fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+    rectRadius: 0.15,
+    shadow: { type: "outer", blur: 4, offset: 2, color: "00000015" },
+  });
+
   slide.addChart("pie", chartData, {
-    x: 2.0,
+    x: 0.5,
     y: yPos,
-    w: 6,
-    h: 3.0,
-    showTitle: true,
-    title: chart.title,
-    titleColor: colors.textDark,
-    titleFontSize: 10,
+    w: 4.5,
+    h: 1.9,
+    showTitle: false,
     showPercent: true,
-    showLegend: true,
-    legendPos: "r",
-    legendColor: colors.textDark,
-    legendFontSize: 8,
+    dataLabelFontSize: 9,
+    dataLabelColor: colors.textDark,
+    showLegend: false,
     chartColors: colors.chartColors,
   });
 
-  return yPos + 3.2;
+  // 우측 범례 (제목 + 항목)
+  if (chart.title) {
+    slide.addText(chart.title, {
+      x: 5.2, y: yPos, w: 4, h: 0.35,
+      fontSize: 10, bold: true, color: colors.accent,
+      fontFace: "Pretendard",
+    });
+  }
+  for (let li = 0; li < pieLabels.length && li < 5; li++) {
+    const legendY = yPos + 0.4 + li * 0.32;
+    // 컬러 블록
+    slide.addShape("rect", {
+      x: 5.2, y: legendY + 0.06, w: 0.18, h: 0.18,
+      fill: { color: colors.chartColors[li % colors.chartColors.length] },
+    });
+    const pieUnit = (chart.data as Record<string, unknown>).unit as string || "";
+    // 범례 라벨이 길면 축약
+    const pieLabelText = pieLabels[li].length > 15 ? pieLabels[li].slice(0, 13) + "…" : pieLabels[li];
+    slide.addText(`${pieLabelText}  ${pieValues[li].toLocaleString()}${pieUnit}`, {
+      x: 5.5, y: legendY, w: 4, h: 0.3,
+      fontSize: 9, color: colors.textDark,
+      fontFace: "Pretendard",
+      shrinkText: true,
+    });
+  }
+
+  return yPos + 2.2;
 }
 
 /**
@@ -189,25 +345,47 @@ function addLineChart(
     },
   ];
 
+  // 차트 배경 카드
+  slide.addShape("roundRect", {
+    x: 0.3, y: yPos - 0.1, w: 9.4, h: 3.4,
+    fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+    rectRadius: 0.15,
+    shadow: { type: "outer", blur: 4, offset: 2, color: "00000015" },
+  });
+
+  // 카테고리 라벨이 긴 경우 폰트 축소
+  const maxLineLabelLen = Math.max(...labels.map((l) => l.length));
+
   slide.addChart("line", chartData, {
     x: 0.5,
     y: yPos,
     w: 9,
     h: 3.0,
     showTitle: true,
-    title: chart.title,
+    title: chart.title.length > 30 ? chart.title.slice(0, 28) + "…" : chart.title,
     titleColor: colors.textDark,
-    titleFontSize: 10,
+    titleFontSize: 11,
+    titleFontFace: "Pretendard",
     showValue: true,
-    dataLabelFontSize: 8,
+    dataLabelFontSize: 9,
+    dataLabelFontBold: true,
+    dataLabelColor: colors.primary,
     lineDataSymbol: "circle",
     lineDataSymbolSize: 8,
+    lineSmooth: true,
+    lineSize: 3,
     catAxisLabelColor: colors.textDark,
+    catAxisLabelFontSize: maxLineLabelLen > 12 ? 7 : 9,
+    catAxisLabelFontFace: "Pretendard",
     valAxisLabelColor: colors.textLight,
+    valAxisLabelFontSize: 8,
     chartColors: [colors.primary],
+    plotArea: { fill: { color: "FFFFFF", transparency: 0 } },
+    catGridLine: { color: "F1F5F9", size: 1 },
+    valGridLine: { color: "F1F5F9", size: 1 },
   });
 
-  return yPos + 3.2;
+  return yPos + 3.5;
 }
 
 /**
@@ -219,19 +397,53 @@ function addDoughnutChart(
   colors: TemplateColors,
   yPos: number
 ) {
-  const { tam, sam, som } = chart.data as {
-    tam?: string;
-    sam?: string;
-    som?: string;
-  };
-  if (!tam && !sam && !som) return yPos;
+  const rawData = chart.data as Record<string, unknown>;
+  // tam/sam/som이 문자열 또는 객체({value, unit}) 형태일 수 있음
+  function extractValue(val: unknown): { text: string; num: number } {
+    if (!val) return { text: "-", num: 0 };
+    if (typeof val === "string") {
+      return { text: val, num: parseFloat(val.replace(/[^0-9.]/g, "") || "0") };
+    }
+    if (typeof val === "object" && val !== null) {
+      const obj = val as Record<string, unknown>;
+      const v = obj.value ?? obj.amount ?? 0;
+      const u = (obj.unit as string) || "";
+      const l = (obj.label as string) || "";
+      return { text: `${v}${u}`, num: parseFloat(String(v).replace(/[^0-9.]/g, "") || "0") };
+    }
+    return { text: String(val), num: parseFloat(String(val).replace(/[^0-9.]/g, "") || "0") };
+  }
+  const tamVal = extractValue(rawData.tam);
+  const samVal = extractValue(rawData.sam);
+  const somVal = extractValue(rawData.som);
+  const tam = tamVal.text;
+  const sam = samVal.text;
+  const som = somVal.text;
+  if (!rawData.tam && !rawData.sam && !rawData.som) return yPos;
 
   // TAM/SAM/SOM을 시각적 텍스트로 표현 (동심원 대체)
-  const tamNum = parseFloat(tam?.replace(/[^0-9.]/g, "") || "0");
-  const samNum = parseFloat(sam?.replace(/[^0-9.]/g, "") || "0");
-  const somNum = parseFloat(som?.replace(/[^0-9.]/g, "") || "0");
+  // 단위 통일: 모든 값을 억원 단위로 변환하여 차트 비율이 정확하게 표시
+  function normalizeToEok(val: { text: string; num: number }, rawVal: unknown): number {
+    if (typeof rawVal === "object" && rawVal !== null) {
+      const obj = rawVal as Record<string, unknown>;
+      const unit = ((obj.unit as string) || "").toLowerCase();
+      const v = val.num;
+      if (unit.includes("조")) return v * 10000; // 조원 → 억원
+      if (unit.includes("만억")) return v * 10000;
+      return v; // 이미 억원 또는 단위 없음
+    }
+    // 문자열인 경우 텍스트에서 단위 추론
+    const txt = val.text;
+    if (txt.includes("조")) return val.num * 10000;
+    return val.num;
+  }
+  const tamNum = normalizeToEok(tamVal, rawData.tam);
+  const samNum = normalizeToEok(samVal, rawData.sam);
+  const somNum = normalizeToEok(somVal, rawData.som);
 
   if (tamNum > 0 || samNum > 0 || somNum > 0) {
+    // 차트에서는 로그 스케일 표현 (차이가 너무 클 때)
+    // TAM >> SAM >> SOM이므로 시각적 비율 조정
     const chartData = [
       {
         name: "시장 규모",
@@ -240,19 +452,30 @@ function addDoughnutChart(
       },
     ];
 
+    // TAM/SAM/SOM 배경 카드
+    slide.addShape("roundRect", {
+      x: 0.3, y: yPos - 0.1, w: 9.4, h: 3.2,
+      fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+      rectRadius: 0.15,
+      shadow: { type: "outer", blur: 4, offset: 2, color: "00000015" },
+    });
+
+    // 섹션 라벨
+    slide.addText("시장 규모 분석", {
+      x: 0.5, y: yPos - 0.05, w: 4, h: 0.3,
+      fontSize: 10, bold: true, color: colors.accent,
+      fontFace: "Pretendard",
+    });
+
     slide.addChart("doughnut", chartData, {
       x: 0.5,
-      y: yPos,
-      w: 4.5,
-      h: 3.0,
+      y: yPos + 0.25,
+      w: 4.0,
+      h: 2.5,
       showTitle: false,
       showPercent: false,
-      showValue: true,
-      dataLabelFontSize: 10,
-      showLegend: true,
-      legendPos: "r",
-      legendColor: colors.textDark,
-      legendFontSize: 10,
+      showValue: false,
+      showLegend: false,
       chartColors: [colors.primary, colors.accent, colors.chartColors[2]],
     });
 
@@ -273,7 +496,7 @@ function addDoughnutChart(
         fontSize: 12,
         bold: true,
         color: colors.chartColors[idx] || colors.primary,
-        fontFace: "Arial",
+        fontFace: "Pretendard",
       });
       slide.addText(item.value, {
         x: 6.5,
@@ -283,7 +506,7 @@ function addDoughnutChart(
         fontSize: 14,
         bold: true,
         color: colors.textDark,
-        fontFace: "Arial",
+        fontFace: "Pretendard",
       });
       slide.addText(item.desc, {
         x: 6.5,
@@ -292,11 +515,11 @@ function addDoughnutChart(
         h: 0.25,
         fontSize: 8,
         color: colors.textLight,
-        fontFace: "Arial",
+        fontFace: "Pretendard",
       });
     });
 
-    return yPos + 3.2;
+    return yPos + 2.7;
   }
 
   return yPos;
@@ -311,63 +534,109 @@ function addStatsCards(
   colors: TemplateColors,
   yPos: number
 ) {
-  const cardCount = Math.min(stats.length, 4);
-  const cardWidth = 9 / cardCount;
+  if (!stats || !Array.isArray(stats) || stats.length === 0) return yPos;
+  // undefined/null 항목 필터링
+  const validStats = stats.filter(s => s && (s.value !== undefined || s.label !== undefined));
+  if (validStats.length === 0) return yPos;
+  const cardCount = Math.min(validStats.length, 4);
+  const totalW = 9;
+  const gap = 0.2;
+  const cardWidth = (totalW - gap * (cardCount - 1)) / cardCount;
 
   for (let i = 0; i < cardCount; i++) {
-    const stat = stats[i];
-    const x = 0.5 + i * cardWidth;
+    const stat = validStats[i];
+    const x = 0.5 + i * (cardWidth + gap);
 
-    // 카드 배경
-    slide.addShape("rect", {
+    // 카드 배경 (그림자 + 라운드)
+    slide.addShape("roundRect", {
       x,
       y: yPos,
-      w: cardWidth - 0.15,
-      h: 1.2,
-      fill: { color: colors.bg === "FFFFFF" ? "F1F5F9" : "1E293B" },
+      w: cardWidth,
+      h: 1.3,
+      fill: { color: colors.bg === "FFFFFF" ? "FFFFFF" : "1E293B" },
       rectRadius: 0.1,
+      shadow: { type: "outer", blur: 3, offset: 1, color: "00000012" },
     });
 
-    // 아이콘 (있으면)
+    // 좌측 액센트 바 (카드 내부)
+    const cardAccentColors = [colors.primary, colors.accent, colors.chartColors?.[2] || colors.secondary, colors.chartColors?.[3] || colors.positive];
+    slide.addShape("roundRect", {
+      x,
+      y: yPos,
+      w: 0.06,
+      h: 1.3,
+      fill: { color: cardAccentColors[i % cardAccentColors.length] },
+      rectRadius: 0.03,
+    });
+
+    // 아이콘 (있으면) — 아이콘 이름을 이모지로 매핑
     if (stat.icon) {
-      slide.addText(stat.icon, {
-        x,
-        y: yPos + 0.05,
-        w: cardWidth - 0.15,
-        h: 0.3,
-        fontSize: 14,
+      const iconMap: Record<string, string> = {
+        chart: "📊", bar_chart: "📊", graph: "📈", line_chart: "📈", trending_up: "📈",
+        users: "👥", people: "👥", team: "👥", person: "👤", user: "👤",
+        target: "🎯", goal: "🎯", bullseye: "🎯", crosshair: "🎯",
+        shield: "🛡️", security: "🛡️", lock: "🔒", protect: "🛡️",
+        money: "💰", dollar: "💵", revenue: "💰", finance: "💰", won: "₩", currency: "💰",
+        star: "⭐", award: "🏆", trophy: "🏆", medal: "🥇",
+        rocket: "🚀", launch: "🚀", growth: "🚀",
+        clock: "⏰", time: "⏰", calendar: "📅", schedule: "📅",
+        check: "✅", success: "✅", done: "✅",
+        heart: "❤️", health: "🏥", medical: "🏥", hospital: "🏥",
+        globe: "🌍", world: "🌍", global: "🌍", international: "🌐",
+        bulb: "💡", idea: "💡", light: "💡", innovation: "💡",
+        document: "📄", file: "📄", report: "📄", patent: "📜",
+        building: "🏢", company: "🏢", office: "🏢",
+        handshake: "🤝", partnership: "🤝", deal: "🤝",
+        cpu: "🧠", ai: "🧠", brain: "🧠", tech: "⚙️", gear: "⚙️",
+        mobile: "📱", phone: "📱", app: "📱",
+        database: "🗃️", data: "📊", storage: "🗃️",
+      };
+      const iconEmoji = iconMap[stat.icon.toLowerCase()] || stat.icon;
+      slide.addText(iconEmoji, {
+        x: x + 0.15,
+        y: yPos + 0.08,
+        w: cardWidth - 0.3,
+        h: 0.28,
+        fontSize: 16,
         align: "center",
-        fontFace: "Arial",
+        fontFace: "Pretendard",
       });
     }
 
-    // 수치
-    slide.addText(stat.value, {
-      x,
-      y: yPos + (stat.icon ? 0.3 : 0.15),
-      w: cardWidth - 0.15,
-      h: 0.45,
-      fontSize: 20,
+    // 수치 (길이에 따라 폰트 자동 축소)
+    const safeValue = String(stat.value ?? "-");
+    const valueFontSize = safeValue.length > 15 ? 13 : safeValue.length > 10 ? 16 : safeValue.length > 6 ? 18 : 22;
+    slide.addText(safeValue, {
+      x: x + 0.15,
+      y: yPos + (stat.icon ? 0.35 : 0.15),
+      w: cardWidth - 0.3,
+      h: 0.5,
+      fontSize: valueFontSize,
       bold: true,
-      color: colors.primary,
+      color: cardAccentColors[i % cardAccentColors.length],
       align: "center",
-      fontFace: "Arial",
+      fontFace: "Pretendard",
+      shrinkText: true,
     });
 
-    // 라벨
-    slide.addText(stat.label, {
-      x,
-      y: yPos + (stat.icon ? 0.75 : 0.6),
-      w: cardWidth - 0.15,
-      h: 0.3,
+    // 라벨 (긴 경우 축약 + shrinkText)
+    const safeLabel = String(stat.label ?? "");
+    const labelText = safeLabel.length > 30 ? safeLabel.slice(0, 28) + "…" : safeLabel;
+    slide.addText(labelText, {
+      x: x + 0.15,
+      y: yPos + (stat.icon ? 0.85 : 0.65),
+      w: cardWidth - 0.3,
+      h: 0.35,
       fontSize: 10,
       color: colors.textLight,
       align: "center",
-      fontFace: "Arial",
+      fontFace: "Pretendard",
+      valign: "top",
+      shrinkText: true,
     });
   }
 
-  return yPos + 1.4;
+  return yPos + 1.5;
 }
 
 /**
@@ -387,36 +656,58 @@ function addComparisonTable(
 
   const tableRows: PptxGenJS.TableRow[] = [];
 
-  // 헤더 행
+  // 헤더 텍스트가 긴 경우 폰트 축소
+  const maxHeaderLen = Math.max(...headers.map((h) => h.length));
+  const headerFontSize = maxHeaderLen > 12 ? 8 : 10;
+
+  // 헤더 행 (그라데이션 느낌 — 진한 배경 + 볼드 텍스트)
   tableRows.push(
     headers.map((h) => ({
-      text: h,
+      text: h.length > 20 ? h.slice(0, 18) + "…" : h,
       options: {
         bold: true,
-        fontSize: 9,
+        fontSize: headerFontSize,
         color: "FFFFFF",
         fill: { color: colors.primary },
         align: "center" as const,
-        fontFace: "Arial",
+        fontFace: "Pretendard",
+        valign: "middle" as const,
+        margin: [4, 8, 4, 8] as [number, number, number, number],
       },
     }))
   );
 
-  // 데이터 행
+  // 데이터 행 (짝수/홀수 구분 + 더 나은 간격)
+  // 셀 텍스트가 긴 경우 폰트 축소
+  const maxCellLen = Math.max(...rows.flat().map((c) => c.length));
+  const cellFontSize = maxCellLen > 20 ? 7 : 9;
+
   for (let i = 0; i < Math.min(rows.length, 6); i++) {
     tableRows.push(
-      rows[i].map((cell) => ({
-        text: cell,
+      rows[i].map((cell, colIdx) => ({
+        text: cell.length > 30 ? cell.slice(0, 28) + "…" : cell,
         options: {
-          fontSize: 8,
+          fontSize: cellFontSize,
+          bold: colIdx === 0,
           color: colors.textDark,
-          fill: { color: i % 2 === 0 ? "FFFFFF" : "F8FAFC" },
-          align: "center" as const,
-          fontFace: "Arial",
+          fill: { color: i % 2 === 0 ? "FFFFFF" : "F1F5F9" },
+          align: (colIdx === 0 ? "left" : "center") as "left" | "center",
+          fontFace: "Pretendard",
+          valign: "middle" as const,
+          margin: [3, 8, 3, 8] as [number, number, number, number],
         },
       }))
     );
   }
+
+  // 테이블 배경 카드
+  const tableHeight = 0.38 * (Math.min(rows.length, 6) + 1);
+  slide.addShape("roundRect", {
+    x: 0.3, y: yPos - 0.1, w: 9.4, h: tableHeight + 0.3,
+    fill: { color: "FFFFFF" },
+    rectRadius: 0.1,
+    shadow: { type: "outer", blur: 3, offset: 1, color: "00000010" },
+  });
 
   slide.addTable(tableRows, {
     x: 0.5,
@@ -424,10 +715,10 @@ function addComparisonTable(
     w: 9,
     border: { color: "E2E8F0", pt: 0.5 },
     colW: Array(headers.length).fill(9 / headers.length),
+    rowH: Array(Math.min(rows.length, 6) + 1).fill(0.38),
   });
 
-  const tableHeight = 0.35 * (Math.min(rows.length, 6) + 1);
-  return yPos + tableHeight + 0.3;
+  return yPos + tableHeight + 0.4;
 }
 
 /**
@@ -451,11 +742,13 @@ function addChartToSlide(
     case "comparison_table":
       return addComparisonTable(slide, chart, colors, yPos);
     case "highlight_cards": {
-      const items = (chart.data as { items?: Array<{ label: string; value: string }> }).items;
-      if (items) {
+      // data.items 또는 data.cards 배열 지원
+      const hcData = chart.data as Record<string, unknown>;
+      const hcItems = (hcData.items || hcData.cards) as Array<{ label: string; value: string; icon?: string }> | undefined;
+      if (hcItems && hcItems.length > 0) {
         return addStatsCards(
           slide,
-          items.map((item) => ({ value: item.value, label: item.label })),
+          hcItems.map((item) => ({ value: item.value, label: item.label, icon: item.icon })),
           colors,
           yPos
         );
@@ -463,56 +756,90 @@ function addChartToSlide(
       return yPos;
     }
     case "timeline": {
-      const events = (chart.data as { events?: Array<{ date: string; event: string }> }).events;
-      if (events && events.length > 0) {
-        // 타임라인을 가로 플로우로 표현
+      // data.events 또는 data.milestones 배열 지원
+      const tlData = chart.data as Record<string, unknown>;
+      const rawEvents = (tlData.events || tlData.milestones || tlData.timeline) as Array<Record<string, string>> | undefined;
+      if (rawEvents && rawEvents.length > 0) {
+        const events = rawEvents.map((e: any) => ({
+          date: e.date || e.period || e.month || "",
+          event: e.event || e.title || e.name || e.kpi || "",
+          desc: e.description || e.detail || (Array.isArray(e.tasks) ? e.tasks[0] || "" : "") || "",
+        }));
         const count = Math.min(events.length, 6);
         const stepW = 9 / count;
+
+        // 타임라인 배경 카드
+        slide.addShape("roundRect", {
+          x: 0.3, y: yPos - 0.1, w: 9.4, h: 2.2,
+          fill: { color: colors.bg === "FFFFFF" ? "F8FAFC" : "1E293B" },
+          rectRadius: 0.15,
+          shadow: { type: "outer", blur: 3, offset: 1, color: "00000010" },
+        });
+
+        // 중앙 연결선 (전체 가로)
+        slide.addShape("rect", {
+          x: 0.5 + stepW / 2,
+          y: yPos + 0.32,
+          w: 9 - stepW,
+          h: 0.04,
+          fill: { color: colors.accent, transparency: 40 },
+        });
+
         for (let i = 0; i < count; i++) {
           const x = 0.5 + i * stepW;
-          // 원형 마커
+          const markerColor = i === 0 ? colors.primary : i === count - 1 ? colors.accent : colors.chartColors?.[i % colors.chartColors.length] || colors.primary;
+
+          // 원형 마커 (외부 링 + 내부 원)
           slide.addShape("ellipse", {
-            x: x + stepW / 2 - 0.15,
-            y: yPos + 0.2,
-            w: 0.3,
-            h: 0.3,
-            fill: { color: colors.primary },
+            x: x + stepW / 2 - 0.18,
+            y: yPos + 0.16,
+            w: 0.36,
+            h: 0.36,
+            fill: { color: markerColor, transparency: 20 },
           });
-          // 연결선
-          if (i < count - 1) {
-            slide.addShape("rect", {
-              x: x + stepW / 2 + 0.15,
-              y: yPos + 0.33,
-              w: stepW - 0.3,
-              h: 0.04,
-              fill: { color: colors.accent },
+          slide.addShape("ellipse", {
+            x: x + stepW / 2 - 0.12,
+            y: yPos + 0.22,
+            w: 0.24,
+            h: 0.24,
+            fill: { color: markerColor },
+          });
+          // 번호 (마커 내부)
+          slide.addText(String(i + 1), {
+            x: x + stepW / 2 - 0.12,
+            y: yPos + 0.22,
+            w: 0.24, h: 0.24,
+            fontSize: 9, bold: true, color: "FFFFFF",
+            align: "center", valign: "middle",
+            fontFace: "Pretendard",
+          });
+          // 날짜 (shrinkText로 절단 방지)
+          slide.addText(events[i].date, {
+            x, y: yPos + 0.6, w: stepW, h: 0.3,
+            fontSize: 9, bold: true, color: markerColor,
+            align: "center", fontFace: "Pretendard",
+            shrinkText: true,
+          });
+          // 이벤트 제목 (긴 경우 축약 + shrinkText)
+          const eventTitle = events[i].event.length > 15 ? events[i].event.slice(0, 13) + "…" : events[i].event;
+          slide.addText(eventTitle, {
+            x, y: yPos + 0.88, w: stepW, h: 0.3,
+            fontSize: 9, bold: true, color: colors.textDark,
+            align: "center", fontFace: "Pretendard",
+            shrinkText: true,
+          });
+          // 설명 (긴 경우 축약)
+          if (events[i].desc) {
+            const evtDesc = events[i].desc.length > 25 ? events[i].desc.slice(0, 23) + "…" : events[i].desc;
+            slide.addText(evtDesc, {
+              x, y: yPos + 1.15, w: stepW, h: 0.4,
+              fontSize: 7, color: colors.textLight,
+              align: "center", fontFace: "Pretendard",
+              shrinkText: true,
             });
           }
-          // 날짜
-          slide.addText(events[i].date, {
-            x,
-            y: yPos + 0.6,
-            w: stepW,
-            h: 0.3,
-            fontSize: 8,
-            bold: true,
-            color: colors.primary,
-            align: "center",
-            fontFace: "Arial",
-          });
-          // 이벤트
-          slide.addText(events[i].event, {
-            x,
-            y: yPos + 0.85,
-            w: stepW,
-            h: 0.4,
-            fontSize: 7,
-            color: colors.textDark,
-            align: "center",
-            fontFace: "Arial",
-          });
         }
-        return yPos + 1.5;
+        return yPos + 2.0;
       }
       return yPos;
     }
@@ -559,47 +886,97 @@ function addChartToSlide(
     }
 
     case "step_roadmap": {
-      // 단계별 로드맵 → 가로 플로우
-      const { steps } = chart.data as { steps?: Array<{ step: number; title: string; period: string; target: string; goal: string }> };
-      if (steps && steps.length > 0) {
-        const count = Math.min(steps.length, 4);
-        const stepW = 9 / count;
+      // 단계별 로드맵 → 가로 플로우 (개선된 비주얼)
+      const rawSteps = (chart.data as Record<string, unknown>).steps as Array<Record<string, unknown>> | undefined;
+      if (rawSteps && rawSteps.length > 0) {
+        const count = Math.min(rawSteps.length, 4);
+        const gap = 0.3;
+        const totalW = 9;
+        const stepW = (totalW - gap * (count - 1)) / count;
+        const stepColorPalette = [colors.primary, colors.accent, colors.chartColors?.[2] || colors.secondary || "4A90D9", colors.chartColors?.[3] || colors.positive];
+        const statusColors: Record<string, string> = {
+          completed: "27AE60", in_progress: colors.accent, planned: colors.secondary || "4A90D9",
+        };
+
         for (let i = 0; i < count; i++) {
-          const x = 0.5 + i * stepW;
-          // 박스
+          const s = rawSteps[i];
+          const x = 0.5 + i * (stepW + gap);
+          const stepNum = s.step ?? (i + 1);
+          const stepTitle = (s.title as string) || `Step ${i + 1}`;
+          const stepPeriod = (s.period as string) || (s.date as string) || "";
+          const stepStatus = (s.status as string) || "";
+          const stepDesc = (s.description as string) || (s.goal as string) || "";
+          const stepTarget = (s.target as string) || "";
+          const boxColor = statusColors[stepStatus] || stepColorPalette[i % stepColorPalette.length];
+
+          // 카드 그림자 (아래에 깔기)
           slide.addShape("roundRect", {
-            x: x + 0.1,
-            y: yPos,
-            w: stepW - 0.2,
-            h: 1.8,
-            fill: { color: i === 0 ? colors.primary : i === 1 ? colors.accent : colors.secondary || "4A90D9" },
-            rectRadius: 0.1,
+            x: x + 0.03, y: yPos + 0.03, w: stepW, h: 1.8,
+            fill: { color: boxColor, transparency: 30 },
+            rectRadius: 0.12,
           });
-          // 단계 번호
-          slide.addText(`${steps[i].step}단계`, {
-            x: x + 0.1, y: yPos + 0.05, w: stepW - 0.2, h: 0.3,
-            fontSize: 10, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+
+          // 메인 카드
+          slide.addShape("roundRect", {
+            x, y: yPos, w: stepW, h: 1.8,
+            fill: { color: boxColor },
+            rectRadius: 0.12,
           });
-          // 제목
-          slide.addText(steps[i].title, {
-            x: x + 0.1, y: yPos + 0.35, w: stepW - 0.2, h: 0.3,
-            fontSize: 9, bold: true, color: "FFFFFF", align: "center", fontFace: "Arial",
+
+          // 단계 번호 (원형 뱃지)
+          slide.addShape("ellipse", {
+            x: x + stepW / 2 - 0.2, y: yPos + 0.1, w: 0.4, h: 0.4,
+            fill: { color: "FFFFFF", transparency: 20 },
           });
-          // 기간
-          slide.addText(steps[i].period, {
-            x: x + 0.1, y: yPos + 0.65, w: stepW - 0.2, h: 0.25,
-            fontSize: 7, color: "FFFFFF", align: "center", fontFace: "Arial",
+          slide.addText(String(stepNum), {
+            x: x + stepW / 2 - 0.2, y: yPos + 0.1, w: 0.4, h: 0.4,
+            fontSize: 14, bold: true, color: "FFFFFF",
+            align: "center", valign: "middle", fontFace: "Pretendard",
           });
-          // 대상 + 목표
-          slide.addText(`${steps[i].target}\n${steps[i].goal}`, {
-            x: x + 0.1, y: yPos + 0.95, w: stepW - 0.2, h: 0.7,
-            fontSize: 7, color: "FFFFFF", align: "center", fontFace: "Arial",
+
+          // 제목 (긴 경우 축약 + shrinkText)
+          const truncTitle = stepTitle.length > 12 ? stepTitle.slice(0, 10) + "…" : stepTitle;
+          slide.addText(truncTitle, {
+            x: x + 0.1, y: yPos + 0.55, w: stepW - 0.2, h: 0.35,
+            fontSize: 11, bold: true, color: "FFFFFF",
+            align: "center", fontFace: "Pretendard",
+            shrinkText: true,
           });
-          // 화살표
+
+          // 구분선
+          slide.addShape("rect", {
+            x: x + stepW * 0.2, y: yPos + 0.92, w: stepW * 0.6, h: 0.02,
+            fill: { color: "FFFFFF", transparency: 50 },
+          });
+
+          // 기간/상태
+          const periodText = stepPeriod || (stepStatus === "completed" ? "완료" : stepStatus === "in_progress" ? "진행중" : stepStatus === "planned" ? "예정" : "");
+          if (periodText) {
+            slide.addText(periodText, {
+              x: x + 0.1, y: yPos + 0.97, w: stepW - 0.2, h: 0.22,
+              fontSize: 8, color: "E0E7FF",
+              align: "center", fontFace: "Pretendard",
+            });
+          }
+
+          // 설명 (긴 경우 축약 + shrinkText)
+          const bodyText = stepTarget && stepDesc ? `${stepTarget}\n${stepDesc}` : stepDesc || stepTarget;
+          if (bodyText) {
+            const truncBody = bodyText.length > 40 ? bodyText.slice(0, 38) + "…" : bodyText;
+            slide.addText(truncBody, {
+              x: x + 0.1, y: yPos + 1.2, w: stepW - 0.2, h: 0.5,
+              fontSize: 8, color: "FFFFFF",
+              align: "center", fontFace: "Pretendard",
+              shrinkText: true,
+            });
+          }
+
+          // 화살표 (카드 사이)
           if (i < count - 1) {
-            slide.addText("→", {
-              x: x + stepW - 0.15, y: yPos + 0.7, w: 0.3, h: 0.4,
-              fontSize: 18, bold: true, color: colors.textDark, align: "center", fontFace: "Arial",
+            slide.addText("▶", {
+              x: x + stepW, y: yPos + 0.7, w: gap, h: 0.4,
+              fontSize: 14, bold: true, color: colors.accent,
+              align: "center", fontFace: "Pretendard",
             });
           }
         }
@@ -678,9 +1055,130 @@ function addChartToSlide(
   }
 }
 
+/**
+ * 공통 슬라이드 장식 — 하단 바, 페이지 번호, 좌측 액센트 바
+ */
+function addSlideChrome(
+  slide: PptxGenJS.Slide,
+  colors: TemplateColors,
+  pageNum: number,
+  totalPages: number,
+  companyName: string,
+  slideLabel: string,
+  isCover: boolean = false
+) {
+  if (isCover) {
+    // 표지: 하단에 얇은 액센트 라인만
+    slide.addShape("rect", {
+      x: 0, y: 5.15, w: 10, h: 0.04,
+      fill: { color: colors.accent },
+    });
+    // 표지 하단 우측에 날짜
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}`;
+    slide.addText(dateStr, {
+      x: 7.5, y: 4.8, w: 2, h: 0.3,
+      fontSize: 12, color: "FFFFFF", align: "right",
+      fontFace: "Pretendard", italic: true,
+    });
+    return;
+  }
+
+  // === 일반 슬라이드 공통 장식 ===
+
+  // 1. 좌측 컬러 액센트 바 (세로 전체)
+  slide.addShape("rect", {
+    x: 0, y: 0, w: 0.06, h: 5.63,
+    fill: { color: colors.primary },
+  });
+
+  // 2. 하단 바 (그라데이션 느낌 — 진한색 바)
+  slide.addShape("rect", {
+    x: 0, y: 5.25, w: 10, h: 0.38,
+    fill: { color: colors.primary },
+  });
+
+  // 3. 하단 바 위 얇은 액센트 라인
+  slide.addShape("rect", {
+    x: 0, y: 5.22, w: 10, h: 0.03,
+    fill: { color: colors.accent },
+  });
+
+  // 4. 하단 바 내부: 회사명 (좌)
+  slide.addText(companyName, {
+    x: 0.3, y: 5.25, w: 4, h: 0.38,
+    fontSize: 8, color: "FFFFFF", fontFace: "Pretendard",
+    valign: "middle",
+  });
+
+  // 5. 하단 바 내부: 슬라이드 라벨 (중앙)
+  slide.addText(slideLabel, {
+    x: 3.5, y: 5.25, w: 3, h: 0.38,
+    fontSize: 8, color: "C7D2FE", fontFace: "Pretendard",
+    align: "center", valign: "middle",
+  });
+
+  // 6. 하단 바 내부: 페이지 번호 (우)
+  slide.addText(`${pageNum} / ${totalPages}`, {
+    x: 8.0, y: 5.25, w: 1.5, h: 0.38,
+    fontSize: 9, bold: true, color: "FFFFFF", fontFace: "Pretendard",
+    align: "right", valign: "middle",
+  });
+}
+
+/**
+ * 섹션 구분 슬라이드 (선택사항 — 대형 섹션 제목)
+ */
+function addSectionDivider(
+  slide: PptxGenJS.Slide,
+  sectionTitle: string,
+  sectionNum: string,
+  colors: TemplateColors
+) {
+  slide.background = { color: colors.primary };
+
+  // 큰 번호
+  slide.addText(sectionNum, {
+    x: 0.8, y: 1.0, w: 2, h: 1.5,
+    fontSize: 72, bold: true, color: colors.accent,
+    fontFace: "Pretendard",
+  });
+
+  // 섹션 제목
+  slide.addText(sectionTitle, {
+    x: 0.8, y: 2.5, w: 8, h: 1.0,
+    fontSize: 36, bold: true, color: "FFFFFF",
+    fontFace: "Pretendard",
+  });
+
+  // 장식 라인
+  slide.addShape("rect", {
+    x: 0.8, y: 3.6, w: 2.0, h: 0.06,
+    fill: { color: colors.accent },
+  });
+}
+
 export async function buildPptx(options: PptxOptions): Promise<Buffer> {
-  const { companyName, template = "minimal", slides } = options;
-  const colors = TEMPLATES[template];
+  const { companyName, template = "minimal", slides, customColors } = options;
+
+  // custom_ci 템플릿: 사용자가 업로드한 로고에서 추출한 색상 사용
+  let colors: TemplateColors;
+  if (template === "custom_ci" && customColors) {
+    colors = {
+      primary: customColors.primary || "1A1A2E",
+      secondary: customColors.secondary || "023793",
+      accent: customColors.accent || "4361EE",
+      bg: customColors.bg || "FFFFFF",
+      textDark: customColors.textDark || "1A1A2E",
+      textLight: customColors.textLight || "6B7280",
+      positive: "22C55E",
+      negative: "EF4444",
+      chartColors: customColors.chartColors || ["023793", "4361EE", "6C8EF2", "A0B4F5", "D0DBF9"],
+    };
+  } else {
+    colors = TEMPLATES[template as keyof typeof TEMPLATES] || TEMPLATES.minimal;
+  }
+  const totalPages = slides.length + 1; // +1 for closing slide
 
   const pptx = new PptxGenJS();
   pptx.author = "BizPlan AI";
@@ -688,111 +1186,149 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
   pptx.title = `${companyName} IR Presentation`;
   pptx.layout = "LAYOUT_16x9";
 
-  for (const slideData of slides) {
+  // 기본 폰트 패밀리 설정 (fallback 포함)
+  const FONT_TITLE = "Pretendard";
+  const FONT_BODY = "Pretendard";
+  const FONT_NUM = "Pretendard";
+  // 표준 행간 (기업 PPT 기준 1.3배)
+  const LINE_SP = 1.3;
+  const LINE_SP_TIGHT = 1.15;
+
+  for (let slideIdx = 0; slideIdx < slides.length; slideIdx++) {
+    const slideData = slides[slideIdx];
     const slide = pptx.addSlide();
+    const pageNum = slideIdx + 1;
 
     if (slideData.notes) {
       slide.addNotes(slideData.notes);
     }
 
     if (slideData.slide_type === "cover") {
-      // ===== 표지 슬라이드 =====
+      // ===== 표지 슬라이드 (고급 디자인) =====
       slide.background = { color: colors.primary };
 
+      // 좌측 장식 도형 (반원 원 효과)
+      slide.addShape("ellipse", {
+        x: -1.5, y: -1.0, w: 4, h: 4,
+        fill: { color: colors.secondary || colors.primary, transparency: 85 },
+      });
+      slide.addShape("ellipse", {
+        x: -0.5, y: 3.0, w: 2.5, h: 2.5,
+        fill: { color: colors.accent, transparency: 90 },
+      });
+
+      // 우상단 작은 장식
+      slide.addShape("ellipse", {
+        x: 8.5, y: -0.5, w: 2.0, h: 2.0,
+        fill: { color: colors.accent, transparency: 92 },
+      });
+
+      // 회사명 (대형)
       slide.addText(companyName, {
-        x: 0.5,
-        y: 1.5,
-        w: 9,
-        h: 1.2,
-        fontSize: 40,
-        bold: true,
-        color: "FFFFFF",
-        fontFace: "Arial",
+        x: 0.8, y: 1.2, w: 8.5, h: 1.0,
+        fontSize: 40, bold: true, color: "FFFFFF",
+        fontFace: FONT_TITLE, lineSpacingMultiple: 1.1,
       });
 
-      if (slideData.content.headline) {
-        slide.addText(slideData.content.headline, {
-          x: 0.5,
-          y: 2.8,
-          w: 9,
-          h: 0.8,
-          fontSize: 20,
-          color: "E0E7FF",
-          fontFace: "Arial",
-        });
-      }
-
-      if (slideData.content.subtext) {
-        slide.addText(slideData.content.subtext, {
-          x: 0.5,
-          y: 4.0,
-          w: 9,
-          h: 0.5,
-          fontSize: 14,
-          color: "C7D2FE",
-          fontFace: "Arial",
-        });
-      }
-    } else {
-      // ===== 일반 슬라이드 =====
-      slide.background = { color: colors.bg };
-
-      // 제목
-      slide.addText(slideData.title || SLIDE_LABELS[slideData.slide_type], {
-        x: 0.5,
-        y: 0.3,
-        w: 9,
-        h: 0.7,
-        fontSize: 24,
-        bold: true,
-        color: colors.primary,
-        fontFace: "Arial",
-      });
-
-      // 구분선
+      // 액센트 바
       slide.addShape("rect", {
-        x: 0.5,
-        y: 1.0,
-        w: 1.5,
-        h: 0.04,
+        x: 0.8, y: 2.3, w: 1.5, h: 0.06,
         fill: { color: colors.accent },
       });
 
-      let yPos = 1.3;
+      // 헤드라인 (부제목)
+      if (slideData.content.headline) {
+        slide.addText(slideData.content.headline, {
+          x: 0.8, y: 2.6, w: 8.5, h: 0.8,
+          fontSize: 22, color: "E0E7FF",
+          fontFace: FONT_TITLE, lineSpacingMultiple: LINE_SP,
+        });
+      }
+
+      // 서브텍스트
+      if (slideData.content.subtext) {
+        slide.addText(slideData.content.subtext, {
+          x: 0.8, y: 3.6, w: 8.5, h: 0.5,
+          fontSize: 14, color: "C7D2FE",
+          fontFace: FONT_BODY, lineSpacingMultiple: LINE_SP,
+        });
+      }
+
+      // 우하단: IR DECK 뱃지
+      slide.addShape("roundRect", {
+        x: 7.8, y: 4.4, w: 1.7, h: 0.5,
+        fill: { color: colors.accent }, rectRadius: 0.05,
+      });
+      slide.addText("IR DECK", {
+        x: 7.8, y: 4.4, w: 1.7, h: 0.5,
+        fontSize: 12, bold: true, color: "FFFFFF",
+        fontFace: FONT_TITLE, align: "center", valign: "middle",
+      });
+
+      // 표지 장식 추가
+      addSlideChrome(slide, colors, pageNum, totalPages, companyName, "", true);
+
+    } else {
+      // ===== 일반 슬라이드 (개선된 레이아웃) =====
+      slide.background = { color: colors.bg };
+
+      // 상단 제목 영역 (좌측 패딩 확대 — 액센트 바 공간)
+      const titleText = slideData.title || SLIDE_LABELS[slideData.slide_type];
+
+      // 슬라이드 번호 뱃지 (작은 원형)
+      slide.addShape("roundRect", {
+        x: 0.3, y: 0.25, w: 0.5, h: 0.5,
+        fill: { color: colors.primary }, rectRadius: 0.25,
+      });
+      slide.addText(String(pageNum).padStart(2, "0"), {
+        x: 0.3, y: 0.25, w: 0.5, h: 0.5,
+        fontSize: 12, bold: true, color: "FFFFFF",
+        fontFace: FONT_NUM, align: "center", valign: "middle",
+      });
+
+      // 제목
+      slide.addText(titleText, {
+        x: 0.95, y: 0.25, w: 8.5, h: 0.6,
+        fontSize: 22, bold: true, color: colors.primary,
+        fontFace: FONT_TITLE, lineSpacingMultiple: LINE_SP_TIGHT,
+      });
+
+      // 제목 아래 구분선 (그라데이션 느낌 — 두 색상 라인)
+      slide.addShape("rect", {
+        x: 0.95, y: 0.9, w: 1.2, h: 0.04,
+        fill: { color: colors.accent },
+      });
+      slide.addShape("rect", {
+        x: 2.15, y: 0.9, w: 0.6, h: 0.04,
+        fill: { color: colors.chartColors?.[2] || colors.secondary || colors.accent, transparency: 50 },
+      });
+
+      let yPos = 1.15;
 
       // 스탯 카드 (stats 데이터가 있으면 우선 표시)
       if (slideData.content.stats && slideData.content.stats.length > 0) {
         yPos = addStatsCards(slide, slideData.content.stats, colors, yPos);
-        yPos += 0.2;
+        yPos += 0.15;
       }
 
       // 헤드라인
       if (slideData.content.headline) {
         slide.addText(slideData.content.headline, {
-          x: 0.5,
-          y: yPos,
-          w: 9,
-          h: 0.6,
-          fontSize: 16,
-          bold: true,
-          color: colors.textDark,
-          fontFace: "Arial",
+          x: 0.5, y: yPos, w: 9, h: 0.55,
+          fontSize: 16, bold: true, color: colors.textDark,
+          fontFace: FONT_TITLE, lineSpacingMultiple: LINE_SP,
         });
-        yPos += 0.7;
+        yPos += 0.65;
       }
 
       // 부가 설명
       if (slideData.content.subtext) {
         slide.addText(slideData.content.subtext, {
-          x: 0.5,
-          y: yPos,
-          w: 9,
-          h: 0.5,
-          fontSize: 12,
-          color: colors.textLight,
-          fontFace: "Arial",
+          x: 0.5, y: yPos, w: 9, h: 0.45,
+          fontSize: 11, color: colors.textLight,
+          fontFace: FONT_BODY, lineSpacingMultiple: LINE_SP,
         });
-        yPos += 0.6;
+        yPos += 0.5;
       }
 
       // 차트 삽입 (chart 데이터가 있으면)
@@ -802,38 +1338,132 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
 
       // 불릿 포인트 (차트 아래에 표시)
       if (slideData.content.bullets && slideData.content.bullets.length > 0) {
-        const remainingHeight = 5.0 - yPos;
-        if (remainingHeight > 0.5) {
-          const bulletText = slideData.content.bullets
-            .map((b) => `• ${b}`)
-            .join("\n");
+        // 하단 바 시작 y=5.22 → 안전 영역 5.05 (여백 확보)
+        const maxY = 5.05;
+        const remainingHeight = maxY - yPos;
+        const bulletCount = slideData.content.bullets.length;
 
-          slide.addText(bulletText, {
-            x: 0.5,
-            y: yPos,
-            w: 9,
-            h: Math.min(remainingHeight, 3.0),
-            fontSize: 14,
-            color: colors.textDark,
-            fontFace: "Arial",
-            lineSpacingMultiple: 1.5,
-            valign: "top",
-          });
+        if (remainingHeight > 0.35) {
+          // 남은 공간에 따라 불릿 간격/크기 동적 조절
+          const idealSpacing = 0.38;
+          const neededHeight = bulletCount * idealSpacing;
+          const hasChart = !!slideData.content.chart;
+
+          let bulletSpacing: number;
+          let bulletFontSize: number;
+
+          if (neededHeight <= remainingHeight) {
+            // 공간 충분 → 기본 간격
+            bulletSpacing = idealSpacing;
+            bulletFontSize = 12;
+          } else if (hasChart && remainingHeight < 1.5) {
+            // 차트 있고 공간 매우 부족 → 콤팩트 모드
+            bulletSpacing = Math.max(remainingHeight / bulletCount, 0.28);
+            bulletFontSize = 10;
+          } else {
+            // 공간 부족 → 간격 축소
+            bulletSpacing = Math.max(remainingHeight / bulletCount, 0.30);
+            bulletFontSize = 11;
+          }
+
+          const maxBullets = Math.floor(remainingHeight / bulletSpacing);
+          const bulletsToShow = Math.min(bulletCount, maxBullets);
+
+          for (let bi = 0; bi < bulletsToShow; bi++) {
+            const bulletY = yPos + bi * bulletSpacing;
+            if (bulletY > maxY - 0.25) break;
+
+            // 도트 아이콘
+            slide.addShape("ellipse", {
+              x: 0.55, y: bulletY + 0.1, w: 0.12, h: 0.12,
+              fill: { color: colors.accent },
+            });
+
+            // 텍스트 (긴 경우 shrinkText 적용)
+            slide.addText(slideData.content.bullets[bi], {
+              x: 0.8, y: bulletY, w: 8.5, h: bulletSpacing,
+              fontSize: bulletFontSize, color: colors.textDark,
+              fontFace: FONT_BODY, valign: "middle",
+              lineSpacingMultiple: LINE_SP_TIGHT,
+              shrinkText: true,
+            });
+          }
         }
       }
 
-      // 슬라이드 라벨 (우하단)
-      slide.addText(SLIDE_LABELS[slideData.slide_type], {
-        x: 8.0,
-        y: 5.0,
-        w: 1.5,
-        h: 0.3,
-        fontSize: 8,
-        color: colors.textLight,
-        fontFace: "Arial",
-        align: "right",
-      });
+      // 공통 장식 추가
+      addSlideChrome(slide, colors, pageNum, totalPages, companyName, SLIDE_LABELS[slideData.slide_type]);
     }
+  }
+
+  // ===== 감사(Closing) 슬라이드 =====
+  {
+    const closingSlide = pptx.addSlide();
+    closingSlide.background = { color: colors.primary };
+
+    // 장식 도형 (표지와 대칭)
+    closingSlide.addShape("ellipse", {
+      x: 7.0, y: -1.0, w: 4.5, h: 4.5,
+      fill: { color: colors.secondary || colors.primary, transparency: 85 },
+    });
+    closingSlide.addShape("ellipse", {
+      x: 7.5, y: 3.5, w: 2.5, h: 2.5,
+      fill: { color: colors.accent, transparency: 90 },
+    });
+    closingSlide.addShape("ellipse", {
+      x: -1.0, y: 3.0, w: 3.0, h: 3.0,
+      fill: { color: colors.accent, transparency: 92 },
+    });
+
+    // 감사 인사
+    closingSlide.addText("Thank You", {
+      x: 0.8, y: 1.0, w: 8.5, h: 1.2,
+      fontSize: 48, bold: true, color: "FFFFFF",
+      fontFace: FONT_TITLE, align: "center",
+    });
+
+    // 구분선
+    closingSlide.addShape("rect", {
+      x: 4.0, y: 2.3, w: 2.0, h: 0.06,
+      fill: { color: colors.accent },
+    });
+
+    // 회사명
+    closingSlide.addText(companyName, {
+      x: 0.8, y: 2.6, w: 8.5, h: 0.7,
+      fontSize: 24, color: "E0E7FF",
+      fontFace: FONT_TITLE, align: "center",
+    });
+
+    // 부가 정보 (이메일/연락처 등 — 일반적 플레이스홀더)
+    closingSlide.addText("IR 자료에 관한 문의사항이 있으시면 연락 부탁드립니다.", {
+      x: 1.0, y: 3.5, w: 8.0, h: 0.5,
+      fontSize: 13, color: "C7D2FE",
+      fontFace: FONT_BODY, align: "center",
+      lineSpacingMultiple: LINE_SP,
+    });
+
+    // 하단 액센트 라인
+    closingSlide.addShape("rect", {
+      x: 0, y: 5.15, w: 10, h: 0.04,
+      fill: { color: colors.accent },
+    });
+
+    // 하단 날짜
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}`;
+    closingSlide.addText(dateStr, {
+      x: 7.5, y: 4.8, w: 2, h: 0.3,
+      fontSize: 12, color: "FFFFFF", align: "right",
+      fontFace: FONT_BODY, italic: true,
+    });
+
+    // "BizPlan AI" 워터마크 (작게)
+    closingSlide.addText("Generated by BizPlan AI", {
+      x: 0.5, y: 5.2, w: 3, h: 0.3,
+      fontSize: 8, color: "6B7280",
+      fontFace: FONT_BODY, italic: true,
+    });
   }
 
   // Buffer로 반환

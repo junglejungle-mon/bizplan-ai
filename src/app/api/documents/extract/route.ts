@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { callClaude } from "@/lib/ai/claude";
+import { callClaudeVision } from "@/lib/ai/claude";
 
 /**
  * POST /api/documents/extract
@@ -76,14 +76,28 @@ export async function POST(request: NextRequest) {
     const extractionPrompt = getExtractionPrompt(doc.document_type);
 
     const result = await callClaudeVision({
-      base64,
-      mediaType: mediaType as
-        | "image/png"
-        | "image/jpeg"
-        | "image/webp"
-        | "image/gif",
-      documentType: doc.document_type,
-      prompt: extractionPrompt,
+      model: "claude-sonnet-4-20250514",
+      maxTokens: 2000,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "user" as const,
+          content: [
+            {
+              type: "image" as const,
+              source: {
+                type: "base64" as const,
+                media_type: mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif",
+                data: base64,
+              },
+            },
+            {
+              type: "text" as const,
+              text: extractionPrompt,
+            },
+          ],
+        },
+      ],
     });
 
     // JSON 파싱
@@ -140,54 +154,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Claude Vision API 호출 (이미지/PDF 분석)
- */
-async function callClaudeVision({
-  base64,
-  mediaType,
-  documentType,
-  prompt,
-}: {
-  base64: string;
-  mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
-  documentType: string;
-  prompt: string;
-}): Promise<string> {
-  // Anthropic SDK 직접 사용 (Vision API)
-  const { anthropic } = await import("@/lib/ai/claude");
-
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2000,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: base64,
-            },
-          },
-          {
-            type: "text",
-            text: prompt,
-          },
-        ],
-      },
-    ],
-    temperature: 0.1,
-  });
-
-  const textBlock = response.content.find(
-    (block: any) => block.type === "text"
-  ) as { type: "text"; text: string } | undefined;
-  return textBlock?.text ?? "";
 }
 
 /**

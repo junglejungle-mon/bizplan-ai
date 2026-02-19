@@ -38,7 +38,9 @@ export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
       const a = document.createElement("a");
       a.href = url;
       const disposition = response.headers.get("Content-Disposition");
-      const filenameMatch = disposition?.match(/filename="(.+)"/);
+      // RFC 5987 filename* 우선, 폴백으로 filename
+      const utf8Match = disposition?.match(/filename\*=UTF-8''(.+?)(?:;|$)/i);
+      const filenameMatch = disposition?.match(/filename="(.+?)"/);
       const extMap: Record<string, string> = {
         md: "사업계획서.md",
         docx: "사업계획서.docx",
@@ -46,7 +48,9 @@ export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
         hwpx: "사업계획서.hwpx",
       };
       const defaultName = extMap[format] || "사업계획서.md";
-      a.download = filenameMatch
+      a.download = utf8Match
+        ? decodeURIComponent(utf8Match[1])
+        : filenameMatch
         ? decodeURIComponent(filenameMatch[1])
         : defaultName;
       document.body.appendChild(a);

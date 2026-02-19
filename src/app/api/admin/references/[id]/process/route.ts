@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { processReferenceDocument } from "@/lib/rag/processor";
+import { requireAdmin } from "@/lib/admin/auth";
 
 export const maxDuration = 300; // 5분
 
@@ -7,9 +8,12 @@ export const maxDuration = 300; // 5분
  * POST /api/admin/references/[id]/process — OCR + 청킹 + 임베딩 (SSE)
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const { id } = await params;
   const encoder = new TextEncoder();
 

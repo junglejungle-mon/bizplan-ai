@@ -6,6 +6,7 @@ import {
   buildNextQuestionPrompt,
   buildRoundSummaryPrompt,
 } from "@/lib/ai/prompts/interview";
+import { calculateProfileScore } from "@/lib/utils/profile-score";
 
 // Vercel 타임아웃 확장
 export const maxDuration = 60;
@@ -24,10 +25,10 @@ export async function POST(request: NextRequest) {
 
   const { companyId, answer, currentRound, questionOrder } = await request.json();
 
-  // 회사 정보 가져오기 (전략 유도에 활용)
+  // 회사 정보 가져오기 (전략 유도 + 점수 계산에 활용)
   const { data: company } = await supabase
     .from("companies")
-    .select("name, industry, region")
+    .select("name, industry, region, employee_count, revenue, established_date, business_content, profile_score")
     .eq("id", companyId)
     .single();
 
@@ -38,6 +39,29 @@ export async function POST(request: NextRequest) {
     .eq("company_id", companyId)
     .order("question_order", { ascending: true });
 
+  // 서류 업로드 현황 (서류 유도용 + 분석 데이터 활용)
+  const { data: documents } = await supabase
+    .from("company_documents")
+    .select("document_type, status, extracted_data")
+    .eq("company_id", companyId);
+
+  const extractedDocs = (documents ?? []).filter((d) => d.status === "extracted");
+
+  // 업로드된 파일의 분석 요약을 모아서 프롬프트에 반영
+  const fileAnalysisSummaries = extractedDocs
+    .filter((d) => d.extracted_data)
+    .map((d) => {
+      const data = d.extracted_data as any;
+      return data?.summary || data?.full_analysis?.slice(0, 300) || "";
+    })
+    .filter(Boolean);
+
+  const documentInfo = {
+    count: extractedDocs.length,
+    types: extractedDocs.map((d) => d.document_type),
+    analysisSummaries: fileAnalysisSummaries,
+  };
+
   // 답변 저장
   if (answer && questionOrder >= 0) {
     await supabase
@@ -47,20 +71,25 @@ export async function POST(request: NextRequest) {
       .eq("question_order", questionOrder);
   }
 
-  // 라운드 완료 체크 (라운드당 3~4개 질문)
+  // 파일 업로드 여부에 따라 라운드당 질문 수 동적 조절
+  // previousQA는 답변 저장 전에 가져온 데이터이므로, 방금 저장한 답변을 수동으로 반영
   const answeredQA = (previousQA ?? []).filter((qa) => qa.answer !== null);
-  const questionsPerRound = 4;
-  const totalAnswered = answeredQA.length;
+  const hasUploadedFiles = extractedDocs.length > 0;
+  const questionsPerRound = hasUploadedFiles ? 2 : 3; // 파일 있으면 2개, 없으면 3개
+  // 현재 답변이 있으면 +1 (stale data 보정)
+  const totalAnswered = answeredQA.length + (answer ? 1 : 0);
   const roundComplete = totalAnswered > 0 && totalAnswered % questionsPerRound === 0;
 
   // ========================================
-  // 5라운드 완료 시 → 즉시 완료 응답 (인사이트는 별도 API에서 추출)
+  // 5라운드 완료 시 → 최초 완료인 경우만 인사이트 추출
+  // 이미 business_content가 있으면 추가 인터뷰 모드 → 계속 진행
   // ========================================
-  if (currentRound >= 5 && roundComplete) {
+  const isFirstCompletion = !company?.business_content;
+  if (currentRound >= 5 && roundComplete && isFirstCompletion) {
     return Response.json({
       type: "interview_complete",
       companyId,
-      totalAnswered: answeredQA.length,
+      totalAnswered,
     });
   }
 
@@ -92,15 +121,21 @@ export async function POST(request: NextRequest) {
         if (jsonMatch) {
           roundSummary = JSON.parse(jsonMatch[0]);
 
-          // 중간 점수 업데이트
-          if (roundSummary.interim_score) {
+          // 중간 점수 업데이트 (유틸 함수 기반 계산)
+          {
+            const answeredCount = totalAnswered; // 이미 현재 답변 포함됨
+            const newScore = calculateProfileScore(company || {}, answeredCount);
+            // AI interim_score와 유틸 계산 중 큰 값 사용
+            const finalScore = Math.max(newScore, roundSummary.interim_score || 0);
             await supabase
               .from("companies")
               .update({
-                profile_score: roundSummary.interim_score,
+                profile_score: finalScore,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", companyId);
+            // SSE로 보낼 점수도 갱신
+            roundSummary.interim_score = finalScore;
           }
         }
       } catch {}
@@ -143,17 +178,18 @@ export async function POST(request: NextRequest) {
             name: company.name,
             industry: company.industry,
             region: company.region,
-          } : undefined
+          } : undefined,
+          documentInfo
         );
 
         let fullQuestion = "";
 
         for await (const chunk of streamClaude({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-haiku-4-5-20251001",
           system: INTERVIEW_SYSTEM_PROMPT,
           messages: [{ role: "user", content: prompt }],
           temperature: 0.7,
-          maxTokens: 500,
+          maxTokens: 400,
         })) {
           fullQuestion += chunk;
           controller.enqueue(

@@ -13,16 +13,23 @@ import {
   Building2,
   Settings,
   Presentation,
+  CreditCard,
   Menu,
   X,
+  Sparkles,
+  CalendarDays,
 } from "lucide-react";
 
 const sidebarItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
+  { href: "/consultant", label: "AI 컨설턴트", icon: Sparkles },
   { href: "/programs", label: "지원사업", icon: Search },
+  { href: "/scheduler", label: "지원 스케줄러", icon: CalendarDays },
   { href: "/plans", label: "사업계획서", icon: FileText },
+  { href: "/ir", label: "IR PPT", icon: Presentation },
   { href: "/documents", label: "서류관리", icon: FolderOpen },
   { href: "/company", label: "회사 정보", icon: Building2 },
+  { href: "/pricing", label: "요금제", icon: CreditCard },
   { href: "/settings", label: "설정", icon: Settings },
 ];
 
@@ -48,6 +55,7 @@ export function MobileMenuButton() {
           .from("companies")
           .select("profile_score")
           .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
           .limit(1)
           .single();
         if (company) setProfileScore(company.profile_score || 0);
@@ -152,6 +160,7 @@ export function Sidebar() {
           .from("companies")
           .select("profile_score")
           .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
           .limit(1)
           .single();
 

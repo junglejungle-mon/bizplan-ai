@@ -15,12 +15,20 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    if (!agreeTerms || !agreePrivacy) {
+      setError("이용약관과 개인정보처리방침에 동의해주세요.");
+      setLoading(false);
+      return;
+    }
 
     if (password.length < 6) {
       setError("비밀번호는 6자 이상이어야 합니다.");
@@ -135,8 +143,48 @@ export default function SignupPage() {
               required
               minLength={6}
             />
+            {/* 약관 동의 */}
+            <div className="space-y-2 pt-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreeTerms && agreePrivacy}
+                  onChange={(e) => {
+                    setAgreeTerms(e.target.checked);
+                    setAgreePrivacy(e.target.checked);
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-600">
+                  전체 동의
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer ml-6">
+                <input
+                  type="checkbox"
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs text-gray-500">
+                  <Link href="/terms" target="_blank" className="text-blue-600 hover:underline">[필수] 이용약관</Link>에 동의합니다
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer ml-6">
+                <input
+                  type="checkbox"
+                  checked={agreePrivacy}
+                  onChange={(e) => setAgreePrivacy(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs text-gray-500">
+                  <Link href="/privacy" target="_blank" className="text-blue-600 hover:underline">[필수] 개인정보처리방침</Link>에 동의합니다
+                </span>
+              </label>
+            </div>
+
             {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !agreeTerms || !agreePrivacy}>
               {loading ? "가입 중..." : "회원가입"}
             </Button>
           </form>

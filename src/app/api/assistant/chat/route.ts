@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     .from("companies")
     .select("*")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -82,6 +83,29 @@ export async function POST(request: NextRequest) {
       content: h.content,
     }));
 
+  // 서류 업로드 현황 (서류 유도 컨텍스트용)
+  let documentStatus: {
+    totalCount: number;
+    extractedCount: number;
+    types: string[];
+    profileScore: number;
+  } | undefined;
+
+  if (company) {
+    const { data: docs } = await supabase
+      .from("company_documents")
+      .select("document_type, status")
+      .eq("company_id", company.id);
+
+    const extracted = (docs ?? []).filter((d: any) => d.status === "extracted");
+    documentStatus = {
+      totalCount: (docs ?? []).length,
+      extractedCount: extracted.length,
+      types: extracted.map((d: any) => d.document_type),
+      profileScore: company.profile_score || 0,
+    };
+  }
+
   // 사용자 메시지 저장
   if (company) {
     await supabase.from("assistant_chats").insert({
@@ -120,6 +144,7 @@ export async function POST(request: NextRequest) {
           companyProfile,
           currentContext,
           ragContext,
+          documentStatus,
         });
 
         for await (const chunk of streamClaude({

@@ -1,8 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scorePlan } from '@/lib/quality/scorer';
+import { requireAdmin } from "@/lib/admin/auth";
+import { apiError } from "@/lib/api/error";
 
 export async function GET(request: Request) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const { searchParams } = new URL(request.url);
     const planId = searchParams.get('planId');
@@ -21,7 +26,7 @@ export async function GET(request: Request) {
     const { data: scores, error } = await query;
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return apiError(error, "품질 점수 조회 실패", 500);
     }
 
     return Response.json({ scores: scores || [] });
@@ -33,6 +38,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
+
     const { planId } = await request.json();
 
     if (!planId) {

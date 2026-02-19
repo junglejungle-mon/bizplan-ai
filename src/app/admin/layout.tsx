@@ -5,11 +5,19 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "대시보드" },
-  { href: "/admin/agents", label: "에이전트" },
-  { href: "/admin/quality", label: "품질/RAG" },
+  { href: "/admin/companies", label: "업체" },
+  { href: "/admin/matchings", label: "매칭" },
+  { href: "/admin/plans", label: "계획서" },
+  { href: "/admin/ir", label: "IR" },
   { href: "/admin/programs", label: "프로그램" },
   { href: "/admin/users", label: "사용자" },
+  { href: "/admin/quality", label: "품질/RAG" },
+  { href: "/admin/agents", label: "에이전트" },
+  { href: "/admin/payments", label: "결제" },
+  { href: "/admin/segments", label: "세그먼트" },
+  { href: "/admin/cs", label: "CS" },
   { href: "/admin/system", label: "시스템" },
+  { href: "/admin/api-docs", label: "API" },
 ];
 
 export default function AdminLayout({

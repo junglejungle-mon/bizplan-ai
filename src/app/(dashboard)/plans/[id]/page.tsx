@@ -8,6 +8,9 @@ import Link from "next/link";
 import { PlanGeneratorButton } from "@/components/plans/plan-generator-button";
 import { SectionCard } from "@/components/plans/section-card";
 import { ExportButton } from "@/components/plans/export-button";
+import { PlanEvaluation } from "@/components/plans/plan-evaluation";
+import { PlanDeleteButton } from "@/components/plans/plan-delete-button";
+import { PlanAssistantCard } from "@/components/plans/plan-assistant-card";
 
 export default async function PlanEditorPage({
   params,
@@ -71,13 +74,14 @@ export default async function PlanEditorPage({
             </div>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 shrink-0 items-center">
           <Link href={`/plans/${id}/ir`}>
             <Button size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
               <Presentation className="h-4 w-4" /> <span className="hidden sm:inline">IR PPT 생성</span><span className="sm:hidden">IR</span>
             </Button>
           </Link>
           <ExportButton planId={id} hasProgramForm={!!plan.program_id} />
+          <PlanDeleteButton planId={id} planTitle={plan.title} />
         </div>
       </div>
 
@@ -167,31 +171,11 @@ export default async function PlanEditorPage({
               </CardContent>
             </Card>
 
+            {/* 제출 적합성 평가 */}
+            <PlanEvaluation planId={id} planStatus={plan.status} />
+
             {/* AI 어시스턴트 카드 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">AI 어시스턴트</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-500">
-                <p>사업계획서 작성 중 궁금한 점을 물어보세요.</p>
-                <div className="mt-4 space-y-2">
-                  {[
-                    "이 섹션 더 구체적으로",
-                    "평가 기준 분석",
-                    "리서치 추가",
-                  ].map((tip, i) => (
-                    <Button
-                      key={i}
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs justify-start"
-                    >
-                      {tip}
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <PlanAssistantCard planId={id} />
           </div>
         </div>
       </div>

@@ -4,7 +4,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { anthropic } from "@/lib/ai/claude";
+import { callClaudeVision } from "@/lib/ai/claude";
 import { PROGRAM_PDF_OCR_SYSTEM } from "@/lib/ai/prompts/writing";
 import { chunkDocument } from "./chunker";
 import { embedBatch } from "./embeddings";
@@ -65,9 +65,9 @@ export async function* processReferenceDocument(
         const buffer = Buffer.from(await fileData.arrayBuffer());
         const base64 = buffer.toString("base64");
 
-        const response = await anthropic.messages.create({
+        ocrText = await callClaudeVision({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 16000,
+          maxTokens: 16000,
           system: PROGRAM_PDF_OCR_SYSTEM,
           messages: [
             {
@@ -90,11 +90,6 @@ export async function* processReferenceDocument(
           ],
           temperature: 0,
         });
-
-        const textBlock = response.content.find((b) => b.type === "text") as
-          | { type: "text"; text: string }
-          | undefined;
-        ocrText = textBlock?.text ?? "";
 
         // OCR 텍스트 저장
         await supabase

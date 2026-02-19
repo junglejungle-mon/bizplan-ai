@@ -17,7 +17,9 @@ import {
   Upload,
   FileText,
   CheckCircle2,
+  Plus,
 } from "lucide-react";
+import { FileAnalyzer } from "@/components/company/file-analyzer";
 
 interface CompanyData {
   id: string;
@@ -68,6 +70,7 @@ export default function CompanyPage() {
       .from("companies")
       .select("*")
       .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
       .limit(1);
 
     if (!companies?.[0]) {
@@ -152,6 +155,10 @@ export default function CompanyPage() {
       // input 초기화
       e.target.value = "";
     }
+  };
+
+  const handleAdditionalInterview = () => {
+    router.push("/onboarding");
   };
 
   if (loading) {
@@ -270,6 +277,28 @@ export default function CompanyPage() {
         </CardContent>
       </Card>
 
+      {/* AI 자료 분석기 */}
+      <FileAnalyzer
+        companyId={company.id}
+        onDataExtracted={(fields) => {
+          if (!fields || !company) return;
+          // UI 즉시 업데이트 (빈 필드만)
+          setCompany({
+            ...company,
+            ...(fields.industry && !company.industry && { industry: fields.industry }),
+            ...(fields.revenue && !company.revenue && { revenue: fields.revenue }),
+            ...(fields.employee_count && !company.employee_count && {
+              employee_count: parseInt(fields.employee_count) || null,
+            }),
+            ...(fields.established_date && !company.established_date && {
+              established_date: fields.established_date,
+            }),
+          });
+          // DB에서 최신 데이터 다시 로드 (API에서 자동 업데이트했으므로)
+          setTimeout(() => loadData(), 1000);
+        }}
+      />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* 기본 정보 */}
         <Card>
@@ -347,9 +376,18 @@ export default function CompanyPage() {
           </CardHeader>
           <CardContent>
             {company.business_content ? (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {company.business_content}
-              </p>
+              <div>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {company.business_content}
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4 gap-2 w-full"
+                  onClick={handleAdditionalInterview}
+                >
+                  <Plus className="h-4 w-4" /> 추가 인터뷰로 프로필 고도화
+                </Button>
+              </div>
             ) : (
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 text-gray-300 mx-auto mb-3" />

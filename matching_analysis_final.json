@@ -1,0 +1,213 @@
+{
+  "metadata": {
+    "analysis_date": "2026-02-15",
+    "company_name": "AI 기반 도자기 맞춤 추천 서비스 스타트업",
+    "company_profile": {
+      "industry": "AI·디지털전환 / 이커머스 솔루션",
+      "core_tech": "ML 기반 도자기 맞춤 추천 알고리즘 (정확도 80%)",
+      "size": "1~5명",
+      "stage": "베타테스트 단계",
+      "revenue": "미수익화 단계",
+      "key_strengths": [
+        "AI 인증 획득",
+        "초기창업패키지 선정 경험",
+        "대표 이커머스 5년 이상 경력"
+      ],
+      "goal": "3년 내 1억 원 매출, 3~5명 신규 채용"
+    },
+    "evaluation_criteria": {
+      "keyword_relevance": "30점 (핵심 업종/기술 직접 관련성)",
+      "business_alignment": "25점 (전략 부합)",
+      "qualification_fit": "20점 (규모/업력/업종 자격)",
+      "necessity_utility": "15점 (실질적 도움)",
+      "selection_possibility": "10점 (경쟁력)"
+    },
+    "scoring_scale": {
+      "80_plus": "핵심 분야 정확히 일치 (5~8%)",
+      "60_79": "분야 관련성 높음 (15~20%)",
+      "40_59": "간접 관련 (20~25%)",
+      "below_40": "분야 불일치 (50%+)"
+    }
+  },
+  "analysis_results": [
+    {
+      "id": 0,
+      "program_name": "2026 액셀러레이터 연계지원-콘텐츠 액셀러레이터 모집",
+      "organization": "문화체육관광부 / 한국콘텐츠진흥원",
+      "target_type": "액셀러레이터 운영기관 (스타트업 아님)",
+      "key_characteristics": "콘텐츠 산업 중심 액셀러레이터 기관 선정",
+      "scores": {
+        "keyword_relevance": 5,
+        "business_alignment": 0,
+        "qualification_fit": 0,
+        "necessity_utility": 5,
+        "selection_possibility": 0
+      },
+      "total_score": 10,
+      "fit_level": "부적합",
+      "keywords": [
+        "액셀러레이터",
+        "콘텐츠진흥원",
+        "문화체육관광부"
+      ],
+      "rationale": "공고 대상이 액셀러레이터 운영기관이며, 콘텐츠 산업 중심. 회사는 스타트업이고 도자기 이커머스 기술로 콘텐츠 산업과 직접 연관성 부족.",
+      "detail": "회사는 AI 도자기 추천 솔루션 스타트업이나, 본 공고는 콘텐츠 액셀러레이터 운영기관 선정 공모입니다. 공고 대상이 근본적으로 다르며(기관 vs 스타트업), 콘텐츠 산업 중심의 지원 프레임으로 도자기 이커머스 기술과의 직접적 연관성이 제한적입니다.",
+      "recommendation": "신청 대상 아님"
+    },
+    {
+      "id": 1,
+      "program_name": "2026년 투자연계형 GMEP 주관기관 모집",
+      "organization": "중소벤처기업부 추정",
+      "target_type": "글로벌 프로그램 주관기관 (투자사, 창업기획자)",
+      "key_characteristics": "창업기업 해외투자 유치 지원 프로그램의 주관기관 선정",
+      "scores": {
+        "keyword_relevance": 5,
+        "business_alignment": 0,
+        "qualification_fit": 0,
+        "necessity_utility": 8,
+        "selection_possibility": 0
+      },
+      "total_score": 13,
+      "fit_level": "부적합",
+      "keywords": [
+        "글로벌투자",
+        "GMEP",
+        "중소벤처기업부"
+      ],
+      "rationale": "지원 대상이 글로벌 프로그램 운영 주관기관(투자사 등)이며, 회사는 스타트업으로 수혜 대상이 아님.",
+      "detail": "국내 창업기업의 해외투자 유치 지원 프로그램의 주관기관(투자사, 창업기획자) 모집 공고입니다. 회사는 스타트업으로 프로그램 주관기관이 될 수 없으며, 직접 글로벌 투자 지원 수혜는 현 공고 범위 밖입니다. 향후 성장 단계에서 간접 참여 가능성은 있으나 현재 공고는 비대상.",
+      "recommendation": "신청 대상 아님"
+    },
+    {
+      "id": 2,
+      "program_name": "2026-1차 KHNP AI누리 입주기업 공모",
+      "organization": "한국수력원자력(주)",
+      "target_type": "예비창업자 또는 창업 7년 미만 AI 스타트업",
+      "key_characteristics": "에너지 분야 진출 희망 AI 스타트업 입주 공간 및 보육 지원",
+      "scores": {
+        "keyword_relevance": 18,
+        "business_alignment": 8,
+        "qualification_fit": 18,
+        "necessity_utility": 8,
+        "selection_possibility": 6
+      },
+      "total_score": 58,
+      "fit_level": "검토추천",
+      "keywords": [
+        "AI",
+        "에너지",
+        "한국수력원자력",
+        "입주공간",
+        "보육지원"
+      ],
+      "rationale": "AI 스타트업 요건은 부합하나, 에너지 분야 진출이 선정 기준의 핵심이고 도자기 추천 기술과는 직접 무관하여 경쟁력 제한적.",
+      "detail": "KHNP AI누리는 AI 스타트업 발굴/육성 목표로 창업 7년 미만 AI 기업을 대상합니다. 회사는 AI 인증 획득 및 ML 추천 알고리즘으로 AI 역량을 갖추었으나, 공고의 명시적 조건인 '에너지 분야 진출 희망'과의 매칭이 약합니다. 에너지 관련 기술이나 비즈니스 모델이 없어 선정 경쟁력이 낮으나, AI 스타트업 육성 취지상 검토 대상은 될 수 있습니다.",
+      "qualification_analysis": {
+        "ai_startup": "✓ 부합 (AI 기반 추천 알고리즘, AI 인증 획득)",
+        "establishment_period": "✓ 부합 (창업 1년 미만 추정)",
+        "energy_sector_convergence": "✗ 미부합 (도자기 이커머스, 에너지 무관)"
+      },
+      "recommendation": "신청 검토 권장 (다만 에너지 분야 연계 방안 사전 검토 필요)"
+    },
+    {
+      "id": 3,
+      "program_name": "2019년도 시범 스마트공장 구축사업 추가모집",
+      "organization": "미확인 (2019년 공고)",
+      "target_type": "제조업 중심 (제한 없으나 실제 대상 명확)",
+      "key_characteristics": "스마트공장(제조 자동화) 구축 지원",
+      "scores": {
+        "keyword_relevance": 2,
+        "business_alignment": 0,
+        "qualification_fit": 15,
+        "necessity_utility": 2,
+        "selection_possibility": 2
+      },
+      "total_score": 21,
+      "fit_level": "참고",
+      "keywords": [
+        "스마트공장",
+        "제조자동화",
+        "2019년"
+      ],
+      "rationale": "2019년 구 공고이며 스마트공장(제조 자동화) 중심으로, 소프트웨어 기반 이커머스 솔루션과 직접 연관성 없음.",
+      "detail": "스마트공장 구축사업은 IoT/자동화 장비를 통한 제조업 생산성 향상을 목표합니다. 회사는 도자기 판매처/플랫폼을 위한 추천 알고리즘 제공 소프트웨어 기업으로, 생산 시설 자동화와는 무관합니다. 또한 2019년 공고로 현재 활성 프로그램인지 확인 필요하며, 공고 대상(제조업)과 회사 업종(소프트웨어/SaaS)이 상이합니다.",
+      "concerns": [
+        "2019년 구 공고로 현재 활성화 여부 불명확",
+        "대상 업종: 제조업 (회사는 소프트웨어/SaaS)",
+        "에너지·자동화 기술과 도자기 이커머스 기술 무관"
+      ],
+      "recommendation": "신청 비추천 (공고 활성화 여부 확인 필요, 사업 방향성 불일치)"
+    },
+    {
+      "id": 4,
+      "program_name": "2026년 창업성공패키지(청년창업사관학교 글로벌 심화과정) 글로벌 5G 프로그램 운영사 모집",
+      "organization": "중소벤처기업부 / 청년창업사관학교",
+      "target_type": "글로벌 프로그램 운영기관 (창업기획자, 벤처투자회사)",
+      "key_characteristics": "우수 창업기업의 글로벌 사업화 지원 프로그램 운영사 선정",
+      "scores": {
+        "keyword_relevance": 3,
+        "business_alignment": 0,
+        "qualification_fit": 0,
+        "necessity_utility": 5,
+        "selection_possibility": 0
+      },
+      "total_score": 8,
+      "fit_level": "부적합",
+      "keywords": [
+        "글로벌심화",
+        "청년창업사관학교",
+        "벤처투자회사",
+        "5G"
+      ],
+      "rationale": "지원 대상이 글로벌 액셀러레이팅 프로그램 운영기관(창업기획자/벤처투자회사)이며, 회사는 스타트업으로 비대상.",
+      "detail": "우수 창업기업의 글로벌 사업화 지원을 위한 프로그램 운영사 모집 공고입니다. 회사는 스타트업으로 프로그램을 운영할 기관 자격(창업기획자, 벤처투자회사, 현지 협업 파트너 등)을 갖추지 못합니다. 향후 회사가 글로벌 진출을 추진할 시점에 본 프로그램의 수혜 대상이 될 가능성은 있으나, 현 공고는 운영기관 모집이므로 직접 신청 대상이 아닙니다.",
+      "required_qualifications": [
+        "중소벤처기업부 등록 창업기획자 또는 벤처투자회사",
+        "글로벌 사업화 프로그램 운영 경험",
+        "현지 협력 파트너 보유"
+      ],
+      "recommendation": "신청 대상 아님"
+    }
+  ],
+  "summary": {
+    "total_programs_analyzed": 5,
+    "fit_levels_distribution": {
+      "부적합": 3,
+      "검토추천": 1,
+      "참고": 1,
+      "적극권장": 0
+    },
+    "score_distribution": {
+      "80_plus": 0,
+      "60_79": 0,
+      "40_59": 1,
+      "below_40": 4
+    },
+    "highest_scoring_program": {
+      "id": 2,
+      "name": "2026-1차 KHNP AI누리 입주기업 공모",
+      "score": 58,
+      "status": "검토추천"
+    },
+    "key_findings": {
+      "finding_1": "분석 대상 5개 프로그램 중 3개는 스타트업이 아닌 지원기관/운영기관 모집으로, 회사의 신청 대상이 아님",
+      "finding_2": "KHNP AI누리(58점)만이 실질적 검토 대상이나, 에너지 분야 진출 조건으로 경쟁력 제한적",
+      "finding_3": "2019년 스마트공장 공고는 구 프로그램으로 현재 활성화 여부 불명확하고, 제조 자동화 분야로 회사 사업과 무관",
+      "finding_4": "현재 분석된 프로그램들은 회사의 AI·이커머스 솔루션 성장 단계와 직결된 지원책이 부족"
+    },
+    "strategic_recommendations": {
+      "immediate_action": "KHNP AI누리 공모 검토 시, 에너지·스마트그리드 분야와의 도자기 추천 기술 연계 방안을 사전에 구체화할 것",
+      "medium_term": "AI 스타트업 대상 일반 액셀러레이터, 창업기업 성장 지원, 이커머스 기술 혁신 프로그램 등 다른 카테고리의 지원사업 탐색 권장",
+      "long_term": "회사의 매출 규모 및 성장 단계에 따라 (약 1억 원 이상 달성 시) 중소기업 기술개발 지원, 글로벌 진출 프로그램 등으로 확대 고려"
+    }
+  },
+  "metadata_additional": {
+    "analysis_methodology": "엄격한 기준 적용 (출처 등급 + 직접 관련성 + 실무 활용성)",
+    "evaluation_note": "각 공고별 신청 요강 최종 확인 필수 (정책 변동, 공고 종료 등)",
+    "next_steps": [
+      "1. KHNP AI누리 공모 요강 상세 검토 및 에너지 분야 연계 전략 수립",
+      "2. 타 카테고리 정부지원사업 (중소기업청, 각 지역경제진흥원 등) 추가 탐색",
+      "3. 초기창업패키지 이후 성장 지원 프로그램 준비 (후속 선정 기관 아이템 구성)"
+    ]
+  }
+}

@@ -39,7 +39,6 @@ export async function fetchAllKStartupPrograms(maxPages = 5) {
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchKStartupPrograms(page, 500);
     allItems.push(...items);
-    console.log(`[K-Startup] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
     if (items.length < 500) break; // 마지막 페이지
   }
   return allItems;

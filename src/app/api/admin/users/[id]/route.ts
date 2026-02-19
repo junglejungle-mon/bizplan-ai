@@ -1,10 +1,14 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from "@/lib/admin/auth";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const { id } = await params;
 

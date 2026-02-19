@@ -7,7 +7,15 @@ import {
   CheckCircle2,
   FileText,
   Eye,
+  BarChart3,
+  Target,
+  Gift,
+  ArrowRight,
+  Upload,
+  Download,
+  Sparkles,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { DocumentUploadButton } from "./document-upload-button";
 import { useState } from "react";
 
@@ -43,6 +51,14 @@ const DOCUMENT_CATEGORIES = [
   },
 ];
 
+// 인터뷰/파일분석으로 업로드된 자료의 타입 → 표시명 매핑
+const ANALYZED_TYPE_LABELS: Record<string, string> = {
+  analyzed_company_intro: "회사소개서",
+  analyzed_business_plan: "사업계획서",
+  analyzed_financial: "재무자료",
+  analyzed_other: "기타 자료",
+};
+
 interface DocumentInfo {
   id: string;
   document_type: string;
@@ -70,8 +86,57 @@ export function DocumentList({ documents }: DocumentListProps) {
   const linkedDocs = uploadedMap.size;
   const level = Math.min(5, Math.floor(linkedDocs / 2) + 1);
 
+  const BENEFITS = [
+    {
+      icon: BarChart3,
+      title: "계획서 품질 향상",
+      desc: "재무 데이터 기반 정확한 수치가 사업계획서에 자동 반영됩니다",
+      color: { bg: "bg-blue-50", icon: "text-blue-600", title: "text-blue-900" },
+    },
+    {
+      icon: Target,
+      title: "매칭 정확도 향상",
+      desc: "인증서 기반 자격요건 자동 확인으로 적합한 지원사업을 찾습니다",
+      color: { bg: "bg-green-50", icon: "text-green-600", title: "text-green-900" },
+    },
+    {
+      icon: Gift,
+      title: "무료 혜택 잠금 해제",
+      desc: "서류 연동 시 무료 IR PPT 1건 + 프리미엄 1주 혜택을 드립니다",
+      color: { bg: "bg-purple-50", icon: "text-purple-600", title: "text-purple-900" },
+    },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* 혜택 배너 (서류 0개일 때) */}
+      {linkedDocs === 0 && (
+        <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className="h-5 w-5 text-amber-600" />
+              <h3 className="font-bold text-amber-900">왜 서류를 올려야 하나요?</h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              {BENEFITS.map((b) => (
+                <div key={b.title} className={`rounded-xl ${b.color.bg} p-4`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <b.icon className={`h-5 w-5 ${b.color.icon}`} />
+                    <span className={`text-sm font-semibold ${b.color.title}`}>{b.title}</span>
+                  </div>
+                  <p className="text-xs text-gray-600">{b.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-amber-700 text-center">
+              홈택스·중소벤처24 서류를 연동하면 AI가 더 정확한 사업계획서를 작성할 수 있습니다
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 연동 현황 */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
         <CardContent className="p-6">
@@ -160,9 +225,22 @@ export function DocumentList({ documents }: DocumentListProps) {
                         <button
                           onClick={() => setSelectedDoc(uploaded)}
                           className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                          title="추출 데이터 보기"
                         >
                           <Eye className="h-3 w-3" />
                         </button>
+                      )}
+                      {isUploaded && uploaded?.file_url && (
+                        <a
+                          href={uploaded.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="text-xs text-green-600 hover:text-green-800 flex items-center gap-0.5"
+                          title="다운로드"
+                        >
+                          <Download className="h-3 w-3" />
+                        </a>
                       )}
                       {!isUploaded && (
                         <DocumentUploadButton
@@ -185,6 +263,77 @@ export function DocumentList({ documents }: DocumentListProps) {
           </Card>
         ))}
       </div>
+
+      {/* 인터뷰에서 업로드한 자료 */}
+      {(() => {
+        const analyzedDocs = documents.filter((d) =>
+          d.document_type.startsWith("analyzed_")
+        );
+        if (analyzedDocs.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-600" />
+                AI 인터뷰 업로드 자료
+                <Badge variant="outline" className="ml-auto text-xs">
+                  {analyzedDocs.length}건
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {analyzedDocs.map((doc) => {
+                const label =
+                  ANALYZED_TYPE_LABELS[doc.document_type] ||
+                  doc.document_type.replace("analyzed_", "");
+                const summary =
+                  (doc.extracted_data as any)?.summary || "분석 완료";
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {label}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {summary}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {doc.extracted_data && (
+                        <button
+                          onClick={() => setSelectedDoc(doc)}
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5 px-2 py-1 rounded hover:bg-blue-50"
+                          title="추출 데이터 보기"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {doc.file_url && (
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="text-xs text-green-600 hover:text-green-800 flex items-center gap-0.5 px-2 py-1 rounded hover:bg-green-50"
+                          title="파일 다운로드"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* 추출 데이터 미리보기 모달 */}
       {selectedDoc && (

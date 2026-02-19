@@ -28,6 +28,105 @@ export function escapeRegex(str: string): string {
 // ===== XML 삽입 =====
 
 /**
+ * 깊이 카운팅 방식으로 <hp:p> 블록 경계를 정확히 찾기
+ * 중첩된 <hp:p> (테이블 셀 내부 등)에서도 올바르게 동작
+ */
+function findParagraphPositions(
+  xml: string
+): Array<{ start: number; end: number; full: string }> {
+  const positions: Array<{ start: number; end: number; full: string }> = [];
+  const openTag = /<hp:p[\s>]/g;
+  const closeTag = /<\/hp:p>/g;
+
+  let openMatch;
+  while ((openMatch = openTag.exec(xml)) !== null) {
+    const startPos = openMatch.index;
+    let depth = 1;
+    let searchPos = openMatch.index + openMatch[0].length;
+
+    // 셀프클로징 태그 체크: <hp:p ... />
+    const selfClosingCheck = xml.substring(startPos, startPos + 500);
+    const selfClosingMatch = selfClosingCheck.match(/^<hp:p[^>]*\/>/);
+    if (selfClosingMatch) {
+      positions.push({
+        start: startPos,
+        end: startPos + selfClosingMatch[0].length,
+        full: selfClosingMatch[0],
+      });
+      continue;
+    }
+
+    // 깊이 카운팅으로 매칭되는 닫기 태그 찾기
+    while (depth > 0 && searchPos < xml.length) {
+      const nextOpen = xml.indexOf("<hp:p", searchPos);
+      const nextClose = xml.indexOf("</hp:p>", searchPos);
+
+      if (nextClose === -1) break; // 닫기 태그 없으면 중단
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // 중첩 열기 태그 발견 — 셀프클로징이 아닌 경우만 depth++
+        const afterOpen = xml.substring(nextOpen, nextOpen + 500);
+        if (/^<hp:p[^>]*\/>/.test(afterOpen)) {
+          // 셀프클로징은 depth 변화 없이 넘어감
+          searchPos = nextOpen + afterOpen.match(/^<hp:p[^>]*\/>/)![0].length;
+        } else {
+          depth++;
+          searchPos = nextOpen + 5; // "<hp:p".length
+        }
+      } else {
+        // 닫기 태그 발견
+        depth--;
+        if (depth === 0) {
+          const endPos = nextClose + "</hp:p>".length;
+          positions.push({
+            start: startPos,
+            end: endPos,
+            full: xml.substring(startPos, endPos),
+          });
+        }
+        searchPos = nextClose + "</hp:p>".length;
+      }
+    }
+  }
+
+  return positions;
+}
+
+/**
+ * XML well-formedness 간이 검증
+ * 삽입 후 기본적인 태그 균형이 맞는지 확인
+ */
+function validateXmlBalance(xml: string): { valid: boolean; error?: string } {
+  // <hp:p> 열기/닫기 수 일치 확인
+  const openCount = (xml.match(/<hp:p[\s>]/g) || []).length;
+  const selfClosingCount = (xml.match(/<hp:p[^>]*\/>/g) || []).length;
+  const closeCount = (xml.match(/<\/hp:p>/g) || []).length;
+
+  const expectedCloseCount = openCount - selfClosingCount;
+  if (expectedCloseCount !== closeCount) {
+    return {
+      valid: false,
+      error: `<hp:p> 태그 불균형: 열기 ${openCount}개(셀프클로징 ${selfClosingCount}개), 닫기 ${closeCount}개`,
+    };
+  }
+
+  // <hp:run> 열기/닫기 수 일치 확인
+  const runOpenCount = (xml.match(/<hp:run[\s>]/g) || []).length;
+  const runSelfClosingCount = (xml.match(/<hp:run[^>]*\/>/g) || []).length;
+  const runCloseCount = (xml.match(/<\/hp:run>/g) || []).length;
+
+  const expectedRunClose = runOpenCount - runSelfClosingCount;
+  if (expectedRunClose !== runCloseCount) {
+    return {
+      valid: false,
+      error: `<hp:run> 태그 불균형: 열기 ${runOpenCount}개, 닫기 ${runCloseCount}개`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * paraIndex 기반으로 XML 내 해당 <hp:p> 블록을 찾아 텍스트 삽입
  */
 function insertTextAtParagraph(
@@ -36,18 +135,8 @@ function insertTextAtParagraph(
   content: string,
   field: FormField
 ): string {
-  // 모든 <hp:p> 블록의 위치를 찾기
-  const paraPositions: Array<{ start: number; end: number; full: string }> = [];
-  const paraRegex = /<hp:p[^>]*>[\s\S]*?<\/hp:p>/g;
-  let match;
-
-  while ((match = paraRegex.exec(xml)) !== null) {
-    paraPositions.push({
-      start: match.index,
-      end: match.index + match[0].length,
-      full: match[0],
-    });
-  }
+  // 깊이 카운팅으로 정확한 <hp:p> 블록 위치 찾기
+  const paraPositions = findParagraphPositions(xml);
 
   // 해당 paraIndex의 블록 찾기
   if (paraIndex >= paraPositions.length) {
@@ -62,57 +151,99 @@ function insertTextAtParagraph(
 
   if (lines.length === 0) return xml;
 
+  let result: string;
+
   // 단일 줄: <hp:t> 태그 내용만 교체
   if (lines.length === 1) {
     const replaced = replaceEmptyTextInParagraph(
       targetPara.full,
       escapeXml(lines[0])
     );
-    return xml.substring(0, targetPara.start) + replaced + xml.substring(targetPara.end);
+    result = xml.substring(0, targetPara.start) + replaced + xml.substring(targetPara.end);
+  } else {
+    // 여러 줄: 원본 <hp:p> 블록을 여러 단락으로 확장
+    const expandedParagraphs = expandToMultipleParagraphs(
+      targetPara.full,
+      lines
+    );
+    result =
+      xml.substring(0, targetPara.start) +
+      expandedParagraphs +
+      xml.substring(targetPara.end);
   }
 
-  // 여러 줄: 원본 <hp:p> 블록을 여러 단락으로 확장
-  const expandedParagraphs = expandToMultipleParagraphs(
-    targetPara.full,
-    lines
-  );
-  return (
-    xml.substring(0, targetPara.start) +
-    expandedParagraphs +
-    xml.substring(targetPara.end)
-  );
+  // 삽입 후 XML 태그 균형 검증
+  const validation = validateXmlBalance(result);
+  if (!validation.valid) {
+    console.warn(
+      `[form-filler] XML 검증 실패 (필드: "${field.label}"): ${validation.error}. 원본 유지.`
+    );
+    return xml; // 원본 반환 (안전)
+  }
+
+  return result;
 }
 
 /**
  * 빈 <hp:t> 태그에 텍스트 삽입
- * <hp:t/> 또는 <hp:t></hp:t> → <hp:t>내용</hp:t>
+ * 다양한 빈 칸 패턴을 포괄적으로 처리:
+ * - <hp:t/>, <hp:t></hp:t>, <hp:t>  </hp:t>
+ * - <hp:run><hp:t/></hp:run> (빈 run 블록)
+ * - <hp:run> ... <hp:t></hp:t></hp:run> (스타일만 있는 run 블록)
+ * - 플레이스홀더 텍스트 ("입력하세요" 등)
  */
 function replaceEmptyTextInParagraph(
   paraXml: string,
   escapedText: string
 ): string {
-  // 빈 self-closing 태그
+  // 1. 빈 self-closing <hp:t/>
   if (paraXml.includes("<hp:t/>")) {
     return paraXml.replace("<hp:t/>", `<hp:t>${escapedText}</hp:t>`);
   }
 
-  // 빈 텍스트 태그
+  // 2. 빈 텍스트 태그 <hp:t></hp:t>
   const emptyPattern = /<hp:t><\/hp:t>/;
   if (emptyPattern.test(paraXml)) {
     return paraXml.replace(emptyPattern, `<hp:t>${escapedText}</hp:t>`);
   }
 
-  // 공백만 있는 텍스트 태그
-  const whitespacePattern = /<hp:t>\s*<\/hp:t>/;
+  // 3. 공백/특수공백만 있는 텍스트 태그
+  const whitespacePattern = /<hp:t>[\s\u00A0\u3000]*<\/hp:t>/;
   if (whitespacePattern.test(paraXml)) {
     return paraXml.replace(whitespacePattern, `<hp:t>${escapedText}</hp:t>`);
   }
 
-  // 이미 내용이 있는 경우 (덮어쓰기)
-  const textPattern = /<hp:t>([\s\S]*?)<\/hp:t>/;
-  const textMatch = paraXml.match(textPattern);
-  if (textMatch && textMatch[1].trim().length === 0) {
-    return paraXml.replace(textPattern, `<hp:t>${escapedText}</hp:t>`);
+  // 4. 밑줄/대시 패턴 (빈칸 표시) — "____", "ㅡㅡㅡ", "------"
+  const underlinePattern = /<hp:t>[_ㅡ\-]{3,}<\/hp:t>/;
+  if (underlinePattern.test(paraXml)) {
+    return paraXml.replace(underlinePattern, `<hp:t>${escapedText}</hp:t>`);
+  }
+
+  // 5. 플레이스홀더 텍스트 ("입력하세요", "작성하세요" 등)
+  const placeholderPattern = /<hp:t>[\s]*(입력|작성|기재|기입)[\s]*(하세요|해\s*주세요|바랍니다|해\s*주십시오|요망)[^<]*<\/hp:t>/;
+  if (placeholderPattern.test(paraXml)) {
+    return paraXml.replace(placeholderPattern, `<hp:t>${escapedText}</hp:t>`);
+  }
+
+  // 6. 예시 텍스트 ("예) ", "ex) ")
+  const examplePattern = /<hp:t>[\s]*(예\)|ex\))[^<]*<\/hp:t>/i;
+  if (examplePattern.test(paraXml)) {
+    return paraXml.replace(examplePattern, `<hp:t>${escapedText}</hp:t>`);
+  }
+
+  // 7. <hp:run>에 <hp:t>가 없는 경우 — run의 닫기 태그 앞에 <hp:t> 삽입
+  const runWithoutText = /<hp:run([^>]*)>((?:(?!<hp:t)[\s\S])*?)<\/hp:run>/;
+  const runMatch = paraXml.match(runWithoutText);
+  if (runMatch) {
+    const newRun = `<hp:run${runMatch[1]}>${runMatch[2]}<hp:t>${escapedText}</hp:t></hp:run>`;
+    return paraXml.replace(runWithoutText, newRun);
+  }
+
+  // 8. 이미 내용이 있지만 실질적으로 빈 경우 (공백 + 특수문자만)
+  const nearEmptyPattern = /<hp:t>([\s\u00A0\u3000·•○□]*)<\/hp:t>/;
+  const nearEmptyMatch = paraXml.match(nearEmptyPattern);
+  if (nearEmptyMatch && nearEmptyMatch[1].trim().length === 0) {
+    return paraXml.replace(nearEmptyPattern, `<hp:t>${escapedText}</hp:t>`);
   }
 
   return paraXml;
@@ -239,12 +370,23 @@ export async function fillForm(
       const paraIndex = parseInt(field.xpath.match(/\d+/)?.[0] || "0");
 
       try {
+        const xmlBefore = xml;
+
         if (field.isInTable) {
           xml = insertIntoTableCell(xml, field, content);
         } else {
           xml = insertTextAtParagraph(xml, paraIndex, content, field);
         }
-        filledCount++;
+
+        // 삽입 검증: XML이 실제로 변경되었는지 확인
+        if (xml === xmlBefore) {
+          warnings.push(
+            `필드 "${field.label}" 삽입 안 됨 (빈 칸을 찾지 못함)`
+          );
+          skippedCount++;
+        } else {
+          filledCount++;
+        }
       } catch (error) {
         warnings.push(
           `필드 "${field.label}" 삽입 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
@@ -254,6 +396,17 @@ export async function fillForm(
     }
 
     zip.file(sectionFile, xml);
+  }
+
+  // 채우기 결과 요약 경고
+  if (filledCount === 0 && parsedForm.fields.length > 0) {
+    warnings.push(
+      `경고: ${parsedForm.fields.length}개 필드 중 하나도 채워지지 않았습니다. 양식 구조가 예상과 다를 수 있습니다.`
+    );
+  } else if (skippedCount > filledCount) {
+    warnings.push(
+      `주의: 채운 필드(${filledCount}개)보다 스킵된 필드(${skippedCount}개)가 더 많습니다.`
+    );
   }
 
   // 새 HWPX ZIP 생성

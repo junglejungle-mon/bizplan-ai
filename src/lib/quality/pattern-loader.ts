@@ -1,58 +1,49 @@
 /**
  * DB에서 선정패턴(winning_patterns)과 평가기준(evaluation_criteria)을 로드하여
  * 프롬프트에 주입할 수 있는 텍스트로 변환
+ *
+ * Redis 캐싱: Redis 사용 가능 시 분산 캐시, 불가 시 인메모리 자동 폴백
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { cache } from "@/lib/redis";
 
-// ---------------------------------------------------------------------------
-// 캐시 (서버 프로세스 내 메모리 캐시, 5분 TTL)
-// ---------------------------------------------------------------------------
-let patternCache: { data: string; loadedAt: number } | null = null;
-let criteriaCache: Map<string, { data: string; loadedAt: number }> = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5분
+const CACHE_TTL = 300; // 5분 (초 단위, Redis EX용)
 
 // ---------------------------------------------------------------------------
 // loadWinningPatterns — DB에서 활성 선정패턴을 로드하여 프롬프트 텍스트로 변환
 // ---------------------------------------------------------------------------
 export async function loadWinningPatterns(): Promise<string> {
-  // 캐시 확인
-  if (patternCache && Date.now() - patternCache.loadedAt < CACHE_TTL) {
-    return patternCache.data;
-  }
+  return cache.getOrSet("patterns:winning", CACHE_TTL, async () => {
+    const supabase = createAdminClient();
+    const { data: patterns, error } = await supabase
+      .from("winning_patterns")
+      .select("title, description, good_examples, bad_examples, weight, category, subcategory")
+      .eq("is_active", true)
+      .order("weight", { ascending: false });
 
-  const supabase = createAdminClient();
-  const { data: patterns, error } = await supabase
-    .from("winning_patterns")
-    .select("title, description, good_examples, bad_examples, weight, category, subcategory")
-    .eq("is_active", true)
-    .order("weight", { ascending: false });
-
-  if (error || !patterns || patterns.length === 0) {
-    // DB 실패 시 빈 문자열 (하드코딩 폴백은 writing.ts에 이미 있음)
-    return "";
-  }
-
-  // 프롬프트 텍스트로 변환
-  const lines: string[] = [
-    "# 선정 사업계획서 필수 패턴 (DB 기반, 실제 선정 12건 분석)",
-  ];
-
-  for (let i = 0; i < patterns.length; i++) {
-    const p = patterns[i];
-    lines.push(`${i + 1}. **${p.title}** (${p.weight}점)`);
-    if (p.description) lines.push(`   ${p.description}`);
-    if (p.good_examples?.length > 0) {
-      lines.push(`   ✅ ${p.good_examples[0]}`);
+    if (error || !patterns || patterns.length === 0) {
+      return "";
     }
-    if (p.bad_examples?.length > 0) {
-      lines.push(`   ❌ ${p.bad_examples[0]}`);
-    }
-  }
 
-  const result = lines.join("\n");
-  patternCache = { data: result, loadedAt: Date.now() };
-  return result;
+    const lines: string[] = [
+      "# 선정 사업계획서 필수 패턴 (DB 기반, 실제 선정 12건 분석)",
+    ];
+
+    for (let i = 0; i < patterns.length; i++) {
+      const p = patterns[i];
+      lines.push(`${i + 1}. **${p.title}** (${p.weight}점)`);
+      if (p.description) lines.push(`   ${p.description}`);
+      if (p.good_examples?.length > 0) {
+        lines.push(`   ✅ ${p.good_examples[0]}`);
+      }
+      if (p.bad_examples?.length > 0) {
+        lines.push(`   ❌ ${p.bad_examples[0]}`);
+      }
+    }
+
+    return lines.join("\n");
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -61,42 +52,36 @@ export async function loadWinningPatterns(): Promise<string> {
 export async function loadEvaluationCriteria(
   templateType: string,
 ): Promise<string> {
-  // 캐시 확인
-  const cached = criteriaCache.get(templateType);
-  if (cached && Date.now() - cached.loadedAt < CACHE_TTL) {
-    return cached.data;
-  }
+  return cache.getOrSet(`criteria:${templateType}`, CACHE_TTL, async () => {
+    const supabase = createAdminClient();
+    const { data: criteria, error } = await supabase
+      .from("evaluation_criteria")
+      .select("section_name, score_weight, criteria, high_score_strategy")
+      .eq("template_type", templateType)
+      .order("section_order", { ascending: true });
 
-  const supabase = createAdminClient();
-  const { data: criteria, error } = await supabase
-    .from("evaluation_criteria")
-    .select("section_name, score_weight, criteria, high_score_strategy")
-    .eq("template_type", templateType)
-    .order("section_order", { ascending: true });
+    if (error || !criteria || criteria.length === 0) {
+      return "";
+    }
 
-  if (error || !criteria || criteria.length === 0) {
-    return "";
-  }
+    const lines: string[] = [
+      `# 평가 기준 (${templateType} 유형)`,
+    ];
 
-  const lines: string[] = [
-    `# 평가 기준 (${templateType} 유형)`,
-  ];
-
-  for (const c of criteria) {
-    lines.push(`## ${c.section_name} (${c.score_weight}점)`);
-    if (c.criteria && Array.isArray(c.criteria)) {
-      for (const item of c.criteria) {
-        lines.push(`- ${item}`);
+    for (const c of criteria) {
+      lines.push(`## ${c.section_name} (${c.score_weight}점)`);
+      if (c.criteria && Array.isArray(c.criteria)) {
+        for (const item of c.criteria) {
+          lines.push(`- ${item}`);
+        }
+      }
+      if (c.high_score_strategy) {
+        lines.push(`💡 고득점 전략: ${c.high_score_strategy}`);
       }
     }
-    if (c.high_score_strategy) {
-      lines.push(`💡 고득점 전략: ${c.high_score_strategy}`);
-    }
-  }
 
-  const result = lines.join("\n");
-  criteriaCache.set(templateType, { data: result, loadedAt: Date.now() });
-  return result;
+    return lines.join("\n");
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -120,101 +105,95 @@ export async function buildDynamicWriterContext(
 // ---------------------------------------------------------------------------
 // PPT 전용: loadPptPatterns — category가 'ppt_*'인 패턴만 로드
 // ---------------------------------------------------------------------------
-let pptPatternCache: { data: string; loadedAt: number } | null = null;
-
 export async function loadPptPatterns(): Promise<string> {
-  if (pptPatternCache && Date.now() - pptPatternCache.loadedAt < CACHE_TTL) {
-    return pptPatternCache.data;
-  }
+  return cache.getOrSet("patterns:ppt", CACHE_TTL, async () => {
+    const supabase = createAdminClient();
+    const { data: patterns, error } = await supabase
+      .from("winning_patterns")
+      .select("title, description, good_examples, bad_examples, weight, category, subcategory")
+      .eq("is_active", true)
+      .like("category", "ppt_%")
+      .order("weight", { ascending: false });
 
-  const supabase = createAdminClient();
-  const { data: patterns, error } = await supabase
-    .from("winning_patterns")
-    .select("title, description, good_examples, bad_examples, weight, category, subcategory")
-    .eq("is_active", true)
-    .like("category", "ppt_%")
-    .order("weight", { ascending: false });
+    if (error || !patterns || patterns.length === 0) {
+      return "";
+    }
 
-  if (error || !patterns || patterns.length === 0) {
-    return "";
-  }
+    const lines: string[] = [
+      "# IR PPT 필수 패턴 (DB 기반, NAS 실제 선정 PPT + SKILL.md 분석)",
+    ];
 
-  const lines: string[] = [
-    "# IR PPT 필수 패턴 (DB 기반, NAS 실제 선정 PPT + SKILL.md 분석)",
-  ];
+    // 카테고리별 그룹핑
+    const groups = new Map<string, typeof patterns>();
+    for (const p of patterns) {
+      const group = groups.get(p.category) || [];
+      group.push(p);
+      groups.set(p.category, group);
+    }
 
-  // 카테고리별 그룹핑
-  const groups = new Map<string, typeof patterns>();
-  for (const p of patterns) {
-    const group = groups.get(p.category) || [];
-    group.push(p);
-    groups.set(p.category, group);
-  }
+    const categoryLabels: Record<string, string> = {
+      ppt_structure: "구조 패턴",
+      ppt_content: "콘텐츠 패턴",
+      ppt_design: "디자인 패턴",
+      ppt_slide_type: "슬라이드별 패턴",
+    };
 
-  const categoryLabels: Record<string, string> = {
-    ppt_structure: "구조 패턴",
-    ppt_content: "콘텐츠 패턴",
-    ppt_design: "디자인 패턴",
-    ppt_slide_type: "슬라이드별 패턴",
-  };
-
-  for (const [cat, items] of groups) {
-    lines.push(`\n## ${categoryLabels[cat] || cat}`);
-    for (const p of items) {
-      lines.push(`- **${p.title}** (${p.weight}점): ${p.description}`);
-      if (p.good_examples?.length > 0) {
-        lines.push(`  ✅ ${p.good_examples[0]}`);
-      }
-      if (p.bad_examples?.length > 0) {
-        lines.push(`  ❌ ${p.bad_examples[0]}`);
+    for (const [cat, items] of groups) {
+      lines.push(`\n## ${categoryLabels[cat] || cat}`);
+      for (const p of items) {
+        lines.push(`- **${p.title}** (${p.weight}점): ${p.description}`);
+        if (p.good_examples?.length > 0) {
+          lines.push(`  ✅ ${p.good_examples[0]}`);
+        }
+        if (p.bad_examples?.length > 0) {
+          lines.push(`  ❌ ${p.bad_examples[0]}`);
+        }
       }
     }
-  }
 
-  const result = lines.join("\n");
-  pptPatternCache = { data: result, loadedAt: Date.now() };
-  return result;
+    return lines.join("\n");
+  });
 }
 
 // ---------------------------------------------------------------------------
 // loadSlideReferences — 슬라이드 타입별 실제 선정 레퍼런스 로드 (Few-shot)
 // ---------------------------------------------------------------------------
-let slideRefCache: { data: Map<string, string[]>; loadedAt: number } | null = null;
-
 export async function loadSlideReferences(
   slideTypes?: string[],
   maxPerType: number = 2,
 ): Promise<string> {
-  // 캐시 확인
-  if (slideRefCache && Date.now() - slideRefCache.loadedAt < CACHE_TTL) {
-    return formatSlideRefs(slideRefCache.data, slideTypes, maxPerType);
-  }
+  // Redis에는 JSON 직렬화 가능한 Record로 저장
+  const grouped = await cache.getOrSet<Record<string, string[]>>(
+    "patterns:slide_refs",
+    CACHE_TTL,
+    async () => {
+      const supabase = createAdminClient();
+      const { data: refs, error } = await supabase
+        .from("slide_references")
+        .select("slide_type, title, full_text, source_file, char_count")
+        .eq("is_active", true)
+        .order("char_count", { ascending: false });
 
-  const supabase = createAdminClient();
-  const { data: refs, error } = await supabase
-    .from("slide_references")
-    .select("slide_type, title, full_text, source_file, char_count")
-    .eq("is_active", true)
-    .order("char_count", { ascending: false }); // 내용이 풍부한 것 우선
+      if (error || !refs || refs.length === 0) {
+        return {};
+      }
 
-  if (error || !refs || refs.length === 0) {
-    return "";
-  }
+      // 타입별 그룹핑 (Record로 변환하여 JSON 직렬화 호환)
+      const result: Record<string, string[]> = {};
+      for (const r of refs) {
+        if (!result[r.slide_type]) result[r.slide_type] = [];
+        if (result[r.slide_type].length < 5) {
+          const text = `[${r.source_file}] ${r.title}\n${r.full_text}`;
+          result[r.slide_type].push(text);
+        }
+      }
+      return result;
+    },
+  );
 
-  // 타입별 그룹핑
-  const grouped = new Map<string, string[]>();
-  for (const r of refs) {
-    const existing = grouped.get(r.slide_type) || [];
-    // 타입당 최대 5개만 캐시
-    if (existing.length < 5) {
-      const text = `[${r.source_file}] ${r.title}\n${r.full_text}`;
-      existing.push(text);
-    }
-    grouped.set(r.slide_type, existing);
-  }
-
-  slideRefCache = { data: grouped, loadedAt: Date.now() };
-  return formatSlideRefs(grouped, slideTypes, maxPerType);
+  // Record → Map 변환 후 포맷팅
+  const groupedMap = new Map(Object.entries(grouped));
+  return formatSlideRefs(groupedMap, slideTypes, maxPerType);
 }
 
 function formatSlideRefs(

@@ -1,209 +1,278 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Search,
-  FileText,
-  FolderOpen,
-  ArrowRight,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-} from "lucide-react";
-import { AssistantCard } from "@/components/assistant/assistant-card";
+import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
 
-  // 회사 정보 확인
+  // 회사 정보 확인 (가장 최근 업데이트된 회사 우선)
   const { data: companies } = await supabase
     .from("companies")
     .select("*")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
-
-  // 온보딩 미완료 시 리다이렉트
-  if (!company) {
-    redirect("/onboarding");
-  }
+  if (!company) redirect("/onboarding");
 
   // 통계 데이터
-  const { count: matchCount } = await supabase
+  const [
+    { count: matchCount },
+    { count: planCount },
+    { count: docCount },
+    { count: programCount },
+  ] = await Promise.all([
+    supabase
+      .from("matchings")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", company.id),
+    supabase
+      .from("business_plans")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", company.id),
+    supabase
+      .from("company_documents")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", company.id),
+    supabase.from("programs").select("*", { count: "exact", head: true }),
+  ]);
+
+  // 마감 임박 매칭 사업 (7일 이내)
+  const today = new Date();
+  const sevenDaysLater = new Date(today);
+  sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+
+  const { data: urgentMatchings } = await supabase
     .from("matchings")
-    .select("*", { count: "exact", head: true })
-    .eq("company_id", company.id);
+    .select(
+      `
+      id,
+      match_score,
+      fit_level,
+      programs (
+        id,
+        title,
+        institution,
+        source,
+        apply_end,
+        hashtags,
+        detail_url
+      )
+    `
+    )
+    .eq("company_id", company.id)
+    .order("created_at", { ascending: false });
 
-  const { count: planCount } = await supabase
-    .from("business_plans")
-    .select("*", { count: "exact", head: true })
-    .eq("company_id", company.id);
+  // 마감 임박 사업 필터링 + D-Day 계산
+  const urgentPrograms = (urgentMatchings || [])
+    .filter((m: any) => {
+      if (!m.programs?.apply_end) return false;
+      const endDate = new Date(m.programs.apply_end);
+      return endDate >= today && endDate <= sevenDaysLater;
+    })
+    .map((m: any) => {
+      const endDate = new Date(m.programs.apply_end);
+      const dDay = Math.ceil(
+        (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return {
+        id: m.programs.id,
+        title: m.programs.title,
+        institution: m.programs.institution,
+        source: m.programs.source,
+        applyEnd: m.programs.apply_end,
+        matchScore: m.match_score,
+        fitLevel: m.fit_level,
+        dDay,
+      };
+    })
+    .sort((a: any, b: any) => a.dDay - b.dDay);
 
-  const { count: docCount } = await supabase
+  // 30일 이내 마감 사업 수
+  const thirtyDaysLater = new Date(today);
+  thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+  const deadlineSoonCount = (urgentMatchings || []).filter((m: any) => {
+    if (!m.programs?.apply_end) return false;
+    const endDate = new Date(m.programs.apply_end);
+    return endDate >= today && endDate <= thirtyDaysLater;
+  }).length;
+
+  // 서류 업로드 현황
+  const { data: companyDocs } = await supabase
     .from("company_documents")
-    .select("*", { count: "exact", head: true })
+    .select("document_type, status")
     .eq("company_id", company.id);
+
+  const extractedDocTypes = (companyDocs ?? [])
+    .filter((d: any) => d.status === "extracted")
+    .map((d: any) => d.document_type);
+
+  // 최근 매칭 사업 Top 5 (점수 높은 순)
+  const topMatchings = (urgentMatchings || [])
+    .filter((m: any) => m.programs?.apply_end)
+    .map((m: any) => {
+      const endDate = new Date(m.programs.apply_end);
+      const dDay = Math.ceil(
+        (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return {
+        id: m.programs.id,
+        title: m.programs.title,
+        institution: m.programs.institution,
+        source: m.programs.source,
+        applyEnd: m.programs.apply_end,
+        matchScore: m.match_score,
+        fitLevel: m.fit_level,
+        hashtags: m.programs.hashtags || [],
+        dDay,
+      };
+    })
+    .sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0))
+    .slice(0, 5);
+
+  // 미션 생성 로직
+  const missions: {
+    id: string;
+    type: "urgent" | "profile" | "document" | "plan" | "program";
+    title: string;
+    description: string;
+    href: string;
+    cta: string;
+    priority: number;
+  }[] = [];
+
+  // 1) 마감 임박 사업 (최우선)
+  if (urgentPrograms.length > 0) {
+    const top = urgentPrograms[0];
+    missions.push({
+      id: "urgent-deadline",
+      type: "urgent",
+      title: `${top.title.length > 25 ? top.title.substring(0, 25) + "..." : top.title} 마감 확인`,
+      description: `D-${top.dDay} 마감, 적합도 ${top.matchScore || "?"}점`,
+      href: `/programs/${top.id}`,
+      cta: "상세 보기",
+      priority: 1,
+    });
+  }
+
+  // 2) 프로필 미완성
+  if (company.profile_score < 70) {
+    const roundsNeeded = Math.ceil((70 - company.profile_score) / 15);
+    missions.push({
+      id: "profile-complete",
+      type: "profile",
+      title: "AI 인터뷰 계속하기",
+      description: `${roundsNeeded}라운드만 더 하면 맞춤 계획서를 만들 수 있어요`,
+      href: "/onboarding",
+      cta: "시작하기",
+      priority: 2,
+    });
+  }
+
+  // 3) 서류 업로드
+  if ((docCount ?? 0) < 3) {
+    missions.push({
+      id: "upload-docs",
+      type: "document",
+      title: "사업자등록증 업로드하기",
+      description:
+        (docCount ?? 0) === 0
+          ? "AI가 회사정보를 자동 입력해요"
+          : `서류 ${3 - (docCount ?? 0)}개만 더 올리면 IR PPT 무료`,
+      href: "/documents",
+      cta: "업로드",
+      priority: 3,
+    });
+  }
+
+  // 4) 사업계획서 작성
+  if ((planCount ?? 0) === 0 && (matchCount ?? 0) > 0) {
+    missions.push({
+      id: "create-plan",
+      type: "plan",
+      title: "첫 사업계획서 만들기",
+      description: `매칭된 ${matchCount}건 중 하나를 선택해서 AI가 자동 작성`,
+      href: "/programs",
+      cta: "시작하기",
+      priority: 4,
+    });
+  }
+
+  // 5) 지원사업 확인
+  if ((matchCount ?? 0) > 0 && urgentPrograms.length === 0) {
+    missions.push({
+      id: "check-programs",
+      type: "program",
+      title: "새 매칭 지원사업 확인",
+      description: `${matchCount}건의 맞춤 지원사업이 있어요`,
+      href: "/programs",
+      cta: "확인하기",
+      priority: 5,
+    });
+  }
+
+  // 최대 3개
+  const sortedMissions = missions
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, 3);
+
+  // AI 코멘트 생성 (정적, Haiku 호출 없이)
+  let aiComment = "";
+  if (urgentPrograms.length > 0) {
+    const top = urgentPrograms[0];
+    aiComment = `${company.name} 대표님, ${top.title.length > 20 ? top.title.substring(0, 20) + "..." : top.title} 마감이 ${top.dDay}일 남았어요. 적합도 ${top.matchScore || "?"}점이니 꼭 확인해보세요!`;
+  } else if ((matchCount ?? 0) > 0) {
+    aiComment = `${company.name} 대표님, 맞춤 지원사업 ${matchCount}건이 매칭됐어요. 가장 적합한 사업부터 확인해보세요!`;
+  } else if (company.profile_score < 70) {
+    aiComment = `${company.name} 대표님, AI 인터뷰를 조금만 더 진행하면 맞춤 지원사업을 찾아드릴 수 있어요!`;
+  } else {
+    aiComment = `${company.name} 대표님, 오늘도 좋은 지원사업을 찾아보겠습니다!`;
+  }
+
+  // 이번 주 캘린더 데이터 (월~일)
+  const startOfWeek = new Date(today);
+  const dayOfWeek = today.getDay();
+  startOfWeek.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d;
+  });
+
+  const weekEvents = (urgentMatchings || [])
+    .filter((m: any) => {
+      if (!m.programs?.apply_end) return false;
+      const endDate = new Date(m.programs.apply_end);
+      return endDate >= weekDays[0] && endDate <= weekDays[6];
+    })
+    .map((m: any) => ({
+      date: m.programs.apply_end,
+      title: m.programs.title,
+      score: m.match_score,
+    }));
 
   return (
-    <div className="space-y-8">
-      {/* Welcome */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          안녕하세요, {company.name}
-        </h1>
-        <p className="mt-1 text-gray-500">
-          오늘의 추천 지원사업과 진행 현황을 확인하세요
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            label: "프로필 완성도",
-            value: `${company.profile_score}%`,
-            icon: TrendingUp,
-            color: "text-blue-600",
-            bg: "bg-blue-50",
-          },
-          {
-            label: "매칭된 사업",
-            value: `${matchCount ?? 0}건`,
-            icon: Search,
-            color: "text-green-600",
-            bg: "bg-green-50",
-          },
-          {
-            label: "사업계획서",
-            value: `${planCount ?? 0}건`,
-            icon: FileText,
-            color: "text-purple-600",
-            bg: "bg-purple-50",
-          },
-          {
-            label: "연동 서류",
-            value: `${docCount ?? 0}건`,
-            icon: FolderOpen,
-            color: "text-orange-600",
-            bg: "bg-orange-50",
-          },
-        ].map((stat, i) => (
-          <Card key={i}>
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.bg}`}>
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-blue-600" />
-              추천 지원사업
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {matchCount && matchCount > 0 ? (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-500">
-                  매칭된 {matchCount}건의 지원사업을 확인하세요
-                </p>
-                <Link href="/programs">
-                  <Button className="gap-2">
-                    지원사업 보기 <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-500">
-                  아직 매칭된 지원사업이 없습니다.
-                  프로필을 고도화하면 더 정확한 매칭을 받을 수 있습니다.
-                </p>
-                <Link href="/company">
-                  <Button variant="outline" className="gap-2">
-                    프로필 고도화 <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-orange-600" />
-              데이터 연동 현황
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">연동 레벨</span>
-                  <Badge variant="secondary">Level {Math.min(5, Math.floor((docCount ?? 0) / 2) + 1)}</Badge>
-                </div>
-                <div className="mt-2 h-2 rounded-full bg-gray-100">
-                  <div
-                    className="h-2 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all"
-                    style={{ width: `${Math.min(100, ((docCount ?? 0) / 11) * 100)}%` }}
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                서류를 더 연동하면 사업계획서 품질이 향상됩니다
-              </p>
-              <Link href="/documents">
-                <Button variant="outline" size="sm" className="gap-2">
-                  서류 연동하기 <ArrowRight className="h-3 w-3" />
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* AI 사업 비서 */}
-      <AssistantCard />
-
-      {/* Profile Score */}
-      {company.profile_score < 70 && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="flex items-center justify-between p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                <TrendingUp className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="font-medium text-blue-900">프로필을 완성하세요</p>
-                <p className="text-sm text-blue-700">
-                  현재 {company.profile_score}% — 70% 이상이면 사업계획서 자동 작성이 가능합니다
-                </p>
-              </div>
-            </div>
-            <Link href="/company">
-              <Button size="sm">AI 인터뷰 계속하기</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <DashboardClient
+      companyName={company.name}
+      profileScore={company.profile_score}
+      matchCount={matchCount ?? 0}
+      planCount={planCount ?? 0}
+      docCount={docCount ?? 0}
+      programCount={programCount ?? 0}
+      deadlineSoonCount={deadlineSoonCount}
+      missions={sortedMissions}
+      aiComment={aiComment}
+      urgentPrograms={urgentPrograms.slice(0, 3)}
+      topMatchings={topMatchings}
+      weekDays={weekDays.map((d) => d.toISOString())}
+      weekEvents={weekEvents}
+      extractedDocTypes={extractedDocTypes}
+    />
   );
 }

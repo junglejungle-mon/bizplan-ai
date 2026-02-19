@@ -5,6 +5,56 @@ import { verifyAdminSession } from "@/lib/admin/auth";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ─── CSRF 방어: 상태 변경 API 요청에 Origin/Referer 검증 ───
+  if (
+    pathname.startsWith("/api/") &&
+    !pathname.startsWith("/api/cron/") && // cron은 서버→서버 호출
+    ["POST", "PUT", "PATCH", "DELETE"].includes(request.method)
+  ) {
+    const origin = request.headers.get("origin");
+    const referer = request.headers.get("referer");
+    const host = request.headers.get("host") || "";
+
+    // PortOne webhook은 외부 서버에서 옴
+    const isWebhook = pathname.includes("/webhook");
+
+    if (!isWebhook) {
+      const allowedOrigins = [
+        `https://${host}`,
+        `http://${host}`,
+        // 개발 환경
+        "http://localhost:3000",
+        "http://localhost:3002",
+      ];
+
+      const originValid = origin
+        ? allowedOrigins.some((allowed) => origin.startsWith(allowed))
+        : false;
+      const refererValid = referer
+        ? allowedOrigins.some((allowed) => referer.startsWith(allowed))
+        : false;
+
+      // Origin도 Referer도 없거나 둘 다 유효하지 않으면 차단
+      if (!origin && !referer) {
+        // 서버사이드 호출(fetch from server component)은 허용
+        // User-Agent가 없거나 Next.js 내부 호출이면 통과
+        const ua = request.headers.get("user-agent") || "";
+        const isServerCall = !ua || ua.includes("node");
+        if (!isServerCall) {
+          return NextResponse.json(
+            { error: "CSRF validation failed" },
+            { status: 403 }
+          );
+        }
+      } else if (!originValid && !refererValid) {
+        return NextResponse.json(
+          { error: "CSRF validation failed" },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
   // /admin/* 보호 (/admin/login 제외)
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     const isAdmin = await verifyAdminSession(request);

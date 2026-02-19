@@ -13,6 +13,7 @@ export default async function DocumentsPage() {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];

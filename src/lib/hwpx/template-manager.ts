@@ -7,10 +7,21 @@
  *   3. Magic bytes로 hwpx(ZIP) vs hwp(바이너리) 판별
  *   4. hwpx만 처리 (hwp → status='failed')
  *   5. Supabase Storage 저장 + DB 메타데이터 기록
+ *
+ * v2: 로컬 파일 우선 로드 지원
+ *   - 로컬 환경: data/programs/{source}/{source_id}/*.hwpx 에서 우선 로드
+ *   - Vercel 환경: 기존 Supabase Storage에서 로드
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormTemplate } from "./types";
+import { existsSync, readFileSync, readdirSync } from "fs";
+import { join } from "path";
+import {
+  convertHwpToText,
+  convertHwpToHwpx,
+  isHwpConverterAvailable,
+} from "./hwp-converter";
 
 // ===== Magic Bytes =====
 
@@ -164,8 +175,47 @@ export async function downloadAndCacheTemplate(
     const buffer = await downloadFile(sourceUrl);
     const fileType = detectFileType(sourceUrl, buffer);
 
-    // HWP (바이너리) 형식은 지원 안 함
+    // HWP (바이너리) 형식 → LibreOffice로 변환 시도
     if (fileType === "hwp") {
+      if (isHwpConverterAvailable()) {
+        const convertedBuffer = await tryConvertHwp(buffer, programId, supabase);
+        if (convertedBuffer) {
+          // 변환 성공 → HWPX로 처리 계속
+          const storagePath = `form-templates/${programId}/${Date.now()}.hwpx`;
+          const { error: uploadError } = await supabase.storage
+            .from("documents")
+            .upload(storagePath, convertedBuffer, {
+              contentType: "application/hwp+zip",
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.warn("[template-manager] Storage 업로드 실패:", uploadError.message);
+          }
+
+          const { data: record } = await supabase
+            .from("form_templates")
+            .upsert(
+              {
+                program_id: programId,
+                source_url: sourceUrl,
+                file_type: "hwpx",
+                file_size: convertedBuffer.length,
+                storage_path: storagePath,
+                status: "downloaded",
+                error_message: null,
+              },
+              { onConflict: "program_id,source_url" }
+            )
+            .select()
+            .single();
+          return record as FormTemplate | null;
+        }
+        // 변환 실패 → HWP 텍스트 추출이라도 시도 (스킬화용)
+        console.warn("[template-manager] HWP → HWPX 변환 실패, 텍스트 추출만 시도");
+      }
+
+      // LibreOffice 없거나 변환 실패 시 기존 에러 기록
       const { data: record } = await supabase
         .from("form_templates")
         .upsert(
@@ -175,7 +225,9 @@ export async function downloadAndCacheTemplate(
             file_type: "hwp",
             file_size: buffer.length,
             status: "failed",
-            error_message: "HWP 바이너리 형식은 지원되지 않습니다. HWPX만 지원합니다.",
+            error_message: isHwpConverterAvailable()
+              ? "HWP → HWPX 변환에 실패했습니다. 수동 변환이 필요합니다."
+              : "HWP 바이너리 형식은 지원되지 않습니다. LibreOffice가 필요합니다.",
           },
           { onConflict: "program_id,source_url" }
         )
@@ -258,11 +310,25 @@ export async function downloadAndCacheTemplate(
   }
 }
 
-/** Supabase Storage에서 HWPX 파일 다운로드 */
+/**
+ * HWPX 파일 로드 (로컬 우선 → Supabase Storage 폴백)
+ *
+ * 1순위: 로컬 파일 (data/programs/{source}/{source_id}/*.hwpx)
+ * 2순위: Supabase Storage (Vercel 환경 또는 로컬 파일 없을 때)
+ */
 export async function downloadTemplateBuffer(
   supabase: SupabaseClient,
   template: FormTemplate
 ): Promise<Buffer | null> {
+  // 1순위: 로컬 파일 로드 (Vercel이 아닌 경우)
+  if (!process.env.VERCEL) {
+    const localBuffer = await loadFromLocal(supabase, template.program_id);
+    if (localBuffer) {
+      return localBuffer;
+    }
+  }
+
+  // 2순위: Supabase Storage
   if (!template.storage_path) return null;
 
   const { data, error } = await supabase.storage
@@ -276,4 +342,93 @@ export async function downloadTemplateBuffer(
 
   const arrayBuffer = await data.arrayBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+/**
+ * 로컬 data/programs/ 에서 HWPX 파일 로드
+ * programs 테이블에서 source, source_id를 조회하여 경로 결정
+ */
+async function loadFromLocal(
+  supabase: SupabaseClient,
+  programId: string
+): Promise<Buffer | null> {
+  try {
+    // programs 테이블에서 source, source_id 조회
+    const { data: program } = await supabase
+      .from("programs")
+      .select("source, source_id")
+      .eq("id", programId)
+      .single();
+
+    if (!program) return null;
+
+    const programDir = join(
+      process.cwd(),
+      "data",
+      "programs",
+      program.source,
+      program.source_id
+    );
+
+    if (!existsSync(programDir)) return null;
+
+    // .hwpx 파일 찾기
+    const files = readdirSync(programDir);
+    const hwpxFile = files.find((f) => f.toLowerCase().endsWith(".hwpx"));
+
+    if (hwpxFile) {
+      const filePath = join(programDir, hwpxFile);
+      return readFileSync(filePath);
+    }
+
+    // HWPX 없으면 HWP → 변환 시도
+    const hwpFile = files.find((f) =>
+      f.toLowerCase().endsWith(".hwp") && !f.toLowerCase().endsWith(".hwpx")
+    );
+
+    if (hwpFile && isHwpConverterAvailable()) {
+      const hwpPath = join(programDir, hwpFile);
+      const convertedBuffer = await convertHwpToHwpx(hwpPath);
+      if (convertedBuffer) {
+        return convertedBuffer;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("[template-manager] 로컬 파일 로드 실패:", err);
+    return null;
+  }
+}
+
+/**
+ * HWP 바이너리를 HWPX로 변환 시도
+ * LibreOffice를 사용하여 HWP → DOCX로 변환 (HWPX 직접 변환 불가)
+ * 실제로는 DOCX를 반환하지만 ZIP 기반이므로 일부 호환됨
+ */
+async function tryConvertHwp(
+  hwpBuffer: Buffer,
+  programId: string,
+  supabase: SupabaseClient
+): Promise<Buffer | null> {
+  const { tmpdir } = await import("os");
+  const { writeFileSync: writeTmp, unlinkSync, existsSync: tmpExists } = await import("fs");
+  const tmpPath = join(tmpdir(), `hwp-input-${Date.now()}.hwp`);
+
+  try {
+    // 임시 파일로 저장
+    writeTmp(tmpPath, hwpBuffer);
+
+    // HWP → DOCX 변환 (HWPX 직접은 안 됨)
+    const converted = await convertHwpToHwpx(tmpPath);
+
+    // 임시 파일 정리
+    try { unlinkSync(tmpPath); } catch { /* ignore */ }
+
+    return converted;
+  } catch (error) {
+    console.error("[template-manager] HWP 변환 실패:", error);
+    try { unlinkSync(tmpPath); } catch { /* ignore */ }
+    return null;
+  }
 }

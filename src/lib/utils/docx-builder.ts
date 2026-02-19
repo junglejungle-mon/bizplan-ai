@@ -1051,10 +1051,45 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
       sectionParagraphs.push(...buildKpiHighlightCards(kpiData));
     }
 
-    // 섹션 콘텐츠
+    // 섹션 차트 준비
+    const sectionKey = `section_${section.section_order}`;
+    const sectionCharts = chartData?.[sectionKey] || [];
+    const sectionImages = chartImages[sectionKey] || [];
+    let chartIdx = 0;
+
+    // 차트 삽입 헬퍼
+    const insertCharts = (count: number) => {
+      for (let i = 0; i < count && chartIdx < sectionCharts.length; i++) {
+        const chart = sectionCharts[chartIdx];
+        const img = sectionImages[chartIdx];
+        if (img && img.pngBuffer.length > 0) {
+          sectionParagraphs.push(...buildChartImage(img, chart.title));
+        } else {
+          sectionParagraphs.push(...buildChartElement(chart));
+        }
+        chartIdx++;
+      }
+    };
+
+    // 섹션 콘텐츠 + 차트 인터리빙
     if (section.content) {
-      const contentParagraphs = parseMarkdownToParagraphs(section.content);
-      sectionParagraphs.push(...contentParagraphs);
+      // ## 소제목 기준으로 블록 분할
+      const blocks = section.content.split(/(?=^## )/m);
+      const chartsPerBlock = sectionCharts.length > 0 && blocks.length > 0
+        ? Math.max(1, Math.ceil(sectionCharts.length / blocks.length))
+        : 0;
+
+      for (const block of blocks) {
+        if (block.trim()) {
+          const contentParagraphs = parseMarkdownToParagraphs(block);
+          sectionParagraphs.push(...contentParagraphs);
+        }
+        // 블록 뒤에 차트 삽입 (균등 분배)
+        insertCharts(chartsPerBlock);
+      }
+
+      // 남은 차트
+      insertCharts(sectionCharts.length - chartIdx);
     } else {
       sectionParagraphs.push(
         new Paragraph({
@@ -1069,24 +1104,6 @@ export async function buildDocx(opts: DocxOptions): Promise<Buffer> {
           ],
         })
       );
-    }
-
-    // 차트 데이터가 있으면 섹션 끝에 차트 이미지 삽입 (실패 시 테이블 폴백)
-    const sectionKey = `section_${section.section_order}`;
-    const sectionCharts = chartData?.[sectionKey];
-    const sectionImages = chartImages[sectionKey];
-    if (sectionCharts && sectionCharts.length > 0) {
-      for (let ci = 0; ci < sectionCharts.length; ci++) {
-        const chart = sectionCharts[ci];
-        const img = sectionImages?.[ci];
-        if (img && img.pngBuffer.length > 0) {
-          // 차트 이미지 삽입
-          sectionParagraphs.push(...buildChartImage(img, chart.title));
-        } else {
-          // 이미지 실패 시 기존 테이블 폴백
-          sectionParagraphs.push(...buildChartElement(chart));
-        }
-      }
     }
 
     // 섹션 간 여백

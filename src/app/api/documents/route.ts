@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/api/error";
 
 /**
  * GET /api/documents — 서류 목록
@@ -17,6 +18,7 @@ export async function GET() {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return apiError(error, "서류 저장에 실패했습니다", 500);
   }
 
   return Response.json({ document: doc });

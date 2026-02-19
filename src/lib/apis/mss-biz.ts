@@ -14,7 +14,6 @@ export async function fetchAllMssBizPrograms(maxPages = 20) {
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchMssBizPrograms(page, 100);
     allItems.push(...items);
-    console.log(`[MSS] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
     if (items.length < 100) break; // 마지막 페이지
   }
   return allItems;

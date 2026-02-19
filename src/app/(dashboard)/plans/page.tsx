@@ -3,10 +3,18 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { FileText, ArrowRight } from "lucide-react";
+import { FileText } from "lucide-react";
+import { PlansEmptyState } from "@/components/plans/plans-empty-state";
+import { PlanExampleCards } from "@/components/plans/plan-example-cards";
 
-export default async function PlansPage() {
+export default async function PlansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
+  const sp = await searchParams;
+  const previewMode = sp.preview === "1";
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -15,6 +23,7 @@ export default async function PlansPage() {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -26,6 +35,8 @@ export default async function PlansPage() {
     .eq("company_id", company.id)
     .order("created_at", { ascending: false });
 
+  const showEmpty = previewMode || !plans || plans.length === 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -35,7 +46,7 @@ export default async function PlansPage() {
         </div>
       </div>
 
-      {plans && plans.length > 0 ? (
+      {!showEmpty && plans && plans.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan: any) => (
             <Link key={plan.id} href={`/plans/${plan.id}`}>
@@ -74,22 +85,12 @@ export default async function PlansPage() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <FileText className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="font-semibold text-gray-900">
-              아직 작성된 사업계획서가 없습니다
-            </h3>
-            <p className="mt-2 text-sm text-gray-500 text-center">
-              지원사업을 선택하면 AI가 자동으로 사업계획서를 작성합니다.
-            </p>
-            <Link href="/programs" className="mt-6">
-              <Button className="gap-2">
-                지원사업 둘러보기 <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          {/* 사업계획서 예시 — 클릭하면 실제 내용 펼쳐보기 */}
+          <PlanExampleCards />
+
+          <PlansEmptyState samplePlan={null} sampleIR={null} />
+        </div>
       )}
     </div>
   );

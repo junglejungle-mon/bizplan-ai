@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin/auth";
+import { apiError } from "@/lib/api/error";
 
 /**
  * GET /api/admin/references — 레퍼런스 목록
  */
 export async function GET(request: NextRequest) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const supabase = createAdminClient();
   const { searchParams } = request.nextUrl;
 
@@ -26,7 +31,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error, "레퍼런스 목록 조회 실패", 500);
   }
 
   return NextResponse.json({ documents: data || [] });
@@ -36,6 +41,9 @@ export async function GET(request: NextRequest) {
  * POST /api/admin/references — 레퍼런스 업로드
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const supabase = createAdminClient();
   const formData = await request.formData();
 
@@ -65,10 +73,7 @@ export async function POST(request: NextRequest) {
     });
 
   if (uploadError) {
-    return NextResponse.json(
-      { error: `업로드 실패: ${uploadError.message}` },
-      { status: 500 }
-    );
+    return apiError(uploadError, "파일 업로드 실패", 500);
   }
 
   // 2. DB에 레코드 생성
@@ -86,10 +91,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (insertError) {
-    return NextResponse.json(
-      { error: `DB 저장 실패: ${insertError.message}` },
-      { status: 500 }
-    );
+    return apiError(insertError, "레퍼런스 저장 실패", 500);
   }
 
   return NextResponse.json({ document: doc }, { status: 201 });

@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exportHwpxWithFormFill } from "@/lib/hwpx";
+import { safeErrorMessage } from "@/lib/api/error";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+
+export const maxDuration = 60;
 
 /**
  * POST /api/plans/[id]/fill-form
@@ -19,6 +23,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // AI 호출 남용 방지: 분당 5회 제한
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`fill-form:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const { id: planId } = await params;
   const supabase = await createClient();
   const {
@@ -94,7 +103,7 @@ export async function POST(
     return new Response(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": "application/hwp+zip",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "X-Fill-Strategy": result.strategy,
         "X-Filled-Fields": String(result.filledFields),
         "X-Skipped-Fields": String(result.skippedFields),
@@ -105,7 +114,7 @@ export async function POST(
     return Response.json(
       {
         error: "양식 채우기 중 오류가 발생했습니다",
-        details: error instanceof Error ? error.message : "알 수 없는 오류",
+        details: safeErrorMessage(error, "알 수 없는 오류"),
       },
       { status: 500 }
     );

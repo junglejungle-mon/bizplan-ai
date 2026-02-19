@@ -4,6 +4,16 @@ import { buildDocx } from "@/lib/utils/docx-builder";
 import { buildPdf } from "@/lib/utils/pdf-builder";
 import { buildHwpx } from "@/lib/utils/hwpx-builder";
 import { exportHwpxWithFormFill } from "@/lib/hwpx";
+import { incrementUsage } from "@/lib/payment/usage";
+
+export const maxDuration = 60; // PDF/DOCX 차트 이미지 변환에 시간 필요
+
+/** RFC 5987 호환 Content-Disposition 헤더 생성 */
+function makeContentDisposition(filename: string): string {
+  const encoded = encodeURIComponent(filename);
+  // filename: ASCII 폴백, filename*: UTF-8 원본
+  return `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`;
+}
 
 /**
  * POST /api/plans/[id]/export
@@ -19,6 +29,21 @@ export async function POST(
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  // 사용량 체크 (무료: 1회/월, 유료: 플랜별 제한)
+  const usageResult = await incrementUsage(user.id, "exports");
+  if (!usageResult.allowed) {
+    return Response.json(
+      {
+        error: "이번 달 내보내기 한도를 초과했습니다.",
+        code: "USAGE_LIMIT_EXCEEDED",
+        current: usageResult.current,
+        limit: usageResult.limit,
+        upgradeUrl: "/pricing",
+      },
+      { status: 429 }
+    );
   }
 
   const body = await request.json().catch(() => ({}));
@@ -79,20 +104,38 @@ export async function POST(
 
   // chart_data 배열 → 섹션별 객체로 변환 (docx-builder가 기대하는 형태)
   // DB: [{chart_type, section_order, ...}] → {section_1: [{type, ...}], section_8: [{type, ...}]}
+  // 내보내기 시 섹션당 최대 MAX_CHARTS_PER_SECTION개 (priority 높은 순)
+  const MAX_CHARTS_PER_SECTION = 3;
+  const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
   const chartData: Record<string, any[]> = {};
   if (Array.isArray(rawChartData)) {
+    // 섹션별로 그룹핑
+    const grouped: Record<string, any[]> = {};
     for (const chart of rawChartData) {
       const sectionKey = `section_${chart.section_order || 1}`;
-      if (!chartData[sectionKey]) chartData[sectionKey] = [];
-      chartData[sectionKey].push({
-        type: chart.chart_type || chart.type,
-        title: chart.title,
-        data: chart.data,
+      if (!grouped[sectionKey]) grouped[sectionKey] = [];
+      grouped[sectionKey].push(chart);
+    }
+
+    // 각 섹션에서 priority 높은 순으로 정렬 후 상위 N개만 선택
+    for (const [sectionKey, charts] of Object.entries(grouped)) {
+      const sorted = charts.sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority || "medium"] ?? 3;
+        const pb = PRIORITY_ORDER[b.priority || "medium"] ?? 3;
+        return pa - pb;
       });
+      chartData[sectionKey] = sorted.slice(0, MAX_CHARTS_PER_SECTION).map((c) => ({
+        type: c.chart_type || c.type,
+        title: c.title,
+        data: c.data,
+      }));
     }
   } else if (typeof rawChartData === "object") {
-    // 이미 올바른 형태인 경우 그대로 사용
-    Object.assign(chartData, rawChartData);
+    // 이미 올바른 형태인 경우에도 섹션당 제한 적용
+    for (const [key, charts] of Object.entries(rawChartData as Record<string, any[]>)) {
+      chartData[key] = (charts || []).slice(0, MAX_CHARTS_PER_SECTION);
+    }
   }
 
   // ===== DOCX 내보내기 =====
@@ -115,7 +158,7 @@ export async function POST(
       return new Response(new Uint8Array(buffer), {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+          "Content-Disposition": makeContentDisposition(filename),
         },
       });
     } catch (error) {
@@ -142,7 +185,7 @@ export async function POST(
     return new Response(markdown, {
       headers: {
         "Content-Type": "text/markdown; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+        "Content-Disposition": makeContentDisposition(filename),
       },
     });
   }
@@ -167,7 +210,7 @@ export async function POST(
       return new Response(pdfBuffer, {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+          "Content-Disposition": makeContentDisposition(filename),
         },
       });
     } catch (error) {
@@ -226,7 +269,7 @@ export async function POST(
       return new Response(new Uint8Array(hwpxBuffer), {
         headers: {
           "Content-Type": "application/hwp+zip",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+          "Content-Disposition": makeContentDisposition(filename),
           "X-Fill-Strategy": fillStrategy,
         },
       });

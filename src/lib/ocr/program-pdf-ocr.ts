@@ -5,7 +5,7 @@
  * - Claude DocumentBlockParam으로 OCR
  */
 
-import { anthropic } from "@/lib/ai/claude";
+import { callClaudeVision } from "@/lib/ai/claude";
 import { PROGRAM_PDF_OCR_SYSTEM } from "@/lib/ai/prompts/writing";
 
 /**
@@ -99,9 +99,9 @@ export async function downloadPdfAsBase64(
  * 정부지원사업 양식에 특화된 추출
  */
 export async function ocrProgramPdf(base64: string): Promise<string> {
-  const response = await anthropic.messages.create({
+  return callClaudeVision({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 16000,
+    maxTokens: 16000,
     system: PROGRAM_PDF_OCR_SYSTEM,
     messages: [
       {
@@ -124,9 +124,4 @@ export async function ocrProgramPdf(base64: string): Promise<string> {
     ],
     temperature: 0,
   });
-
-  const textBlock = response.content.find(
-    (block) => block.type === "text"
-  ) as { type: "text"; text: string } | undefined;
-  return textBlock?.text ?? "";
 }

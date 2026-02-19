@@ -539,9 +539,9 @@ export default function LandingPage() {
           </div>
           <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto">
             {[
-              { name: "무료", price: "0", description: "서비스 체험", features: ["AI 인터뷰 + 프로필 구축", "지원사업 매칭 3건/월", "AI 비서 5회/일", "서류 전체 연동 시 계획서 1건 무료"], cta: "무료로 시작", popular: false },
-              { name: "스타터", price: "49,000", description: "본격 활용", features: ["매칭 무제한", "사업계획서 3건/월", "AI 비서 무제한", "섹션 재생성"], cta: "스타터 시작", popular: false },
-              { name: "프로", price: "99,000", description: "무제한 활용", features: ["전체 무제한", "사업계획서 무제한", "IR PPT 생성", "HWP/PDF/DOCX 내보내기", "우선 지원"], cta: "프로 시작", popular: true },
+              { name: "무료", price: "0", description: "서비스 체험", features: ["AI 인터뷰 + 프로필 구축", "지원사업 기본 매칭", "AI 비서 5회/일", "사업계획서 1건/월"], cta: "무료로 시작", popular: false },
+              { name: "스타터", price: "29,000", description: "본격 활용", features: ["사업계획서 5건/월", "IR 2건/월", "AI 비서 무제한", "섹션 재생성"], cta: "스타터 시작", popular: false },
+              { name: "프로", price: "79,000", description: "무제한 활용", features: ["무제한 사업계획서", "무제한 IR", "HWP/PDF/DOCX 내보내기", "우선처리"], cta: "프로 시작", popular: true },
             ].map((plan, i) => (
               <div key={i} className={`relative rounded-2xl border p-8 ${plan.popular ? "border-blue-600 shadow-lg ring-1 ring-blue-600" : "border-gray-200"}`}>
                 {plan.popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2"><Star className="mr-1 h-3 w-3" /> 추천</Badge>}

@@ -4,7 +4,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { anthropic } from "@/lib/ai/claude";
+import { callClaudeVision } from "@/lib/ai/claude";
 
 const OCR_SYSTEM = `당신은 대한민국 사업자등록증 OCR 전문가입니다.
 이미지에서 사업자등록증 정보를 정확히 추출하세요.
@@ -110,9 +110,9 @@ export async function POST(request: Request) {
           },
         };
 
-    const response = await anthropic.messages.create({
+    const rawText = await callClaudeVision({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      maxTokens: 1024,
       system: OCR_SYSTEM,
       messages: [
         {
@@ -128,9 +128,6 @@ export async function POST(request: Request) {
       ],
       temperature: 0,
     });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    const rawText = textBlock?.text ?? "";
 
     // JSON 파싱
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
@@ -179,10 +176,6 @@ export async function POST(request: Request) {
       data: {
         ...ocrResult,
         region,
-      },
-      usage: {
-        input_tokens: response.usage.input_tokens,
-        output_tokens: response.usage.output_tokens,
       },
     });
   } catch (error) {

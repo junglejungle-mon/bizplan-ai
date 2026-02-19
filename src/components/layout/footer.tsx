@@ -26,30 +26,39 @@ export function Footer() {
               <li><Link href="/programs" className="text-sm text-gray-500 hover:text-gray-700">지원사업 매칭</Link></li>
               <li><Link href="/plans" className="text-sm text-gray-500 hover:text-gray-700">사업계획서 작성</Link></li>
               <li><Link href="/documents" className="text-sm text-gray-500 hover:text-gray-700">서류관리</Link></li>
+              <li><Link href="/pricing" className="text-sm text-gray-500 hover:text-gray-700">요금제</Link></li>
             </ul>
           </div>
 
           <div>
             <h3 className="text-sm font-semibold text-gray-900">지원</h3>
             <ul className="mt-3 space-y-2">
-              <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-700">이용약관</Link></li>
-              <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-700">개인정보처리방침</Link></li>
-              <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-700">문의하기</Link></li>
+              <li><Link href="/terms" className="text-sm text-gray-500 hover:text-gray-700">이용약관</Link></li>
+              <li><Link href="/privacy" className="text-sm text-gray-500 hover:text-gray-700">개인정보처리방침</Link></li>
+              <li><a href="mailto:support@bizplan-ai.kr" className="text-sm text-gray-500 hover:text-gray-700">문의하기</a></li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">연락처</h3>
-            <ul className="mt-3 space-y-2">
-              <li className="text-sm text-gray-500">support@bizplan-ai.kr</li>
+            <h3 className="text-sm font-semibold text-gray-900">사업자 정보</h3>
+            <ul className="mt-3 space-y-1.5">
+              <li className="text-xs text-gray-500">주식회사 정글몬스터</li>
+              <li className="text-xs text-gray-500">대표: 정광우</li>
+              <li className="text-xs text-gray-500">사업자등록번호: 188-86-01211</li>
+              <li className="text-xs text-gray-500">주소: 서울특별시</li>
+              <li className="text-xs text-gray-500">이메일: support@bizplan-ai.kr</li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-8 border-t border-gray-200 pt-8">
-          <p className="text-center text-xs text-gray-400">
-            &copy; {new Date().getFullYear()} BizPlan AI. All rights reserved.
+        <div className="mt-8 border-t border-gray-200 pt-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="text-xs text-gray-400">
+            &copy; {new Date().getFullYear()} BizPlan AI (주식회사 정글몬스터). All rights reserved.
           </p>
+          <div className="flex gap-4">
+            <Link href="/terms" className="text-xs text-gray-400 hover:text-gray-600">이용약관</Link>
+            <Link href="/privacy" className="text-xs text-gray-400 hover:text-gray-600">개인정보처리방침</Link>
+          </div>
         </div>
       </div>
     </footer>

@@ -470,6 +470,215 @@ export interface Database {
         };
         Update: Partial<Database["public"]["Tables"]["form_templates"]["Insert"]>;
       };
+      // ── 결제 시스템 테이블 ──
+      subscription_plans: {
+        Row: {
+          id: string;
+          name: string;
+          display_name: string;
+          description: string | null;
+          price: number;
+          currency: string;
+          interval: string;
+          features: unknown[];
+          limits: Record<string, number>;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          display_name: string;
+          description?: string | null;
+          price?: number;
+          currency?: string;
+          interval?: string;
+          features?: unknown[];
+          limits?: Record<string, number>;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscription_plans"]["Insert"]>;
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan_id: string;
+          status: "active" | "canceled" | "past_due" | "trialing" | "expired";
+          current_period_start: string;
+          current_period_end: string | null;
+          cancel_at_period_end: boolean;
+          canceled_at: string | null;
+          portone_billing_key: string | null;
+          portone_customer_id: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan_id: string;
+          status?: string;
+          current_period_start?: string;
+          current_period_end?: string | null;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          portone_billing_key?: string | null;
+          portone_customer_id?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
+      };
+      payments: {
+        Row: {
+          id: string;
+          user_id: string;
+          subscription_id: string | null;
+          amount: number;
+          currency: string;
+          status: "pending" | "paid" | "failed" | "canceled" | "refunded";
+          portone_payment_id: string | null;
+          payment_method: string | null;
+          payment_method_detail: Record<string, unknown> | null;
+          paid_at: string | null;
+          failed_reason: string | null;
+          receipt_url: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          subscription_id?: string | null;
+          amount: number;
+          currency?: string;
+          status?: string;
+          portone_payment_id?: string | null;
+          payment_method?: string | null;
+          payment_method_detail?: Record<string, unknown> | null;
+          paid_at?: string | null;
+          failed_reason?: string | null;
+          receipt_url?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
+      };
+      usage_records: {
+        Row: {
+          id: string;
+          user_id: string;
+          period: string;
+          plan_generations: number;
+          section_regenerations: number;
+          ir_generations: number;
+          exports: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          period: string;
+          plan_generations?: number;
+          section_regenerations?: number;
+          ir_generations?: number;
+          exports?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["usage_records"]["Insert"]>;
+      };
+      agent_meetings: {
+        Row: {
+          id: string;
+          meeting_type: 'weekly' | 'monthly';
+          meeting_date: string;
+          week_number: number | null;
+          status: 'pending' | 'collecting_metrics' | 'strategy_meeting' | 'team_analysis' | 'uploading_notion' | 'completed' | 'failed';
+          current_phase: string | null;
+          service_metrics: Record<string, unknown> | null;
+          strategy_summary: string | null;
+          strategy_result: Record<string, unknown> | null;
+          team_reports: Record<string, unknown>[];
+          notion_page_id: string | null;
+          notion_page_url: string | null;
+          total_tokens: number;
+          total_cost_usd: number;
+          duration_ms: number | null;
+          triggered_by: string;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_type: 'weekly' | 'monthly';
+          meeting_date: string;
+          week_number?: number | null;
+          status?: string;
+          current_phase?: string | null;
+          service_metrics?: Record<string, unknown> | null;
+          strategy_summary?: string | null;
+          strategy_result?: Record<string, unknown> | null;
+          team_reports?: Record<string, unknown>[];
+          notion_page_id?: string | null;
+          notion_page_url?: string | null;
+          total_tokens?: number;
+          total_cost_usd?: number;
+          duration_ms?: number | null;
+          triggered_by?: string;
+          error_message?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["agent_meetings"]["Insert"]>;
+      };
+      agent_missions: {
+        Row: {
+          id: string;
+          meeting_id: string;
+          team_id: string;
+          team_name: string;
+          chief: string;
+          title: string;
+          description: string | null;
+          category: 'strategy' | 'marketing' | 'product' | 'tech' | 'data' | 'growth' | 'ops';
+          priority: 'critical' | 'high' | 'medium' | 'low';
+          expected_outcome: string | null;
+          kpi_target: Record<string, unknown> | null;
+          approval_status: 'pending' | 'approved' | 'rejected' | 'deferred';
+          approved_at: string | null;
+          rejection_reason: string | null;
+          execution_status: 'waiting' | 'in_progress' | 'completed' | 'blocked' | 'cancelled';
+          started_at: string | null;
+          completed_at: string | null;
+          completion_notes: string | null;
+          due_date: string | null;
+          notion_block_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_id: string;
+          team_id: string;
+          team_name: string;
+          chief: string;
+          title: string;
+          description?: string | null;
+          category: string;
+          priority?: string;
+          expected_outcome?: string | null;
+          kpi_target?: Record<string, unknown> | null;
+          approval_status?: string;
+          rejection_reason?: string | null;
+          execution_status?: string;
+          due_date?: string | null;
+          notion_block_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["agent_missions"]["Insert"]>;
+      };
     };
   };
 }

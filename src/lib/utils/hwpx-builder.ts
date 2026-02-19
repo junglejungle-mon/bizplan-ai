@@ -68,14 +68,21 @@ function buildManifestXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><odf:manifest xmlns:odf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"/>`;
 }
 
-function buildContentHpf(title: string): string {
+function buildContentHpf(title: string, binFileCount: number = 0): string {
   const now = new Date().toISOString().replace(/\.\d+Z/, "Z");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package ${NS} version="" unique-identifier="" id=""><opf:metadata><opf:title>${escapeXml(title)}</opf:title><opf:language>ko</opf:language><opf:meta name="creator" content="text">BizPlan AI</opf:meta><opf:meta name="subject" content="text"/><opf:meta name="description" content="text"/><opf:meta name="lastsaveby" content="text">BizPlan AI</opf:meta><opf:meta name="CreatedDate" content="text">${now}</opf:meta><opf:meta name="ModifiedDate" content="text">${now}</opf:meta><opf:meta name="date" content="text">${now}</opf:meta><opf:meta name="keyword" content="text"/></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/><opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="header"/><opf:itemref idref="section0" linear="no"/></opf:spine></opf:package>`;
+
+  // BinData 이미지 manifest 항목 생성
+  const binManifestItems = Array.from({ length: binFileCount }, (_, i) => {
+    const binId = `BIN${String(i).padStart(4, "0")}`;
+    return `<opf:item id="${binId}" href="BinData/${binId}.png" media-type="image/png"/>`;
+  }).join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package ${NS} version="" unique-identifier="" id=""><opf:metadata><opf:title>${escapeXml(title)}</opf:title><opf:language>ko</opf:language><opf:meta name="creator" content="text">BizPlan AI</opf:meta><opf:meta name="subject" content="text"/><opf:meta name="description" content="text"/><opf:meta name="lastsaveby" content="text">BizPlan AI</opf:meta><opf:meta name="CreatedDate" content="text">${now}</opf:meta><opf:meta name="ModifiedDate" content="text">${now}</opf:meta><opf:meta name="date" content="text">${now}</opf:meta><opf:meta name="keyword" content="text"/></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/><opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/>${binManifestItems}</opf:manifest><opf:spine><opf:itemref idref="header"/><opf:itemref idref="section0" linear="no"/></opf:spine></opf:package>`;
 }
 
 // ===== Header XML (폰트, 스타일, 단락 속성 정의) =====
 
-function buildHeaderXml(primaryColor: string): string {
+function buildHeaderXml(primaryColor: string, binFileCount: number = 0): string {
   // fontface 7개 언어 (HANGUL, LATIN, HANJA, JAPANESE, OTHER, SYMBOL, USER)
   const langs = ["HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER"];
   const fontfacesXml = langs.map(lang =>
@@ -99,7 +106,17 @@ function buildHeaderXml(primaryColor: string): string {
   // styles
   const stylesXml = `<hh:styles itemCnt="2"><hh:style id="0" type="PARA" name="바탕글" engName="Normal" paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0" langID="1042" lockForm="0"/><hh:style id="1" type="PARA" name="본문" engName="Body" paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="1" langID="1042" lockForm="0"/></hh:styles>`;
 
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hh:head ${NS} version="1.4" secCnt="1"><hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList><hh:fontfaces itemCnt="7">${fontfacesXml}</hh:fontfaces>${borderFillsXml}${charPropsXml}${tabPropsXml}${paraPropsXml}${stylesXml}</hh:refList><hh:compatibleDocument targetProgram="HWP201X"><hh:layoutCompatibility/></hh:compatibleDocument><hh:docOption><hh:linkinfo path="" pageInherit="0" footnoteInherit="0"/></hh:docOption><hh:trackchageConfig flags="56"/></hh:head>`;
+  // binData (이미지 참조)
+  let binDataXml = "";
+  if (binFileCount > 0) {
+    const binItems = Array.from({ length: binFileCount }, (_, i) => {
+      const binId = `BIN${String(i).padStart(4, "0")}`;
+      return `<hh:binItem id="${i}" src="BinData/${binId}.png" format="PNG" isEmbeded="1"/>`;
+    }).join("");
+    binDataXml = `<hh:binData itemCnt="${binFileCount}">${binItems}</hh:binData>`;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hh:head ${NS} version="1.4" secCnt="1"><hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList><hh:fontfaces itemCnt="7">${fontfacesXml}</hh:fontfaces>${borderFillsXml}${charPropsXml}${tabPropsXml}${paraPropsXml}${stylesXml}${binDataXml}</hh:refList><hh:compatibleDocument targetProgram="HWP201X"><hh:layoutCompatibility/></hh:compatibleDocument><hh:docOption><hh:linkinfo path="" pageInherit="0" footnoteInherit="0"/></hh:docOption><hh:trackchageConfig flags="56"/></hh:head>`;
 }
 
 // ===== Section XML 빌드 =====
@@ -132,72 +149,135 @@ function emptyP(): string {
   return `<hp:p id="${id}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t/></hp:run>${lineseg()}</hp:p>`;
 }
 
-/** 마크다운 → HWPX 단락 배열로 변환 */
+// ===== 이미지 고유 ID 카운터 =====
+let _shapeId = 100;
+function nextShapeId(): number {
+  return _shapeId++;
+}
+
+/**
+ * 이미지 단락 생성 (OWPML <hp:pic> 구조)
+ * binItemId: header.xml의 binItem id (0부터)
+ * widthEmu, heightEmu: HWPUNIT 단위 크기 (1inch = 7200 HWPUNIT)
+ */
+function imageParagraph(binItemId: number, widthEmu: number, heightEmu: number): string {
+  const paraId = nextParaId();
+  const shapeId = nextShapeId();
+  const instId = shapeId;
+
+  // 이미지를 본문 폭에 맞게 조정 (최대 42520 HWPUNIT ≈ 약 15cm)
+  const maxWidth = 42520;
+  if (widthEmu > maxWidth) {
+    const scale = maxWidth / widthEmu;
+    heightEmu = Math.round(heightEmu * scale);
+    widthEmu = maxWidth;
+  }
+
+  return `<hp:p id="${paraId}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:pic id="${shapeId}" reverse="0" lock="0" dropcapstyle="None" instid="${instId}" textFlow="BOTH_SIDES" blockoPaGe="0" embedded="1" holdAnchorAndSO="0"><hp:shapeObject id="${shapeId}" zOrder="${shapeId}" numberingType="NONE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES"><hp:size width="${widthEmu}" height="${heightEmu}" widthRelTo="ABSOLUTE" heightRelTo="ABSOLUTE"/><hp:position treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="1" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT"><hp:vertOffset value="0"/><hp:horzOffset value="0"/></hp:position></hp:shapeObject><hp:shapeComponent href="" groupLevel="0" instid="${instId}"><hc:offset x0="0" y0="0" x1="${widthEmu}" y1="${heightEmu}" groupLevel="0" flipType="NONE" rotationAngle="0"/><hc:orgSz width="${widthEmu}" height="${heightEmu}"/><hc:imgRect x0="0" y0="0" x1="1" y1="1"/><hc:imgClip left="0" top="0" right="0" bottom="0"/><hc:imgEffect><hc:brightness>0</hc:brightness><hc:contrast>0</hc:contrast></hc:imgEffect></hp:shapeComponent><hc:fillBrush><hc:imgFill type="TILE"><hc:image binaryItemIDRef="${binItemId}"/></hc:imgFill></hc:fillBrush></hp:pic></hp:run>${lineseg()}</hp:p>`;
+}
+
+/** 마크다운 → HWPX 단락 배열로 변환 (차트 이미지를 ## 블록 사이에 분산 삽입) */
 function markdownToHwpxParagraphs(
   markdown: string,
-  _chartImages: ChartImageResult[],
-  _headerColor: string
+  chartImages: ChartImageResult[],
+  _headerColor: string,
+  sectionBinOffset: number
 ): string[] {
-  const lines = markdown.split("\n");
+  // ## 소제목 기준으로 블록 분할
+  const blocks = markdown.split(/(?=^## )/m);
+  const chartsPerBlock = chartImages.length > 0 && blocks.length > 0
+    ? Math.max(1, Math.ceil(chartImages.length / blocks.length))
+    : 0;
+
   const parts: string[] = [];
+  let imageIdx = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (const block of blocks) {
+    // 블록 내 라인 처리
+    const lines = block.split("\n");
 
-    // 빈 줄
-    if (line.trim() === "") {
-      parts.push(emptyP());
-      continue;
-    }
+    for (const line of lines) {
+      if (line.trim() === "") {
+        parts.push(emptyP());
+        continue;
+      }
 
-    // 테이블 구분선 스킵
-    if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
-      const cells = line.split("|").slice(1, -1).map((c) => c.trim());
-      if (cells.every((c) => /^[-:]+$/.test(c))) continue; // 구분선
-      // 테이블 헤더/행 → 일반 텍스트로 변환
-      const text = cells.join(" | ");
-      parts.push(p(text, 0, 0));
-      continue;
-    }
+      // 테이블 구분선 스킵
+      if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
+        const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+        if (cells.every((c) => /^[-:]+$/.test(c))) continue;
+        const text = cells.join(" | ");
+        parts.push(p(text, 0, 0));
+        continue;
+      }
 
-    // ### 소제목
-    if (line.startsWith("### ")) {
-      parts.push(p(line.replace("### ", ""), 3, 2));
-      continue;
-    }
+      // ### 소제목
+      if (line.startsWith("### ")) {
+        parts.push(p(line.replace("### ", ""), 3, 2));
+        continue;
+      }
 
-    // ## 중제목
-    if (line.startsWith("## ")) {
-      parts.push(p(line.replace("## ", ""), 2, 2));
-      continue;
-    }
+      // ## 중제목
+      if (line.startsWith("## ")) {
+        parts.push(p(line.replace("## ", ""), 2, 2));
+        continue;
+      }
 
-    // 구분선
-    if (line.trim() === "---" || line.trim() === "***") {
-      parts.push(emptyP());
-      continue;
-    }
+      // 구분선
+      if (line.trim() === "---" || line.trim() === "***") {
+        parts.push(emptyP());
+        continue;
+      }
 
-    // 볼드/이탤릭 제거
-    const cleanText = line
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1");
+      // 볼드/이탤릭 제거
+      const cleanText = line
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/\*([^*]+)\*/g, "$1");
 
-    // 불릿
-    if (/^[\s]*[-*•]\s/.test(line)) {
-      const text = cleanText.replace(/^[\s]*[-*•]\s+/, "");
-      parts.push(p(`  · ${text}`, 0, 0));
-      continue;
-    }
+      // 불릿
+      if (/^[\s]*[-*•]\s/.test(line)) {
+        const text = cleanText.replace(/^[\s]*[-*•]\s+/, "");
+        parts.push(p(`  · ${text}`, 0, 0));
+        continue;
+      }
 
-    // 번호 리스트
-    if (/^\d+\.\s/.test(line)) {
+      // 번호 리스트
+      if (/^\d+\.\s/.test(line)) {
+        parts.push(p(cleanText, 0, 0));
+        continue;
+      }
+
+      // 일반 텍스트
       parts.push(p(cleanText, 0, 0));
-      continue;
     }
 
-    // 일반 텍스트
-    parts.push(p(cleanText, 0, 0));
+    // 블록 뒤에 차트 이미지 분배 삽입
+    const chartsForThisBlock = Math.min(chartsPerBlock, chartImages.length - imageIdx);
+    for (let ci = 0; ci < chartsForThisBlock; ci++) {
+      if (imageIdx < chartImages.length) {
+        const img = chartImages[imageIdx];
+        const widthEmu = Math.round((img.width / 2) * 30);
+        const heightEmu = Math.round((img.height / 2) * 30);
+        const binItemId = sectionBinOffset + imageIdx;
+
+        parts.push(emptyP());
+        parts.push(imageParagraph(binItemId, widthEmu, heightEmu));
+        parts.push(emptyP());
+        imageIdx++;
+      }
+    }
+  }
+
+  // 남은 이미지가 있으면 섹션 끝에 삽입
+  while (imageIdx < chartImages.length) {
+    const img = chartImages[imageIdx];
+    const widthEmu = Math.round((img.width / 2) * 30);
+    const heightEmu = Math.round((img.height / 2) * 30);
+    const binItemId = sectionBinOffset + imageIdx;
+
+    parts.push(emptyP());
+    parts.push(imageParagraph(binItemId, widthEmu, heightEmu));
+    imageIdx++;
   }
 
   return parts;
@@ -206,11 +286,12 @@ function markdownToHwpxParagraphs(
 /** 전체 section0.xml 빌드 */
 function buildSectionXml(
   opts: HwpxOptions,
-  _chartImages: Record<string, ChartImageResult[]>,
-  _headerColor: string
+  chartImages: Record<string, ChartImageResult[]>,
+  headerColor: string
 ): string {
-  // paraId 리셋
+  // paraId, shapeId 리셋
   _paraId = 0;
+  _shapeId = 100;
 
   const parts: string[] = [];
 
@@ -238,6 +319,9 @@ function buildSectionXml(
   parts.push(emptyP());
   parts.push(emptyP());
 
+  // binItem 오프셋 계산 (섹션별로 이미지 인덱스를 누적)
+  let binOffset = 0;
+
   // 본문
   for (const section of opts.sections) {
     // 섹션 제목
@@ -246,19 +330,21 @@ function buildSectionXml(
 
     // 섹션 콘텐츠
     const sectionKey = `section_${section.section_order}`;
-    const sectionImages = _chartImages[sectionKey] || [];
+    const sectionImages = chartImages[sectionKey] || [];
 
     if (section.content) {
       const paragraphs = markdownToHwpxParagraphs(
         section.content,
         sectionImages,
-        _headerColor
+        headerColor,
+        binOffset
       );
       parts.push(...paragraphs);
     } else {
       parts.push(p("(미작성)", 4, 0));
     }
 
+    binOffset += sectionImages.length;
     parts.push(emptyP());
   }
 
@@ -280,6 +366,19 @@ export async function buildHwpx(opts: HwpxOptions): Promise<Buffer> {
     }
   }
 
+  // 이미지 파일 목록 생성 (전 섹션 순서대로 flatten)
+  const flatImages: { binId: string; buffer: Buffer }[] = [];
+  for (const section of opts.sections) {
+    const sectionKey = `section_${section.section_order}`;
+    const sectionImgs = chartImages[sectionKey] || [];
+    for (const img of sectionImgs) {
+      const binId = `BIN${String(flatImages.length).padStart(4, "0")}`;
+      flatImages.push({ binId, buffer: img.pngBuffer });
+    }
+  }
+
+  const binFileCount = flatImages.length;
+
   // ZIP 생성
   const zip = new JSZip();
 
@@ -294,9 +393,14 @@ export async function buildHwpx(opts: HwpxOptions): Promise<Buffer> {
   zip.file("version.xml", buildVersionXml());
   zip.file("settings.xml", buildSettingsXml());
 
+  // BinData (차트 이미지)
+  for (const { binId, buffer } of flatImages) {
+    zip.file(`BinData/${binId}.png`, buffer);
+  }
+
   // Contents
-  zip.file("Contents/content.hpf", buildContentHpf(opts.title));
-  zip.file("Contents/header.xml", buildHeaderXml(theme.primary));
+  zip.file("Contents/content.hpf", buildContentHpf(opts.title, binFileCount));
+  zip.file("Contents/header.xml", buildHeaderXml(theme.primary, binFileCount));
   zip.file("Contents/section0.xml", buildSectionXml(opts, chartImages, theme.primary));
 
   // Preview

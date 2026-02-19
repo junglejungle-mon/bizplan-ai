@@ -16,7 +16,12 @@ import {
   Check,
   Phone,
   Send,
+  User,
+  Lock,
 } from "lucide-react";
+import { toast } from "sonner";
+import { SubscriptionStatus } from "@/components/payment/SubscriptionStatus";
+import { PaymentHistory } from "@/components/payment/PaymentHistory";
 
 interface NotificationSettings {
   kakao: {
@@ -57,6 +62,13 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [name, setName] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const router = useRouter();
 
   const showSaved = useCallback(() => {
@@ -86,6 +98,9 @@ export default function SettingsPage() {
       if (profileData?.phone) {
         setPhone(profileData.phone);
       }
+      if (profileData?.name) {
+        setName(profileData.name);
+      }
 
       // 알림 설정 로드 (DB)
       const { data: settingsData } = await supabase
@@ -114,6 +129,68 @@ export default function SettingsPage() {
     loadData();
   }, [router]);
 
+  const saveName = async () => {
+    if (!user || !name.trim()) return;
+    setNameSaving(true);
+
+    const supabase = createClient();
+    await supabase
+      .from("profiles")
+      .update({ name: name.trim() })
+      .eq("id", user.id);
+
+    setProfile((prev: any) => (prev ? { ...prev, name: name.trim() } : prev));
+    setNameSaving(false);
+    showSaved();
+    toast.success("이름이 변경되었습니다.");
+  };
+
+  const changePassword = async () => {
+    setPasswordError("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("새 비밀번호는 최소 6자 이상이어야 합니다.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    const supabase = createClient();
+
+    // 현재 비밀번호로 재인증
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email!,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      setPasswordError("현재 비밀번호가 올바르지 않습니다.");
+      setPasswordSaving(false);
+      return;
+    }
+
+    // 비밀번호 변경
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (updateError) {
+      setPasswordError("비밀번호 변경에 실패했습니다.");
+      setPasswordSaving(false);
+      return;
+    }
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordSaving(false);
+    toast.success("비밀번호가 변경되었습니다.");
+  };
+
   const savePhone = async () => {
     if (!user || !phone.trim()) return;
     setPhoneSaving(true);
@@ -136,7 +213,7 @@ export default function SettingsPage() {
 
     // 카카오 알림 활성화 시 전화번호 필수
     if (channel === "kakao" && !notifications.kakao.enabled && !profile?.phone) {
-      alert("카카오 알림톡을 받으려면 먼저 전화번호를 등록해주세요.");
+      toast.warning("카카오 알림톡을 받으려면 먼저 전화번호를 등록해주세요.");
       return;
     }
 
@@ -267,12 +344,100 @@ export default function SettingsPage() {
                   : "이메일"}
             </Badge>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">플랜</span>
-            <Badge variant="secondary">무료</Badge>
+          {/* 플랜 정보는 SubscriptionStatus에서 표시 */}
+        </CardContent>
+      </Card>
+
+      {/* 프로필 수정 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <User className="h-5 w-5 text-blue-600" />
+            프로필 수정
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              이름
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="name"
+                placeholder="이름을 입력하세요"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                size="sm"
+                onClick={saveName}
+                disabled={nameSaving || !name.trim() || name.trim() === profile?.name}
+              >
+                {nameSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "저장"
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* 비밀번호 변경 (이메일 로그인 사용자만) */}
+      {user?.app_metadata?.provider === "email" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lock className="h-5 w-5 text-blue-600" />
+              비밀번호 변경
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input
+              id="currentPassword"
+              type="password"
+              label="현재 비밀번호"
+              placeholder="현재 비밀번호 입력"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <Input
+              id="newPassword"
+              type="password"
+              label="새 비밀번호"
+              placeholder="최소 6자 이상"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <Input
+              id="confirmPassword"
+              type="password"
+              label="새 비밀번호 확인"
+              placeholder="새 비밀번호 다시 입력"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            {passwordError && (
+              <p className="text-sm text-red-500">{passwordError}</p>
+            )}
+            <Button
+              onClick={changePassword}
+              disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+              className="w-full"
+            >
+              {passwordSaving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> 변경 중...
+                </span>
+              ) : (
+                "비밀번호 변경"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 전화번호 등록 */}
       <Card>
@@ -432,34 +597,53 @@ export default function SettingsPage() {
       </Card>
 
       {/* 구독 관리 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">구독 관리</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 p-4">
-            <h4 className="font-medium text-blue-900">
-              프리미엄으로 업그레이드
-            </h4>
-            <p className="mt-1 text-sm text-blue-700">
-              무제한 매칭 + 사업계획서 자동 작성 + AI 비서
-            </p>
-            <Button className="mt-3" size="sm">
-              플랜 보기
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <SubscriptionStatus />
 
-      {/* 로그아웃 */}
+      {/* 결제 내역 */}
+      <PaymentHistory />
+
+      {/* 로그아웃 & 회원탈퇴 */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
           <Button
             variant="outline"
             className="w-full gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" /> 로그아웃
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full text-xs text-gray-400 hover:text-red-500"
+            onClick={async () => {
+              const confirmed = window.confirm(
+                "정말 탈퇴하시겠습니까?\n\n" +
+                "- 모든 사업계획서, 기업 정보, 결제 내역이 삭제됩니다.\n" +
+                "- 유료 구독이 있는 경우 즉시 해지됩니다.\n" +
+                "- 이 작업은 되돌릴 수 없습니다."
+              );
+              if (!confirmed) return;
+
+              const doubleConfirm = window.confirm(
+                "마지막 확인입니다.\n삭제된 데이터는 복구할 수 없습니다.\n정말 탈퇴하시겠습니까?"
+              );
+              if (!doubleConfirm) return;
+
+              try {
+                const res = await fetch("/api/user/delete", { method: "DELETE" });
+                if (!res.ok) {
+                  const data = await res.json();
+                  toast.error(data.error || "탈퇴 처리에 실패했습니다.");
+                  return;
+                }
+                toast.success("탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사합니다.");
+                window.location.href = "/";
+              } catch {
+                toast.error("오류가 발생했습니다. 고객센터에 문의해주세요.");
+              }
+            }}
+          >
+            회원 탈퇴
           </Button>
         </CardContent>
       </Card>

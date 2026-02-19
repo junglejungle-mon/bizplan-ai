@@ -2,6 +2,14 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPptx } from "@/lib/pptx/pptx-builder";
 
+export const maxDuration = 60; // PPTX 생성에 시간 필요
+
+/** RFC 5987 호환 Content-Disposition 헤더 생성 */
+function makeContentDisposition(filename: string): string {
+  const encoded = encodeURIComponent(filename);
+  return `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`;
+}
+
 /**
  * POST /api/plans/[id]/ir/export
  * PPTX/PDF 내보내기
@@ -22,56 +30,133 @@ export async function POST(
   // format 지원: pptx (기본), pdf는 Phase 6에서 추가
   const _format = body.format || "pptx";
 
-  // IR 프레젠테이션 로드
+  // IR 프레젠테이션 로드 (완료된 것만)
   const { data: presentation } = await supabase
     .from("ir_presentations")
     .select("*, companies!inner(name, user_id)")
     .eq("plan_id", planId)
+    .eq("status", "completed")
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
 
   if (!presentation || (presentation as any).companies?.user_id !== user.id) {
-    return new Response("Not Found", { status: 404 });
+    // status=completed 가 없으면 generating 중인지 확인
+    const { data: pendingPres } = await supabase
+      .from("ir_presentations")
+      .select("status")
+      .eq("plan_id", planId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (pendingPres?.status === "generating") {
+      return Response.json(
+        { error: "IR 자료가 아직 생성 중입니다. 잠시 후 다시 시도해주세요." },
+        { status: 202 }
+      );
+    }
+    return Response.json(
+      { error: "완료된 IR 자료가 없습니다. IR 자료를 먼저 생성해주세요." },
+      { status: 404 }
+    );
   }
 
   // 슬라이드 로드
-  const { data: slides } = await supabase
+  const { data: slides, error: slidesError } = await supabase
     .from("ir_slides")
     .select("*")
     .eq("presentation_id", presentation.id)
     .order("slide_order");
 
+  if (slidesError) {
+    console.error("[IR Export] 슬라이드 로드 실패:", slidesError.message);
+    return Response.json(
+      { error: "슬라이드 로드에 실패했습니다." },
+      { status: 500 }
+    );
+  }
+
   if (!slides || slides.length === 0) {
     return Response.json(
-      { error: "슬라이드가 없습니다" },
+      { error: "슬라이드가 없습니다. IR 자료를 다시 생성해주세요." },
       { status: 400 }
     );
   }
 
   const companyName = (presentation as any).companies?.name || "회사명";
 
+  // custom_ci 템플릿인 경우 브랜드 색상 로드
+  let customColors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    bg?: string;
+    textDark?: string;
+    textLight?: string;
+    chartColors?: string[];
+  } | undefined;
+  const templateName = (presentation.template as string) || "minimal";
+
+  if (templateName === "custom_ci") {
+    try {
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("business_content")
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (companies && companies.length > 0) {
+        const content = (companies[0] as any)?.business_content || "";
+        const match = content.match(/\[BRAND_COLORS\]\n([\s\S]*?)\n\[\/BRAND_COLORS\]/);
+        if (match) {
+          const parsed = JSON.parse(match[1]);
+          customColors = {
+            primary: parsed.primary || "1A1A2E",
+            secondary: parsed.secondary || "023793",
+            accent: parsed.accent || "4361EE",
+            bg: parsed.bg,
+            textDark: parsed.textDark,
+            textLight: parsed.textLight,
+            chartColors: parsed.chartColors,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("[IR Export] 브랜드 색상 로드 실패:", e);
+    }
+  }
+
   // PPTX 생성
-  const pptxBuffer = await buildPptx({
-    companyName,
-    template: (presentation.template as any) || "minimal",
-    slides: slides.map((s: any) => ({
-      slide_type: s.slide_type,
-      title: s.title,
-      content: s.content || {},
-      notes: s.notes,
-    })),
-  });
+  try {
+    const pptxBuffer = await buildPptx({
+      companyName,
+      template: templateName as any,
+      slides: slides.map((s: any) => ({
+        slide_type: s.slide_type,
+        title: s.title,
+        content: s.content || {},
+        notes: s.notes,
+      })),
+      customColors,
+    });
 
-  const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pptx`;
+    const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pptx`;
 
-  // Convert Buffer to Uint8Array for Response compatibility
-  const uint8Array = new Uint8Array(pptxBuffer);
-  return new Response(uint8Array, {
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-    },
-  });
+    // Convert Buffer to Uint8Array for Response compatibility
+    const uint8Array = new Uint8Array(pptxBuffer);
+    return new Response(uint8Array, {
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "Content-Disposition": makeContentDisposition(filename),
+      },
+    });
+  } catch (buildError) {
+    console.error("[IR Export] PPTX 빌드 실패:", buildError);
+    return Response.json(
+      { error: "PPTX 생성에 실패했습니다." },
+      { status: 500 }
+    );
+  }
 }

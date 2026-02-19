@@ -10,6 +10,7 @@ export const ASSISTANT_SYSTEM = `당신은 BizPlan AI의 AI 사업 비서입니�
 - 사업계획서 작성 코칭
 - 기업 전략 자문
 - 서비스 사용법 안내
+- **서류 업로드 유도**: 대표님의 사업계획서 품질을 높이기 위해 서류 업로드를 적극 안내
 
 # 스타일
 - 친절하고 전문적인 어조
@@ -17,10 +18,18 @@ export const ASSISTANT_SYSTEM = `당신은 BizPlan AI의 AI 사업 비서입니�
 - 필요 시 관련 데이터나 통계 인용
 - 간결한 답변 (3-5문장 이내, 필요 시 확장)
 
+# 서류 업로드 유도 전략
+사용자가 사업계획서, 지원사업, 품질 관련 질문을 하면 자연스럽게 서류 업로드를 권유하세요:
+- "사업계획서 품질을 높이려면 **회사소개서, 재무제표, 특허증** 등의 서류를 올려주시면 좋아요!"
+- "서류를 3개 이상 올려주시면 **IR PPT도 무료**로 생성해드려요 🎁"
+- 서류가 있으면 AI가 실제 수치와 데이터를 반영하여 훨씬 정확한 계획서를 만들 수 있다고 강조
+- 단, 강제가 아닌 권유 톤으로, 대화 맥락에 자연스럽게 녹여서 안내
+
 # 컨텍스트 활용
 - 회사 프로필 정보가 제공되면 맞춤 상담
 - 현재 보고 있는 지원사업/계획서 정보가 있으면 해당 맥락에서 답변
-- 이전 대화 기록을 참고하여 일관성 유지`;
+- 이전 대화 기록을 참고하여 일관성 유지
+- 서류 업로드 현황이 제공되면 부족한 서류를 구체적으로 안내`;
 
 export function buildAssistantPrompt(opts: {
   userMessage: string;
@@ -31,11 +40,48 @@ export function buildAssistantPrompt(opts: {
     details?: string;
   };
   ragContext?: string;
+  documentStatus?: {
+    totalCount: number;
+    extractedCount: number;
+    types: string[];
+    profileScore: number;
+  };
 }) {
   let context = "";
 
   if (opts.companyProfile) {
     context += `\n[회사 프로필]\n${opts.companyProfile}\n`;
+  }
+
+  if (opts.documentStatus) {
+    const ds = opts.documentStatus;
+    const docTypeLabels: Record<string, string> = {
+      business_registration: "사업자등록증",
+      company_intro: "회사소개서",
+      financial_statement: "재무제표",
+      patent_certificate: "특허증",
+      certification: "인증서",
+      tax_clearance: "국세완납증명서",
+      insurance_clearance: "4대보험 완납증명서",
+      venture_certificate: "벤처확인서",
+    };
+    const uploadedTypes = ds.types.map((t) => docTypeLabels[t] || t).join(", ");
+    const missingTypes = ["business_registration", "company_intro", "financial_statement", "patent_certificate"]
+      .filter((t) => !ds.types.includes(t))
+      .map((t) => docTypeLabels[t])
+      .join(", ");
+
+    context += `\n[서류 업로드 현황]\n`;
+    context += `- 업로드 서류: ${ds.extractedCount}개${uploadedTypes ? ` (${uploadedTypes})` : ""}\n`;
+    context += `- 프로필 완성도: ${ds.profileScore}%\n`;
+    if (ds.extractedCount < 3) {
+      context += `- ⚠️ 서류 ${3 - ds.extractedCount}개 더 업로드하면 IR PPT 무료 생성 가능!\n`;
+      if (missingTypes) {
+        context += `- 추천 업로드 서류: ${missingTypes}\n`;
+      }
+    } else {
+      context += `- ✅ IR PPT 무료 생성 조건 충족!\n`;
+    }
   }
 
   if (opts.currentContext) {

@@ -1,10 +1,13 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude } from "@/lib/ai/claude";
 import {
   INSIGHT_EXTRACTION_PROMPT,
   BUSINESS_CONTENT_BUILDER_PROMPT,
 } from "@/lib/ai/prompts/interview";
+import { runMatchingPipeline } from "@/lib/pipeline/matcher";
+import { calculateProfileScore } from "@/lib/utils/profile-score";
 
 // Vercel 타임아웃 확장
 export const maxDuration = 60;
@@ -13,20 +16,29 @@ export const maxDuration = 60;
  * POST /api/company/interview/insights
  * 인터뷰 완료 후 인사이트 추출 + business_content 생성
  * SSE 스트리밍으로 진행 상황 전달 (타임아웃 방지)
+ * ★ Admin client 사용: 인터뷰 완료 시점에 세션이 만료되어도 정상 동작
  */
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // 세션 검증 시도 (실패해도 companyId로 진행)
+  let userId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id || null;
+  } catch {}
 
   const { companyId } = await request.json();
+
+  if (!userId && !companyId) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   if (!companyId) {
     return Response.json({ error: "companyId is required" }, { status: 400 });
   }
+
+  // Admin client 사용 (세션 만료 문제 방지)
+  const supabase = createAdminClient();
 
   // 전체 Q&A 로드
   const { data: allQA } = await supabase
@@ -108,9 +120,20 @@ export async function POST(request: NextRequest) {
         });
 
         // ========================================
-        // Step 3: DB 업데이트
+        // Step 3: DB 업데이트 — 점수는 유틸 함수로 정확히 계산
         // ========================================
-        const profileScore = (insights.profile_score as number) || 70;
+        // 회사 기본 정보 조회 (점수 계산용)
+        const { data: companyData } = await supabase
+          .from("companies")
+          .select("name, industry, region, employee_count, revenue, established_date")
+          .eq("id", companyId)
+          .single();
+
+        // business_content가 생성되었으므로 포함하여 점수 계산
+        const profileScore = calculateProfileScore(
+          { ...companyData, business_content: businessContent },
+          allQA.length
+        );
 
         await supabase
           .from("companies")
@@ -135,17 +158,39 @@ export async function POST(request: NextRequest) {
         }
 
         // ========================================
-        // Step 4: 완료 이벤트
+        // Step 4: 매칭은 비동기로 백그라운드 실행 (사용자 대기 없음)
+        // ========================================
+        if (profileScore >= 20) {
+          send({
+            type: "progress",
+            progress: 90,
+            step: "프로필 저장 완료! 지원사업 매칭을 백그라운드에서 시작합니다...",
+          });
+
+          // 매칭을 기다리지 않고 백그라운드에서 실행
+          runMatchingPipeline(companyId)
+            .then((result) => {
+              console.log(`[Insights] 백그라운드 매칭 완료: ${result.matched}건 매칭`);
+            })
+            .catch((err) => {
+              console.error("[Insights] 백그라운드 매칭 실패:", err);
+            });
+        }
+
+        // ========================================
+        // Step 5: 완료 이벤트 (매칭 완료를 기다리지 않음)
         // ========================================
         send({
           type: "complete",
           progress: 100,
-          step: "완료!",
+          step: "완료! 지원사업 매칭이 백그라운드에서 진행됩니다.",
           profileScore,
           insights,
           scoreBreakdown: insights.score_breakdown || null,
           missingData: insights.missing_data || [],
           strategicDirection: insights.strategic_direction || null,
+          matchedCount: 0, // 매칭은 백그라운드에서 진행 중
+          matchingInProgress: true,
         });
 
         controller.close();

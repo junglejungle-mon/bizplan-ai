@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/api/error";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return apiError(error, "사업계획서 목록 조회에 실패했습니다", 500);
   }
 
   return Response.json({ plans });
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -72,14 +75,14 @@ export async function POST(request: NextRequest) {
       company_id: company.id,
       program_id: programId || null,
       matching_id: matchingId,
-      title: title || "새 사업계획서",
+      title: (title || "새 사업계획서").replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
       status: "draft",
     })
     .select()
     .single();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return apiError(error, "사업계획서 생성에 실패했습니다", 500);
   }
 
   return Response.json({ plan });

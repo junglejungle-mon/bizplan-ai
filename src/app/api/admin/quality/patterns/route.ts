@@ -1,7 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from "@/lib/admin/auth";
+import { apiError } from "@/lib/api/error";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     const supabase = createAdminClient();
 
     const { data: patterns, error } = await supabase
@@ -10,7 +14,7 @@ export async function GET() {
       .order('weight', { ascending: false });
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return apiError(error, "패턴 처리 실패", 500);
     }
 
     return Response.json({ patterns: patterns || [] });
@@ -22,6 +26,9 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
+
     const supabase = createAdminClient();
     const body = await request.json();
     const { id, ...updates } = body;
@@ -38,7 +45,7 @@ export async function PUT(request: Request) {
       .single();
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return apiError(error, "패턴 처리 실패", 500);
     }
 
     return Response.json({ pattern });

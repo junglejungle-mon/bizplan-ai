@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { MobileMenuButton } from "@/components/layout/sidebar";
+import { NotificationCenter } from "@/components/layout/notification-center";
 import { createClient } from "@/lib/supabase/client";
 
 export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
@@ -69,9 +70,12 @@ export function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
 
         <div className="flex items-center space-x-3">
           {isLoggedIn ? (
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              로그아웃
-            </Button>
+            <>
+              <NotificationCenter />
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                로그아웃
+              </Button>
+            </>
           ) : (
             <>
               <Link href="/login">

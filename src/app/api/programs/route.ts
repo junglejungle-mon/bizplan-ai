@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/api/error";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return apiError(error, "지원사업 조회에 실패했습니다", 500);
   }
 
   return Response.json({ programs: data, total: count });

@@ -10,7 +10,11 @@ export const COOKIE_NAME = "admin_session";
 const TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24시간
 
 function getSecret(): string {
-  return process.env.ADMIN_PASSWORD || "default-admin-password-change-me";
+  const secret = process.env.ADMIN_PASSWORD;
+  if (!secret) {
+    throw new Error("ADMIN_PASSWORD 환경변수가 설정되지 않았습니다.");
+  }
+  return secret;
 }
 
 /**
@@ -96,4 +100,43 @@ export async function verifyAdminSession(request: NextRequest): Promise<boolean>
   const cookie = request.cookies.get(COOKIE_NAME);
   if (!cookie?.value) return false;
   return verifyAdminToken(cookie.value);
+}
+
+/**
+ * 관리자 인증 필수 가드 — API 라우트 핸들러 최상단에서 호출
+ * Request/NextRequest 모두 지원
+ * 미들웨어 우회 방어를 위한 이중 인증 레이어
+ *
+ * @returns null if authenticated, Response if unauthorized
+ *
+ * 사용법:
+ *   const denied = await requireAdmin(request);
+ *   if (denied) return denied;
+ */
+export async function requireAdmin(request: Request | NextRequest): Promise<Response | null> {
+  // NextRequest인 경우 cookies API 사용
+  if ("cookies" in request && typeof (request as NextRequest).cookies?.get === "function") {
+    const nr = request as NextRequest;
+    const cookie = nr.cookies.get(COOKIE_NAME);
+    if (!cookie?.value) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const valid = await verifyAdminToken(cookie.value);
+    if (!valid) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return null;
+  }
+
+  // 일반 Request인 경우 Cookie 헤더에서 파싱
+  const cookieHeader = request.headers.get("cookie") || "";
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]*)`));
+  if (!match) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const valid = await verifyAdminToken(decodeURIComponent(match[1]));
+  if (!valid) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
 }

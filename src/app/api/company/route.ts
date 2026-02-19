@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { apiError } from "@/lib/api/error";
 
 export async function GET() {
   const supabase = await createClient();
@@ -16,7 +17,7 @@ export async function GET() {
     .single();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 404 });
+    return apiError(error, "기업 정보를 찾을 수 없습니다", 404);
   }
 
   return Response.json({ company });
@@ -43,7 +44,7 @@ export async function PUT(request: NextRequest) {
     .single();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return apiError(error, "기업 정보 수정에 실패했습니다", 500);
   }
 
   return Response.json({ company });

@@ -45,6 +45,14 @@ supabase/.temp/
 # NAS references (local only)
 references/NAS/
 
+# AI 학습 데이터 (로컬 전용)
+/data/ai-logs/
+/data/references/
+/data/training/
+
+# 지원사업 양식 로컬 저장 (크롤링 결과)
+/data/programs/
+
 # vercel
 .vercel
 

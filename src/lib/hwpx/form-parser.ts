@@ -42,7 +42,55 @@ const SECTION_TITLE_PATTERN = /^(?:\d+\.|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+\.|[�
 const SUBSECTION_PATTERN = /^(?:\d+-\d+\.|\d+\.\d+\.|\(\d+\)|[가나다라마바사아자차카타파하]\)|[①②③④⑤⑥⑦⑧⑨⑩])\s*/;
 
 /** 라벨 패턴: "사업명:", "대표자명 :", "회사명" 등 (뒤에 콜론이나 공백) */
-const LABEL_PATTERN = /^[가-힣a-zA-Z\s]{2,20}[:：]\s*$/;
+const LABEL_PATTERN = /^[가-힣a-zA-Z0-9\s\-·()（）]{2,30}[:：]\s*$/;
+
+/** 괄호 안 라벨 패턴: "(사업명)" → 빈칸 */
+const PAREN_LABEL_PATTERN = /^[\s]*[(\uFF08][가-힣a-zA-Z\s]{2,20}[)\uFF09][\s]*$/;
+
+/** 플레이스홀더 텍스트 패턴 (빈 필드로 간주) */
+const PLACEHOLDER_PATTERNS = [
+  /^[\s]*입력[\s]*(하세요|해\s*주세요|바랍니다|해\s*주십시오|요망)/,
+  /^[\s]*작성[\s]*(하세요|해\s*주세요|바랍니다|해\s*주십시오|요망)/,
+  /^[\s]*기재[\s]*(하세요|해\s*주세요|바랍니다|해\s*주십시오|요망)/,
+  /^[\s]*기입[\s]*(하세요|해\s*주세요|바랍니다|해\s*주십시오|요망)/,
+  /^[\s]*\([\s]*해당[\s]*내용[\s]*작성[\s]*\)/,
+  /^[\s]*※[\s]*작성[\s]*예시/,
+  /^[\s]*예\)[\s]*/,
+  /^[\s]*ex\)[\s]*/i,
+  /^[\s]*예시[\s]*:/,
+  /^[_ㅡ\-]{3,}$/,          // 밑줄 패턴 (______, ㅡㅡㅡㅡ, ------)
+  /^[\s·•○●□■◇◆]{1,2}$/,   // 빈 불릿/마커
+  // === 추가 패턴 ===
+  /^[\s]*내용[\s]*작성/,                  // "내용 작성"
+  /^[\s]*여기에[\s]*작성/,               // "여기에 작성"
+  /^[\s]*해당사항[\s]*기재/,             // "해당사항 기재"
+  /^[\s]*구체적[\s]*으?로[\s]*작성/,     // "구체적으로 작성"
+  /^[\s]*상세[\s]*기술/,                 // "상세 기술"
+  /^[\s]*자유[\s]*기술/,                 // "자유 기술"
+  /^[\s]*자유[\s]*양식/,                 // "자유 양식"
+  /^[\s]*별첨[\s]*참조/,                 // "별첨 참조"
+  /^\s*\(?\s*[0-9,]+\s*자\s*(이내|이하|내외)\s*\)?\s*$/, // "(500자 이내)", "1000자 이하"
+  /^[\s]*\([\s]*선택[\s]*\)/,            // "(선택)"
+  /^[\s]*해당\s*(없음|없을\s*경우)/,     // "해당 없음", "해당 없을 경우"
+  /^[\s]*○{2,}/,                         // "○○○○" (빈 체크)
+  /^[\s]*□{2,}/,                         // "□□□□" (빈 체크)
+];
+
+/** 텍스트가 비어있거나 플레이스홀더인지 판정 */
+function isEmptyOrPlaceholder(text: string): boolean {
+  if (text.length === 0) return true;
+
+  // 특수 공백 문자 처리 (NBSP, 전각 공백, 탭)
+  const normalized = text.replace(/[\u00A0\u3000\t\r\n]/g, " ").trim();
+  if (normalized.length === 0) return true;
+
+  // 플레이스홀더 패턴 매칭
+  for (const pattern of PLACEHOLDER_PATTERNS) {
+    if (pattern.test(normalized)) return true;
+  }
+
+  return false;
+}
 
 // ===== XML 파싱 =====
 
@@ -77,7 +125,7 @@ function extractTextNodes(xml: string, sectionFile: string): TextNode[] {
         paraIndex,
         sectionFile,
         isInTable,
-        isEmpty: text.length === 0,
+        isEmpty: isEmptyOrPlaceholder(text),
         xmlOffset: paraMatch.index + textMatch.index,
       });
     }
@@ -154,6 +202,26 @@ function detectFields(nodes: TextNode[]): FormField[] {
           )
         );
         i++; // 빈 노드 스킵
+      }
+      continue;
+    }
+
+    // 패턴 1.5: 괄호 라벨 패턴 "(사업명)" 뒤의 빈칸
+    if (PAREN_LABEL_PATTERN.test(text)) {
+      const innerLabel = text.replace(/[\s()（）]/g, "").trim();
+      const nextNode = nodes[i + 1];
+      if (nextNode && nextNode.isEmpty) {
+        fields.push(
+          makeField(
+            fieldCounter++,
+            innerLabel,
+            nextNode,
+            currentSectionTitle,
+            currentSubsectionTitle,
+            text
+          )
+        );
+        i++;
       }
       continue;
     }
@@ -462,11 +530,34 @@ export async function parseForm(
 
   // 1. 규칙 기반 필드 탐지
   let fields = detectFields(allNodes);
+  const ruleBasedCount = fields.length;
+
+  console.log(
+    `[form-parser] 파싱 결과: 섹션파일 ${sectionFiles.length}개, 텍스트노드 ${allNodes.length}개, 빈노드 ${allNodes.filter((n) => n.isEmpty).length}개, 규칙기반 필드 ${ruleBasedCount}개`
+  );
 
   // 2. AI 보조 파싱 (필드가 부족하고 AI 사용 가능한 경우)
   if (useAI && fields.length < 3 && allNodes.length > 10) {
+    console.log(
+      `[form-parser] AI 보조 파싱 시작 (규칙기반 ${ruleBasedCount}개 < 3 → AI 보조)`
+    );
     const aiFields = await aiAssistedParse(xmlTexts, fields);
     fields = [...fields, ...aiFields];
+    console.log(
+      `[form-parser] AI 보조 파싱 완료: +${aiFields.length}개 추가 → 총 ${fields.length}개`
+    );
+  }
+
+  // 필드별 상세 로그 (디버그용)
+  if (fields.length > 0) {
+    console.log(
+      `[form-parser] 필드 목록:\n${fields
+        .map(
+          (f, i) =>
+            `  ${i + 1}. [${f.type}] "${f.label}" (${f.sectionFile}, p${f.xpath}${f.isInTable ? ", 테이블" : ""})`
+        )
+        .join("\n")}`
+    );
   }
 
   // 3. 섹션 구조 추출

@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdmin } from "@/lib/admin/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     const supabase = createAdminClient();
 
     // Agent logs summary - last 20 logs

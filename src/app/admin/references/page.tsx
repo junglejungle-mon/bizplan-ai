@@ -269,13 +269,16 @@ function UploadModal({
                 onChange={(e) => setTemplateType(e.target.value)}
                 className="w-full h-10 rounded-lg border border-gray-300 px-3 text-sm"
               >
-                <option value="custom">Custom</option>
+                <option value="custom">Custom (범용)</option>
                 <option value="startup_package">초기창업패키지</option>
                 <option value="growth_package">창업도약패키지</option>
-                <option value="dips">DIPS</option>
+                <option value="dips">DIPS (초격차)</option>
                 <option value="export_voucher">수출바우처</option>
                 <option value="sme_fund">중소기업진흥공단</option>
                 <option value="innovation_growth">혁신성장</option>
+                <option value="small_business">소상공인</option>
+                <option value="policy_fund">정책자금</option>
+                <option value="rnd_project">R&D 과제</option>
               </select>
             </div>
           </div>

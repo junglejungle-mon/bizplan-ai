@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin/auth";
+import { apiError } from "@/lib/api/error";
 
 /**
  * GET /api/admin/references/[id] — 레퍼런스 상세
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const { id } = await params;
   const supabase = createAdminClient();
 
@@ -38,6 +43,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const { id } = await params;
   const supabase = createAdminClient();
   const body = await request.json();
@@ -61,7 +69,7 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error, "레퍼런스 수정 실패", 500);
   }
 
   return NextResponse.json({ document: data });
@@ -71,9 +79,12 @@ export async function PATCH(
  * DELETE /api/admin/references/[id] — 레퍼런스 삭제
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
   const { id } = await params;
   const supabase = createAdminClient();
 
@@ -95,7 +106,7 @@ export async function DELETE(
     .eq("id", id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error, "레퍼런스 삭제 실패", 500);
   }
 
   return NextResponse.json({ success: true });

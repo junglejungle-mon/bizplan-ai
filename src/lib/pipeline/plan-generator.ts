@@ -1,7 +1,9 @@
 /**
- * 사업계획서 자동 생성 파이프라인 — 3단계 공정 v4
+ * 사업계획서 자동 생성 파이프라인 — 3단계 공정 v5
  * Stage 0: 양식 인식 + 자동 분류 + 평가 기준 추출
  * Stage 1: 텍스트 초안 (선정 패턴 + 리서치 + 섹션별 작성)
+ *          ★ v5: 06-CFO 재무팀 에이전트 통합 — 재무 섹션 전문가 품질
+ *          ★ v6: 09-사업개발 + 02-마케팅 + 12-제품개발 에이전트 통합
  * Stage 1.5: 품질 검증 + 차트 데이터 추출
  * Stage 2: DOCX/PDF 내보내기 시 인포그래픽 반영 (export 단에서 처리)
  *
@@ -22,6 +24,29 @@ import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
 import { scoreAndSave } from "@/lib/quality/scorer";
 import { buildDynamicWriterContext } from "@/lib/quality/pattern-loader";
 import {
+  classifyFinanceSection,
+  buildCFOCoreContext,
+  buildCFOEnhancedContext,
+  extractFinancialDataFromContent,
+  CFO_FINANCE_SYSTEM,
+} from "@/lib/agents/finance-agent";
+import {
+  classifyBizDevSection,
+  buildBizDevContext,
+  BIZDEV_SYSTEM,
+} from "@/lib/agents/bizdev-agent";
+import {
+  classifyMarketSection,
+  buildMarketContext,
+  MARKET_INTELLIGENCE_SYSTEM,
+  extractMarketDataFromContent,
+} from "@/lib/agents/market-agent";
+import {
+  classifyTechSection,
+  buildTechContext,
+  TECH_STRATEGY_SYSTEM,
+} from "@/lib/agents/tech-agent";
+import {
   // Stage 0
   TEMPLATE_CLASSIFIER_SYSTEM,
   buildTemplateClassifierPrompt,
@@ -33,18 +58,14 @@ import {
   buildSectionExtractorPrompt,
   EVALUATION_EXTRACTOR_SYSTEM,
   // Stage 1
-  RESEARCH_JUDGE_SYSTEM,
-  buildResearchJudgePrompt,
-  SEARCH_QUERY_SYSTEM,
-  buildSearchQueryPrompt,
+  RESEARCH_JUDGE_WITH_QUERY_SYSTEM,
+  buildResearchJudgeWithQueryPrompt,
   SECTION_WRITER_SYSTEM,
   buildSectionWriterPrompt,
   DEFAULT_SECTIONS,
   // Stage 1.5
-  QUALITY_VALIDATOR_SYSTEM,
-  buildQualityValidatorPrompt,
-  CHART_DATA_EXTRACTOR_SYSTEM,
-  buildChartDataExtractorPrompt,
+  QUALITY_AND_CHART_SYSTEM,
+  buildQualityAndChartPrompt,
   KPI_EXTRACTOR_SYSTEM,
 } from "@/lib/ai/prompts/writing";
 
@@ -99,7 +120,31 @@ export async function* generateBusinessPlan(
         .single();
 
       if (program) {
-        programInfo = `공고명: ${program.title}\n요약: ${program.summary || ""}\n대상: ${program.target || ""}`;
+        // 프로그램 정보 최대한 풍부하게 구성 (매칭 정확도 + 계획서 일치성 핵심)
+        const programParts = [
+          `공고명: ${program.title}`,
+          program.institution ? `주관기관: ${program.institution}` : "",
+          program.summary ? `공고 요약: ${program.summary}` : "",
+          program.target ? `지원대상/자격요건: ${program.target}` : "",
+          (program as any).hashtags?.length ? `분야 키워드: ${(program as any).hashtags.join(", ")}` : "",
+          (program as any).apply_start ? `접수기간: ${(program as any).apply_start} ~ ${(program as any).apply_end || "미정"}` : "",
+        ].filter(Boolean);
+
+        // raw_data에서 추가 정보 추출 (지원금액, 상세 자격요건 등)
+        const rawData = (program as any).raw_data;
+        if (rawData) {
+          if (rawData.support_amount || rawData.지원규모 || rawData.지원금액) {
+            programParts.push(`지원금액/규모: ${rawData.support_amount || rawData.지원규모 || rawData.지원금액}`);
+          }
+          if (rawData.support_detail || rawData.지원내용) {
+            programParts.push(`지원내용: ${(rawData.support_detail || rawData.지원내용 || "").slice(0, 500)}`);
+          }
+          if (rawData.evaluation_criteria || rawData.평가기준) {
+            programParts.push(`평가기준: ${(rawData.evaluation_criteria || rawData.평가기준 || "").slice(0, 500)}`);
+          }
+        }
+
+        programInfo = programParts.join("\n");
         programAttachmentUrls = (program as any).attachment_urls;
       }
     }
@@ -126,7 +171,6 @@ export async function* generateBusinessPlan(
             const ocrText = await ocrProgramPdf(pdfData.base64);
             if (ocrText && ocrText.length > 100) {
               opts.templateOcrText = ocrText;
-              console.log(`[PlanGen] 양식 OCR 완료: ${ocrText.length}자 추출`);
 
               // DB에 캐시 저장
               await supabase
@@ -170,7 +214,6 @@ export async function* generateBusinessPlan(
           previousSections += `\n## ${es.section_name}\n${es.content}\n`;
         }
       }
-      console.log(`[PlanGen] 이어쓰기 모드: ${completedSections.size}/${existingSections!.length} 섹션 완료됨`);
     }
 
     // ========================================
@@ -224,9 +267,6 @@ export async function* generateBusinessPlan(
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
               templateType = parsed.template_type as TemplateType;
-              console.log(
-                `[PlanGen] 양식 분류: ${templateType} (confidence: ${parsed.confidence})`
-              );
             }
           } catch {}
         } catch (e) {
@@ -259,7 +299,7 @@ export async function* generateBusinessPlan(
     } else if (opts.templateOcrText) {
       // OCR된 양식에서 섹션 추출
       const extractResult = await callClaude({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         system: SECTION_EXTRACTOR_SYSTEM,
         messages: [
           {
@@ -307,7 +347,7 @@ export async function* generateBusinessPlan(
       if (programInfo) {
         try {
           const evalResult = await callClaude({
-            model: "claude-sonnet-4-20250514",
+            model: "claude-haiku-4-5-20251001",
             system: EVALUATION_EXTRACTOR_SYSTEM,
             messages: [
               {
@@ -394,6 +434,9 @@ export async function* generateBusinessPlan(
 
     const allChartData: any[] = [];
 
+    // ★ v5: 재무 수치 일관성 추적 — CFO 내부감사 에이전트
+    let accumulatedFinancialData = "";
+
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
       const progress = Math.round(12 + (i / sections.length) * 65);
@@ -427,21 +470,22 @@ export async function* generateBusinessPlan(
       let researchKo = "";
       let researchEn = "";
 
+      // Step A+B 통합: 리서치 판단 + 검색 쿼리 생성 (1회 호출)
       try {
         const judgeResult = await callClaude({
           model: "claude-haiku-4-5-20251001",
-          system: RESEARCH_JUDGE_SYSTEM,
+          system: RESEARCH_JUDGE_WITH_QUERY_SYSTEM,
           messages: [
             {
               role: "user",
-              content: buildResearchJudgePrompt(
+              content: buildResearchJudgeWithQueryPrompt(
                 section.section_name,
                 section.guidelines,
                 company.business_content
               ),
             },
           ],
-          temperature: 0,
+          temperature: 0.1,
         });
 
         try {
@@ -451,66 +495,51 @@ export async function* generateBusinessPlan(
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             needsResearch = parsed.needs_research === 1;
+
+            if (needsResearch) {
+              const searchKo = parsed.ko || "";
+              const searchEn = parsed.en || "";
+
+              // Perplexity 한글/영문 병렬 호출
+              if (process.env.PERPLEXITY_API_KEY && (searchKo || searchEn)) {
+                const perplexityTasks: Promise<string>[] = [];
+                const taskLabels: string[] = [];
+                if (searchKo) {
+                  perplexityTasks.push(callPerplexity(searchKo, "ko"));
+                  taskLabels.push("ko");
+                }
+                if (searchEn) {
+                  perplexityTasks.push(callPerplexity(searchEn, "en"));
+                  taskLabels.push("en");
+                }
+                const results = await Promise.allSettled(perplexityTasks);
+                results.forEach((r, i) => {
+                  if (r.status === "fulfilled") {
+                    if (taskLabels[i] === "ko") researchKo = r.value;
+                    else researchEn = r.value;
+                  }
+                });
+              }
+
+              await supabase
+                .from("plan_sections")
+                .update({
+                  needs_research: true,
+                  research_query_ko: searchKo,
+                  research_query_en: searchEn,
+                  research_result_ko: researchKo,
+                  research_result_en: researchEn,
+                })
+                .eq("plan_id", opts.planId)
+                .eq("section_order", section.section_order);
+            }
           }
         } catch {}
-      } catch {}
-
-      // Step B: 리서치 실행 (Perplexity)
-      if (needsResearch) {
-        try {
-          const queryResult = await callClaude({
-            model: "claude-haiku-4-5-20251001",
-            system: SEARCH_QUERY_SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: buildSearchQueryPrompt(
-                  section.section_name,
-                  section.guidelines,
-                  company.business_content
-                ),
-              },
-            ],
-            temperature: 0.3,
-          });
-
-          let searchKo = "";
-          let searchEn = "";
-          try {
-            const jsonMatch = queryResult.match(/\{[\s\S]*"ko"[\s\S]*\}/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              searchKo = parsed.ko || "";
-              searchEn = parsed.en || "";
-            }
-          } catch {}
-
-          if (process.env.PERPLEXITY_API_KEY && (searchKo || searchEn)) {
-            if (searchKo) {
-              researchKo = await callPerplexity(searchKo, "ko");
-            }
-            if (searchEn) {
-              researchEn = await callPerplexity(searchEn, "en");
-            }
-          }
-
-          await supabase
-            .from("plan_sections")
-            .update({
-              needs_research: true,
-              research_query_ko: searchKo,
-              research_query_en: searchEn,
-              research_result_ko: researchKo,
-              research_result_en: researchEn,
-            })
-            .eq("plan_id", opts.planId)
-            .eq("section_order", section.section_order);
-        } catch (e) {
-          console.error(
-            `[PlanGen] 리서치 실패 [${section.section_name}]:`,
-            e
-          );
-        }
+      } catch (e) {
+        console.error(
+          `[PlanGen] 리서치 판단+쿼리 실패 [${section.section_name}]:`,
+          e
+        );
       }
 
       // Step B-2: RAG 레퍼런스 검색
@@ -525,7 +554,6 @@ export async function* generateBusinessPlan(
         });
         if (ragResults.length > 0) {
           referenceExamples = formatReferenceExamples(ragResults);
-          console.log(`[PlanGen] RAG search: ${ragResults.length}개 레퍼런스 (${section.section_name})`);
         }
       } catch (e) {
         console.warn(`[PlanGen] RAG 검색 실패 (계속 진행):`, e);
@@ -542,12 +570,59 @@ export async function* generateBusinessPlan(
       let sectionContent = "";
 
       // 시스템 프롬프트에 DB 패턴 동적 주입
-      const writerSystem = dynamicWriterContext
+      let writerSystem = dynamicWriterContext
         ? `${SECTION_WRITER_SYSTEM}\n\n${dynamicWriterContext}`
         : SECTION_WRITER_SYSTEM;
 
+      // ★ v5: CFO 재무팀 에이전트 컨텍스트 주입
+      const financeType = classifyFinanceSection(section.section_name);
+      if (financeType === "core") {
+        // 직접적 재무/예산 섹션 → CFO 전문가 시스템 + 상세 지침
+        writerSystem = `${CFO_FINANCE_SYSTEM}\n\n${writerSystem}`;
+        writerSystem += buildCFOCoreContext({
+          sectionName: section.section_name,
+          companyIndustry: company.business_content?.slice(0, 100),
+          previousFinancialData: accumulatedFinancialData || undefined,
+        });
+      } else if (financeType === "enhanced") {
+        // 간접 관련 섹션 → 경량 재무 수치 신뢰성 강화
+        writerSystem += buildCFOEnhancedContext({
+          sectionName: section.section_name,
+          previousFinancialData: accumulatedFinancialData || undefined,
+        });
+      }
+
+      // ★ v6: 사업개발(CBDO) 에이전트 — 설득력/평가위원 관점 강화
+      const bizDevType = classifyBizDevSection(section.section_name);
+      if (bizDevType) {
+        writerSystem += buildBizDevContext({
+          sectionName: section.section_name,
+          previousSections: previousSections || undefined,
+        });
+      }
+
+      // ★ v6: 시장 인텔리전스(CMO+CDO+CGO) — 시장/마케팅/글로벌 강화
+      const marketType = classifyMarketSection(section.section_name);
+      if (marketType) {
+        writerSystem = `${MARKET_INTELLIGENCE_SYSTEM}\n\n${writerSystem}`;
+        writerSystem += buildMarketContext({
+          sectionName: section.section_name,
+          companyIndustry: company.business_content?.slice(0, 100),
+        });
+      }
+
+      // ★ v6: 기술/R&D(CPO+CSO) — 기술/제품/연구개발 섹션 강화
+      const techType = classifyTechSection(section.section_name);
+      if (techType) {
+        writerSystem = `${TECH_STRATEGY_SYSTEM}\n\n${writerSystem}`;
+        writerSystem += buildTechContext({
+          sectionName: section.section_name,
+          companyIndustry: company.business_content?.slice(0, 100),
+        });
+      }
+
       for await (const chunk of streamClaude({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         system: writerSystem,
         messages: [
           {
@@ -555,17 +630,15 @@ export async function* generateBusinessPlan(
             content: buildSectionWriterPrompt({
               sectionName: section.section_name,
               guidelines: section.guidelines,
-              businessContent:
-                company.business_content +
-                (programInfo
-                  ? `\n\n지원사업 정보:\n${programInfo}`
-                  : ""),
+              businessContent: company.business_content,
+              programInfo: programInfo || undefined,
               previousSections,
               evaluationWeight: evalWeight,
               researchKo: researchKo || undefined,
               researchEn: researchEn || undefined,
               templateType,
               referenceExamples,
+              evaluationCriteria: evaluationCriteria.length > 0 ? evaluationCriteria : undefined,
             }),
           },
         ],
@@ -598,21 +671,36 @@ export async function* generateBusinessPlan(
 
       previousSections += `\n## ${section.section_name}\n${sectionContent}\n`;
 
+      // ★ v5: 재무 수치 누적 추출 — 후속 섹션 일관성 유지 (내부감사 에이전트)
+      const newFinancialData = extractFinancialDataFromContent(sectionContent);
+      if (newFinancialData) {
+        accumulatedFinancialData += (accumulatedFinancialData ? "\n" : "") +
+          `[${section.section_name}] ${newFinancialData}`;
+      }
+
+      // ★ v6: 시장 데이터 누적 추출 — 시장 수치 일관성 유지
+      const newMarketData = extractMarketDataFromContent(sectionContent);
+      if (newMarketData) {
+        accumulatedFinancialData += (accumulatedFinancialData ? "\n" : "") +
+          `[${section.section_name}:시장] ${newMarketData}`;
+      }
+
       // ========================================
       // Stage 1.5: 품질 검증 + 차트 데이터 추출 + 자동 채점 (비동기 병렬)
       // ========================================
       // 품질 검증, 차트 추출, 자동 채점을 병렬로 실행
       const sectionId = savedSection?.id;
 
-      const [validationResult, chartResult, scorerResult] = await Promise.allSettled([
-        // 품질 검증
+      // Stage 1.5: 품질검증+차트추출 통합 (1회 AI) + 자동채점 (regex) 병렬
+      const [qualityChartResult, scorerResult] = await Promise.allSettled([
+        // 품질 검증 + 차트 데이터 추출 통합 (1회 호출)
         callClaude({
           model: "claude-haiku-4-5-20251001",
-          system: QUALITY_VALIDATOR_SYSTEM,
+          system: QUALITY_AND_CHART_SYSTEM,
           messages: [
             {
               role: "user",
-              content: buildQualityValidatorPrompt(
+              content: buildQualityAndChartPrompt(
                 section.section_name,
                 sectionContent,
                 templateType
@@ -621,42 +709,28 @@ export async function* generateBusinessPlan(
           ],
           temperature: 0,
         }),
-        // 차트 데이터 추출
-        callClaude({
-          model: "claude-haiku-4-5-20251001",
-          system: CHART_DATA_EXTRACTOR_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: buildChartDataExtractorPrompt(
-                section.section_name,
-                sectionContent
-              ),
-            },
-          ],
-          temperature: 0,
-        }),
-        // 자동 채점 (regex 기반, DB 저장)
+        // 자동 채점 (regex 기반, DB 저장 — AI 호출 없음)
         sectionId
           ? scoreAndSave(opts.planId, sectionId, sectionContent, section.section_name)
           : Promise.resolve(null),
       ]);
 
-      // 품질 점수 파싱 + DB 저장
+      // 통합 결과에서 품질 + 차트 분리 파싱
       let qualityScore: any = null;
-      if (validationResult.status === "fulfilled") {
+      let chartData: any = null;
+      if (qualityChartResult.status === "fulfilled") {
         try {
-          const jsonMatch = validationResult.value.match(
-            /\{[\s\S]*"total"[\s\S]*\}/
+          const jsonMatch = qualityChartResult.value.match(
+            /\{[\s\S]*"quality"[\s\S]*"charts"[\s\S]*\}/
           );
           if (jsonMatch) {
-            qualityScore = JSON.parse(jsonMatch[0]);
+            const parsed = JSON.parse(jsonMatch[0]);
+            qualityScore = parsed.quality || null;
+            chartData = parsed.charts || null;
 
-            // plan_sections에 품질 점수 저장 (content_formatted 에 메타 추가)
             await supabase
               .from("plan_sections")
               .update({
-                // quality_score JSONB 컬럼이 없을 수 있으니 content_formatted에 포함
                 updated_at: new Date().toISOString(),
               })
               .eq("plan_id", opts.planId)
@@ -665,34 +739,112 @@ export async function* generateBusinessPlan(
         } catch {}
       }
 
-      // 자동 채점 결과 로깅
+      // 자동 채점 결과 로깅 + 재작성 루프
       let autoScore: number | null = null;
+      let rewriteAttempted = false;
       if (scorerResult.status === "fulfilled" && scorerResult.value) {
         autoScore = scorerResult.value.total_score;
-        console.log(`[PlanGen] 자동 채점: ${section.section_name} = ${autoScore}점/100`);
+
+        // ★ 40점 미만이면 자동 재작성 1회 시도 (비용 최적화: 60→40)
+        if (autoScore < 40 && sectionId) {
+          rewriteAttempted = true;
+          const suggestions = scorerResult.value.improvement_suggestions || [];
+
+          try {
+            const rewritePrompt = buildSectionWriterPrompt({
+              sectionName: section.section_name,
+              guidelines: section.guidelines,
+              businessContent: company.business_content,
+              programInfo: programInfo || undefined,
+              previousSections,
+              evaluationWeight: evalWeight,
+              researchKo: researchKo || undefined,
+              researchEn: researchEn || undefined,
+              templateType,
+              referenceExamples,
+            });
+
+            const improvementGuide = suggestions.length > 0
+              ? `\n\n## ⚠️ 이전 작성 품질 개선 필요 (${autoScore}점/100)\n다음 사항을 반드시 보완하세요:\n${suggestions.map((s: string, idx: number) => `${idx + 1}. ${s}`).join("\n")}\n\n이전 작성 내용을 참고하되, 위 피드백을 반영하여 더 높은 품질로 다시 작성하세요.\n\n### 이전 작성 내용 (참고용):\n${sectionContent.slice(0, 2000)}...`
+              : "";
+
+            let rewrittenContent = "";
+            for await (const chunk of streamClaude({
+              model: "claude-haiku-4-5-20251001",
+              system: writerSystem,
+              messages: [
+                {
+                  role: "user",
+                  content: rewritePrompt + improvementGuide,
+                },
+              ],
+              temperature: 0.5,
+              maxTokens: 8000,
+            })) {
+              rewrittenContent += chunk;
+              yield {
+                type: "section_chunk",
+                data: {
+                  sectionName: section.section_name,
+                  chunk,
+                  isRewrite: true,
+                },
+              };
+            }
+
+            // 재작성 내용 재채점
+            const rewriteScore = await scoreAndSave(
+              opts.planId,
+              sectionId,
+              rewrittenContent,
+              section.section_name
+            );
+
+            const newScore = rewriteScore.total_score;
+
+            // 더 높은 점수 버전 사용
+            if (newScore > autoScore) {
+              sectionContent = rewrittenContent;
+              autoScore = newScore;
+
+              // DB 업데이트
+              await supabase
+                .from("plan_sections")
+                .update({
+                  content: rewrittenContent,
+                  content_formatted: rewrittenContent,
+                  generation_count: 2,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("plan_id", opts.planId)
+                .eq("section_order", section.section_order);
+
+              // previousSections 업데이트 (마지막 추가된 섹션 교체)
+              const lastSectionIdx = previousSections.lastIndexOf(`\n## ${section.section_name}\n`);
+              if (lastSectionIdx >= 0) {
+                previousSections = previousSections.slice(0, lastSectionIdx) + `\n## ${section.section_name}\n${rewrittenContent}\n`;
+              }
+
+            }
+          } catch (e) {
+            console.error(`[PlanGen] 재작성 실패 [${section.section_name}]:`, e);
+          }
+        }
       } else if (scorerResult.status === "rejected") {
         console.warn(`[PlanGen] 자동 채점 실패 [${section.section_name}]:`, scorerResult.reason);
       }
 
-      // 차트 데이터 파싱
+      // 차트 데이터 (통합 결과에서 이미 파싱됨)
       let sectionCharts: any[] = [];
-      if (chartResult.status === "fulfilled") {
-        try {
-          const jsonMatch = chartResult.value.match(
-            /\{[\s\S]*"charts"[\s\S]*\}/
-          );
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            sectionCharts = parsed.charts || [];
-            allChartData.push(
-              ...sectionCharts.map((c: any) => ({
-                ...c,
-                section_name: section.section_name,
-                section_order: section.section_order,
-              }))
-            );
-          }
-        } catch {}
+      if (chartData && Array.isArray(chartData)) {
+        sectionCharts = chartData;
+        allChartData.push(
+          ...sectionCharts.map((c: any) => ({
+            ...c,
+            section_name: section.section_name,
+            section_order: section.section_order,
+          }))
+        );
       }
 
       yield {
@@ -800,7 +952,6 @@ export async function* generateBusinessPlan(
       const { scorePlan } = await import("@/lib/quality/scorer");
       const scoreResults = await scorePlan(opts.planId);
       const avgTotal = scoreResults.reduce((s, r) => s + r.total_score, 0) / scoreResults.length;
-      console.log(`[PlanGen] 전체 품질 점수: ${Math.round(avgTotal)}점 (${scoreResults.length}개 섹션)`);
     } catch (e) {
       console.warn("[PlanGen] 전체 품질 점수 계산 실패:", e);
     }

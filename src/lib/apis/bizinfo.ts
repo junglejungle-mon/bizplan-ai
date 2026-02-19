@@ -30,7 +30,6 @@ export async function fetchAllBizinfoPrograms(maxPages = 10) {
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchBizinfoPrograms(page, 100);
     allItems.push(...items);
-    console.log(`[Bizinfo] 페이지 ${page}: ${items.length}건 (누적 ${allItems.length}건)`);
     if (items.length < 100) break; // 마지막 페이지
   }
   return allItems;

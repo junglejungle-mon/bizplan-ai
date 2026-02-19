@@ -7,6 +7,7 @@ import {
   buildSectionWriterPrompt,
 } from "@/lib/ai/prompts/writing";
 import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
+import { incrementUsage } from "@/lib/payment/usage";
 
 /**
  * POST /api/plans/[id]/sections/[sId]/regenerate
@@ -22,6 +23,30 @@ export async function POST(
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  // 사용량 체크 (무료: 3회/월, 유료: 플랜별 제한)
+  const usageResult = await incrementUsage(user.id, "section_regenerations");
+  if (!usageResult.allowed) {
+    return Response.json(
+      {
+        error: "이번 달 섹션 재생성 한도를 초과했습니다.",
+        code: "USAGE_LIMIT_EXCEEDED",
+        current: usageResult.current,
+        limit: usageResult.limit,
+        upgradeUrl: "/pricing",
+      },
+      { status: 429 }
+    );
+  }
+
+  // 사용자 프롬프트 (선택적)
+  let userPrompt: string | undefined;
+  try {
+    const body = await request.json();
+    userPrompt = body.userPrompt || undefined;
+  } catch {
+    // body가 없으면 무시 (기존 호환)
   }
 
   // 사업계획서 + 회사 정보 로드
@@ -120,6 +145,7 @@ export async function POST(
                 researchKo: section.research_result_ko || undefined,
                 researchEn: section.research_result_en || undefined,
                 referenceExamples,
+                userPrompt,
               }),
             },
           ],

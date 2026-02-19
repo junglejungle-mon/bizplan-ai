@@ -1,12 +1,39 @@
 /**
- * 사업계획서 PDF 생성 유틸리티 (v2 — 차트 이미지 삽입)
+ * 사업계획서 PDF 생성 유틸리티 (v2 — 차트 이미지 삽입 + 한글 폰트)
  * jsPDF를 사용하여 서버사이드에서 PDF 생성
  */
 
 import jsPDF from "jspdf";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chartsToImages, ChartImageResult } from "@/lib/charts/chart-to-image";
 import { getThemeForTemplate } from "@/lib/charts/themes";
 import type { ChartDataItem } from "@/lib/charts/svg-renderer";
+
+/** 한글 폰트 캐시 (프로세스 수명 동안 재사용) */
+let _fontRegularBase64: string | null = null;
+let _fontBoldBase64: string | null = null;
+
+function loadFontBase64(filename: string): string {
+  const fontPath = join(process.cwd(), "src", "lib", "fonts", filename);
+  const buf = readFileSync(fontPath);
+  return buf.toString("base64");
+}
+
+function registerKoreanFonts(doc: jsPDF): void {
+  if (!_fontRegularBase64) {
+    _fontRegularBase64 = loadFontBase64("NotoSansKR-Regular.ttf");
+  }
+  if (!_fontBoldBase64) {
+    _fontBoldBase64 = loadFontBase64("NotoSansKR-Bold.ttf");
+  }
+
+  doc.addFileToVFS("NotoSansKR-Regular.ttf", _fontRegularBase64);
+  doc.addFont("NotoSansKR-Regular.ttf", "NotoSansKR", "normal");
+
+  doc.addFileToVFS("NotoSansKR-Bold.ttf", _fontBoldBase64);
+  doc.addFont("NotoSansKR-Bold.ttf", "NotoSansKR", "bold");
+}
 
 interface PdfOptions {
   title: string;
@@ -140,13 +167,16 @@ export async function buildPdf(opts: PdfOptions): Promise<ArrayBuffer> {
     format: "a4",
   });
 
+  // 한글 폰트 등록
+  registerKoreanFonts(doc);
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 25;
   const contentWidth = pageWidth - margin * 2;
   let y = margin;
 
-  doc.setFont("Helvetica");
+  doc.setFont("NotoSansKR", "normal");
 
   // ===== 표지 =====
   y = 80;
@@ -224,9 +254,14 @@ export async function buildPdf(opts: PdfOptions): Promise<ArrayBuffer> {
     doc.line(margin, y, pageWidth - margin, y);
     y += 8;
 
-    // 섹션 내용
-    if (section.content) {
-      const cleanContent = stripMarkdown(section.content);
+    // 섹션 차트 이미지 준비
+    const sectionKey = `section_${section.section_order}`;
+    const sectionImages = chartImages[sectionKey] || [];
+    let chartIdx = 0;
+
+    // 텍스트 블록 렌더링 헬퍼
+    const renderTextBlock = (text: string) => {
+      const cleanContent = stripMarkdown(text);
       const lines = cleanContent.split("\n");
 
       doc.setFontSize(10);
@@ -241,12 +276,10 @@ export async function buildPdf(opts: PdfOptions): Promise<ArrayBuffer> {
         const wrappedLines = wrapText(doc, line, contentWidth);
 
         for (const wLine of wrappedLines) {
-          // 페이지 넘김 체크
           if (y + 6 > pageHeight - margin) {
             doc.addPage();
             y = margin;
 
-            // 헤더 표시
             doc.setFontSize(8);
             doc.setTextColor(150, 150, 150);
             doc.text(
@@ -262,25 +295,52 @@ export async function buildPdf(opts: PdfOptions): Promise<ArrayBuffer> {
           doc.text(wLine, margin, y);
           y += 5;
         }
-        y += 1; // 문단 간격
+        y += 1;
+      }
+    };
+
+    // 섹션 내용 + 차트 인터리빙
+    if (section.content) {
+      // ## 소제목 기준으로 블록 분할
+      const blocks = section.content.split(/(?=^## )/m);
+      // 차트를 블록 수에 맞게 분배 (각 블록 뒤에 균등 배분)
+      const chartsPerBlock = sectionImages.length > 0 && blocks.length > 0
+        ? Math.max(1, Math.ceil(sectionImages.length / blocks.length))
+        : 0;
+
+      for (let bi = 0; bi < blocks.length; bi++) {
+        const block = blocks[bi];
+        if (block.trim()) {
+          renderTextBlock(block);
+        }
+
+        // 이 블록 뒤에 차트 삽입 (균등 분배)
+        const chartsForThisBlock = Math.min(chartsPerBlock, sectionImages.length - chartIdx);
+        for (let ci = 0; ci < chartsForThisBlock; ci++) {
+          if (chartIdx < sectionImages.length) {
+            y += 5;
+            y = addChartImageToPdf(
+              doc, sectionImages[chartIdx], y, margin, pageWidth, pageHeight,
+              contentWidth, companyName, title, primaryRgb
+            );
+            chartIdx++;
+          }
+        }
+      }
+
+      // 남은 차트가 있으면 섹션 끝에 삽입
+      while (chartIdx < sectionImages.length) {
+        y += 5;
+        y = addChartImageToPdf(
+          doc, sectionImages[chartIdx], y, margin, pageWidth, pageHeight,
+          contentWidth, companyName, title, primaryRgb
+        );
+        chartIdx++;
       }
     } else {
       doc.setFontSize(10);
       doc.setTextColor(150, 150, 150);
       doc.text("(Not yet written)", margin, y);
-    }
-
-    // 섹션 차트 이미지 삽입
-    const sectionKey = `section_${section.section_order}`;
-    const sectionImages = chartImages[sectionKey];
-    if (sectionImages && sectionImages.length > 0) {
-      y += 5;
-      for (const img of sectionImages) {
-        y = addChartImageToPdf(
-          doc, img, y, margin, pageWidth, pageHeight,
-          contentWidth, companyName, title, primaryRgb
-        );
-      }
     }
   }
 

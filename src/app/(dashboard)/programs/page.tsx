@@ -2,7 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ProgramList } from "@/components/programs/program-list";
 
-export default async function ProgramsPage() {
+export default async function ProgramsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
+  const sp = await searchParams;
+  const previewMode = sp.preview === "1";
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -11,6 +18,7 @@ export default async function ProgramsPage() {
     .from("companies")
     .select("id")
     .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
     .limit(1);
 
   const company = companies?.[0];
@@ -47,12 +55,28 @@ export default async function ProgramsPage() {
     (p: any) => !matchedPrograms.find((mp: any) => mp.id === p.id)
   );
 
-  const allPrograms = [...matchedPrograms, ...unmatchedPrograms];
+  // 소스 간 중복 제거 (제목+기관 기준, 매칭된 프로그램 우선)
+  const seenTitles = new Set<string>();
+  const dedupedMatched = matchedPrograms.filter((p: any) => {
+    const key = `${(p.title || "").trim().toLowerCase()}::${(p.institution || "").trim().toLowerCase()}`;
+    if (seenTitles.has(key)) return false;
+    seenTitles.add(key);
+    return true;
+  });
+  const dedupedUnmatched = unmatchedPrograms.filter((p: any) => {
+    const key = `${(p.title || "").trim().toLowerCase()}::${(p.institution || "").trim().toLowerCase()}`;
+    if (seenTitles.has(key)) return false;
+    seenTitles.add(key);
+    return true;
+  });
+
+  const allPrograms = [...dedupedMatched, ...dedupedUnmatched];
 
   return (
     <ProgramList
-      matchedPrograms={matchedPrograms}
+      matchedPrograms={previewMode ? [] : dedupedMatched}
       allPrograms={allPrograms}
+      companyId={company.id}
     />
   );
 }
