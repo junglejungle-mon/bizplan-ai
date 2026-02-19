@@ -33,9 +33,8 @@ interface User {
 
 const PLAN_BADGE: Record<string, { label: string; variant: "success" | "default" | "secondary" | "warning" }> = {
   free: { label: "무료", variant: "secondary" },
-  starter: { label: "스타터", variant: "default" },
   pro: { label: "프로", variant: "success" },
-  enterprise: { label: "엔터프라이즈", variant: "warning" },
+  allfree: { label: "올프리", variant: "warning" },
 };
 
 export default function AdminUsersPage() {

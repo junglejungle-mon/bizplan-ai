@@ -69,7 +69,7 @@ interface Meeting {
 interface KpiData {
   users: { total: number; new_this_week: number };
   plans: { total: number; this_week: number };
-  subscriptions: { active: number; pro: number; enterprise: number };
+  subscriptions: { active: number; pro: number; allfree: number };
   ai: { weekly_cost: number; weekly_tokens: number; cost_per_plan: number };
   programs: { total: number };
   meetings: { recent_count: number; missions: { total: number; pending: number; approved: number; completed: number } };

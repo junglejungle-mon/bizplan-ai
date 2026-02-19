@@ -41,9 +41,8 @@ const VIEW_LABELS: Record<ViewMode, string> = {
 
 const PLAN_COLORS: Record<string, string> = {
   "무료": "bg-gray-100 text-gray-700",
-  "스타터": "bg-blue-100 text-blue-700",
   "프로": "bg-purple-100 text-purple-700",
-  "엔터프라이즈": "bg-amber-100 text-amber-700",
+  "올프리": "bg-amber-100 text-amber-700",
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
@@ -106,7 +105,7 @@ export default function AdminSegmentsPage() {
   }[viewMode];
 
   const segmentLabels: Record<ViewMode, Record<string, string>> = {
-    plan: { free: "무료", starter: "스타터", pro: "프로", enterprise: "엔터프라이즈" },
+    plan: { free: "무료", pro: "프로", allfree: "올프리" },
     activity: { active: "활발", moderate: "보통", inactive: "비활성" },
     join: { recent7d: "최근 7일", recent30d: "최근 30일", older90d: "30~90일", veteran: "90일+" },
     profile: { high: "높음 (70%+)", medium: "보통 (30~70%)", low: "낮음 (<30%)" },
@@ -259,7 +258,7 @@ export default function AdminSegmentsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard title="유료 전환율" value={
           summary.totalUsers > 0
-            ? `${(((summary.planDistribution["스타터"] || 0) + (summary.planDistribution["프로"] || 0) + (summary.planDistribution["엔터프라이즈"] || 0)) / summary.totalUsers * 100).toFixed(1)}%`
+            ? `${(((summary.planDistribution["프로"] || 0) + (summary.planDistribution["올프리"] || 0)) / summary.totalUsers * 100).toFixed(1)}%`
             : "0%"
         } />
         <SummaryCard title="활발 사용자 비율" value={

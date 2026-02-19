@@ -6,7 +6,7 @@ export interface ServiceMetrics {
   snapshot_date: string;
   users: { total: number; new_this_week: number; dau_avg: number; retention_7d: number };
   plans: { total: number; this_week: number; avg_quality_score: number; completion_rate: number };
-  subscriptions: { active: number; pro: number; enterprise: number; trial: number; churn_rate: number; mrr: number };
+  subscriptions: { active: number; pro: number; allfree: number; trial: number; churn_rate: number; mrr: number };
   payments: { total_revenue: number; this_week_revenue: number; avg_arpu: number; refund_rate: number };
   ai: { weekly_tokens: number; weekly_cost: number; cost_per_plan: number; avg_generation_time_ms: number };
   programs: { total_active: number; new_this_week: number; total_matchings: number; avg_match_score: number };

@@ -113,9 +113,8 @@ export async function GET(request: Request) {
       // 플랜별
       byPlan: {
         free: segmentedUsers.filter((u) => u.plan === "무료"),
-        starter: segmentedUsers.filter((u) => u.plan === "스타터"),
         pro: segmentedUsers.filter((u) => u.plan === "프로"),
-        enterprise: segmentedUsers.filter((u) => u.plan === "엔터프라이즈"),
+        allfree: segmentedUsers.filter((u) => u.plan === "올프리"),
       },
       // 활동별
       byActivity: {
@@ -149,9 +148,8 @@ export async function GET(request: Request) {
       totalUsers: segmentedUsers.length,
       planDistribution: {
         "무료": segments.byPlan.free.length,
-        "스타터": segments.byPlan.starter.length,
         "프로": segments.byPlan.pro.length,
-        "엔터프라이즈": segments.byPlan.enterprise.length,
+        "올프리": segments.byPlan.allfree.length,
       },
       activityDistribution: {
         "활발": segments.byActivity.active.length,

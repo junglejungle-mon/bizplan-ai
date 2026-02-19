@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
     const activeSubs = subscriptions?.length || 0;
     const proSubs = subscriptions?.filter((s) => s.plan_type === 'pro').length || 0;
-    const enterpriseSubs = subscriptions?.filter((s) => s.plan_type === 'enterprise').length || 0;
+    const allfreeSubs = subscriptions?.filter((s) => s.plan_type === 'allfree').length || 0;
 
     // AI 비용 (최근 7일)
     const { data: aiLogs } = await supabase
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
         subscriptions: {
           active: activeSubs,
           pro: proSubs,
-          enterprise: enterpriseSubs,
+          allfree: allfreeSubs,
         },
         ai: {
           weekly_cost: Math.round(weeklyAiCost * 100) / 100,

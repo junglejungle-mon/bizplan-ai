@@ -50,8 +50,8 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[...Array(4)].map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[...Array(3)].map((_, i) => (
           <Card key={i} className="animate-pulse">
             <CardHeader>
               <div className="h-6 bg-gray-200 rounded w-1/2" />
@@ -74,11 +74,10 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
   const displayPlans = plans.length > 0 ? plans : getDefaultPlans();
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {displayPlans.map((plan) => {
         const isCurrent = currentPlanName === plan.name;
-        const isPopular = plan.name === "starter";
-        const isEnterprise = plan.name === "enterprise";
+        const isPopular = plan.name === "pro";
 
         return (
           <Card
@@ -108,10 +107,6 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
                 {plan.price === 0 ? (
                   <div className="text-3xl font-bold text-gray-900">
                     무료
-                  </div>
-                ) : isEnterprise ? (
-                  <div className="text-3xl font-bold text-gray-900">
-                    문의
                   </div>
                 ) : (
                   <div>
@@ -155,13 +150,6 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
                 >
                   현재 플랜
                 </button>
-              ) : isEnterprise ? (
-                <a
-                  href="mailto:dktkghdeh@jmnc.co.kr"
-                  className="w-full py-2.5 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium text-center hover:bg-gray-50 transition-colors"
-                >
-                  문의하기
-                </a>
               ) : plan.price === 0 ? (
                 <button
                   disabled
@@ -191,49 +179,37 @@ function getDefaultPlans(): Plan[] {
       id: "free",
       name: "free",
       display_name: "무료",
-      description: "기본 기능",
+      description: "서비스 체험",
       price: 0,
       currency: "KRW",
       interval: "month",
-      features: ["사업계획서 1건/월", "기본 매칭"],
+      features: ["사업계획서 1건/월", "기본 AI 매칭", "섹션 재생성 3회"],
       limits: { plan_generations: 1, section_regenerations: 3, ir_generations: 0, exports: 1 },
       sort_order: 0,
-    },
-    {
-      id: "starter",
-      name: "starter",
-      display_name: "스타터",
-      description: "성장하는 사업자용",
-      price: 29000,
-      currency: "KRW",
-      interval: "month",
-      features: ["사업계획서 5건/월", "IR 2건/월", "AI 비서"],
-      limits: { plan_generations: 5, section_regenerations: 20, ir_generations: 2, exports: 10 },
-      sort_order: 1,
     },
     {
       id: "pro",
       name: "pro",
       display_name: "프로",
-      description: "전문가 올인원",
-      price: 79000,
+      description: "사업자 필수 플랜",
+      price: 99000,
       currency: "KRW",
       interval: "month",
-      features: ["무제한 사업계획서", "무제한 IR", "우선처리"],
-      limits: { plan_generations: -1, section_regenerations: -1, ir_generations: -1, exports: -1 },
-      sort_order: 2,
+      features: ["사업계획서 10건/월", "IR PPT 5건/월", "섹션 재생성 50회", "리서치 강화", "우선 처리"],
+      limits: { plan_generations: 10, section_regenerations: 50, ir_generations: 5, exports: 20 },
+      sort_order: 1,
     },
     {
-      id: "enterprise",
-      name: "enterprise",
-      display_name: "엔터프라이즈",
-      description: "맞춤 플랜",
-      price: 0,
+      id: "allfree",
+      name: "allfree",
+      display_name: "올프리",
+      description: "무제한 사용",
+      price: 299000,
       currency: "KRW",
       interval: "month",
-      features: ["전용 API", "맞춤 교육", "SLA 보장"],
+      features: ["무제한 사업계획서", "무제한 IR PPT", "무제한 재생성", "리서치 강화", "전담 지원"],
       limits: { plan_generations: -1, section_regenerations: -1, ir_generations: -1, exports: -1 },
-      sort_order: 3,
+      sort_order: 2,
     },
   ];
 }
