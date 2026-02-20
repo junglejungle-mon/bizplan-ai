@@ -59,11 +59,13 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function formatNumber(n: number): string {
-  if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억`;
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}만`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toLocaleString();
+function formatNumber(n: number | unknown): string {
+  const num = typeof n === "number" ? n : Number(n);
+  if (isNaN(num)) return String(n ?? "");
+  if (num >= 100000000) return `${(num / 100000000).toFixed(1)}억`;
+  if (num >= 10000) return `${(num / 10000).toFixed(1)}만`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num.toLocaleString();
 }
 
 function truncateText(text: string | unknown, maxLen: number): string {
@@ -346,11 +348,11 @@ function renderPie(chart: ChartDataItem, opts: SvgRenderOptions): string {
   let values: number[];
 
   if (data.items && data.items.length > 0) {
-    labels = data.items.map((i) => i.label || i.name || "");
-    values = data.items.map((i) => i.value);
+    labels = data.items.map((i) => String(i.label || i.name || ""));
+    values = data.items.map((i) => typeof i.value === "number" ? i.value : Number(i.value) || 0);
   } else if (data.labels && data.values) {
-    labels = data.labels;
-    values = data.values;
+    labels = data.labels.map((l) => typeof l === "string" ? l : String(l ?? ""));
+    values = data.values.map((v) => typeof v === "number" ? v : Number(v) || 0);
   } else {
     return renderFallback(chart, opts);
   }
