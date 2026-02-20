@@ -113,12 +113,42 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
             required
           />
 
-          <div className="rounded-lg bg-blue-50 p-4 space-y-2">
-            <p className="text-xs font-medium text-blue-800">AI 인터뷰 안내</p>
-            <ul className="text-xs text-blue-700 space-y-1">
-              <li>• 5라운드, 약 15~20개 질문 (10분 소요)</li>
-              <li>• 시장 트렌드 기반 전략 컨설팅 + 데이터 수집</li>
-              <li>• 인터뷰 완료 후 AI가 사업계획서를 자동 작성합니다</li>
+          {/* Quick Win 가치 전달 */}
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-lg bg-blue-50 p-3">
+              <div className="text-2xl mb-1">📝</div>
+              <div className="text-xs font-medium text-gray-900">사업계획서</div>
+              <div className="text-[10px] text-gray-500">AI 자동 작성</div>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3">
+              <div className="text-2xl mb-1">🎯</div>
+              <div className="text-xs font-medium text-gray-900">지원사업 매칭</div>
+              <div className="text-[10px] text-gray-500">적합도 자동 분석</div>
+            </div>
+            <div className="rounded-lg bg-purple-50 p-3">
+              <div className="text-2xl mb-1">📊</div>
+              <div className="text-xs font-medium text-gray-900">IR PPT</div>
+              <div className="text-[10px] text-gray-500">투자자 발표자료</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-800 flex items-center gap-1.5">
+              ⏱️ 10분 인터뷰 → 전문 사업계획서 완성
+            </p>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                AI 전략 컨설턴트와 5라운드 인터뷰
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                시장 분석 + 경쟁사 데이터 자동 수집
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                정부지원사업 맞춤 사업계획서 생성
+              </li>
             </ul>
           </div>
 

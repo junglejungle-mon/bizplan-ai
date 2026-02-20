@@ -9,7 +9,7 @@ import { InterviewChat } from "@/components/onboarding/interview-chat";
 import { AnalyzingStep } from "@/components/onboarding/analyzing-step";
 import { CompleteStep } from "@/components/onboarding/complete-step";
 import { TermsStep } from "@/components/onboarding/terms-step";
-import { trackOnboardingStart, trackOnboardingRound, trackOnboardingComplete } from "@/lib/analytics";
+import { trackOnboardingStart, trackOnboardingRound, trackOnboardingComplete, trackOnboardingDrop } from "@/lib/analytics";
 
 interface ChatMessage {
   role: "assistant" | "user" | "system";
@@ -67,6 +67,18 @@ function OnboardingPage() {
     checkExistingProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 이탈 방지: 인터뷰 진행 중 탭/창 이탈 시 GA4 이벤트 + 경고
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (step === "interview" && currentRound < 5) {
+        trackOnboardingDrop(currentRound, 5);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [step, currentRound]);
 
   const checkExistingProgress = async () => {
     const supabase = createClient();
