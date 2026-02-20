@@ -41,9 +41,11 @@ export async function sendKakaoNotification(
     return { sent: false, reason: "카카오 알림이 비활성화되어 있습니다" };
   }
 
-  // 유형별 on/off 확인
-  const typeEnabled =
-    params.type === "matching"
+  // 유형별 on/off 확인 (리타게팅은 알림 설정 무관하게 발송 가능)
+  const isRetarget = params.type.startsWith("retarget_");
+  const typeEnabled = isRetarget
+    ? true
+    : params.type === "matching"
       ? settings.notify_matching
       : params.type === "deadline"
         ? settings.notify_deadline
@@ -116,21 +118,30 @@ export async function sendBulkKakaoNotification(params: {
     return { total: 0, sent: 0, skipped: 0 };
   }
 
-  // 1. 알림 설정이 켜진 유저 필터
-  const typeColumn =
-    params.type === "matching"
-      ? "notify_matching"
-      : params.type === "deadline"
-        ? "notify_deadline"
-        : "notify_plan_complete";
+  // 1. 알림 설정이 켜진 유저 필터 (리타게팅은 전체 대상)
+  const isRetarget = params.type.startsWith("retarget_");
+  let enabledSettings: Array<{ user_id: string }> | null;
 
-  const { data: enabledSettings } = await supabase
-    .from("notification_settings")
-    .select("user_id")
-    .eq("channel", "kakao")
-    .eq("enabled", true)
-    .eq(typeColumn, true)
-    .in("user_id", userIds);
+  if (isRetarget) {
+    // 리타게팅은 카카오 알림 설정에 관계없이 전화번호 있으면 발송
+    enabledSettings = userIds.map(id => ({ user_id: id }));
+  } else {
+    const typeColumn =
+      params.type === "matching"
+        ? "notify_matching"
+        : params.type === "deadline"
+          ? "notify_deadline"
+          : "notify_plan_complete";
+
+    const { data } = await supabase
+      .from("notification_settings")
+      .select("user_id")
+      .eq("channel", "kakao")
+      .eq("enabled", true)
+      .eq(typeColumn, true)
+      .in("user_id", userIds);
+    enabledSettings = data;
+  }
 
   const enabledUserIds = new Set(
     (enabledSettings ?? []).map((s: { user_id: string }) => s.user_id)

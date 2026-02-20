@@ -25,12 +25,21 @@ function getClient(): SolapiMessageService {
   return client;
 }
 
-export type NotificationType = "matching" | "deadline" | "plan_complete";
+export type NotificationType =
+  | "matching"
+  | "deadline"
+  | "plan_complete"
+  | "retarget_inactive"
+  | "retarget_no_plan"
+  | "retarget_incomplete_interview";
 
 const TEMPLATE_IDS: Record<NotificationType, string | undefined> = {
   matching: process.env.SOLAPI_TPL_MATCHING,
   deadline: process.env.SOLAPI_TPL_DEADLINE,
   plan_complete: process.env.SOLAPI_TPL_PLAN_COMPLETE,
+  retarget_inactive: process.env.SOLAPI_TPL_RETARGET_INACTIVE,
+  retarget_no_plan: process.env.SOLAPI_TPL_RETARGET_NO_PLAN,
+  retarget_incomplete_interview: process.env.SOLAPI_TPL_RETARGET_INTERVIEW,
 };
 
 interface SendKakaoAlimtalkParams {
