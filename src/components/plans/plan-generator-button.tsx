@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Sparkles, CheckCircle2 } from "lucide-react";
 import { trackPlanGenerateStart, trackPlanGenerateComplete } from "@/lib/analytics";
+import { UpgradeModal } from "@/components/payment/UpgradeModal";
 
 interface PlanGeneratorButtonProps {
   planId: string;
@@ -33,6 +34,8 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
   const [currentSection, setCurrentSection] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [usageInfo, setUsageInfo] = useState({ current: 0, limit: 0 });
   const router = useRouter();
 
   const handleGenerate = async () => {
@@ -49,6 +52,17 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
         body: JSON.stringify({}),
       });
 
+      if (response.status === 429) {
+        // 무료 한도 초과 → 업그레이드 모달
+        const limitData = await response.json().catch(() => ({}));
+        setUsageInfo({
+          current: limitData.current || 1,
+          limit: limitData.limit || 1,
+        });
+        setShowUpgrade(true);
+        setGenerating(false);
+        return;
+      }
       if (!response.ok) throw new Error("생성 API 호출 실패");
 
       const reader = response.body?.getReader();
@@ -162,8 +176,17 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
   }
 
   return (
-    <Button className="gap-2" onClick={handleGenerate} size={label ? "sm" : "default"}>
-      <Sparkles className="h-4 w-4" /> {label || "AI 자동 생성 시작"}
-    </Button>
+    <>
+      <Button className="gap-2" onClick={handleGenerate} size={label ? "sm" : "default"}>
+        <Sparkles className="h-4 w-4" /> {label || "AI 자동 생성 시작"}
+      </Button>
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        featureName="사업계획서 생성"
+        current={usageInfo.current}
+        limit={usageInfo.limit}
+      />
+    </>
   );
 }

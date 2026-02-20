@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2, FileText, FileType, FileCheck } from "lucide-react";
 import { trackPlanDownload } from "@/lib/analytics";
+import { UpgradeModal } from "@/components/payment/UpgradeModal";
 
 interface ExportButtonProps {
   planId: string;
@@ -14,6 +15,8 @@ interface ExportButtonProps {
 export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
   const [exporting, setExporting] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [usageInfo, setUsageInfo] = useState({ current: 0, limit: 0 });
 
   const handleExport = async (
     format: "md" | "docx" | "pdf" | "hwpx",
@@ -30,6 +33,16 @@ export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
         body: JSON.stringify({ format, ...(mode && { mode }) }),
       });
 
+      if (response.status === 429) {
+        const limitData = await response.json().catch(() => ({}));
+        setUsageInfo({
+          current: limitData.current || 1,
+          limit: limitData.limit || 1,
+        });
+        setShowUpgrade(true);
+        setExporting(false);
+        return;
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "내보내기 실패");
@@ -67,70 +80,79 @@ export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
   };
 
   return (
-    <div className="relative">
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={() => setShowMenu(!showMenu)}
-        disabled={exporting}
-      >
-        {exporting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Download className="h-4 w-4" />
-        )}
-        내보내기
-      </Button>
+    <>
+      <div className="relative">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => setShowMenu(!showMenu)}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          내보내기
+        </Button>
 
-      {showMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setShowMenu(false)}
-          />
-          <div className="absolute right-0 top-full mt-1 z-20 w-52 rounded-lg border bg-white shadow-lg py-1">
-            <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
-              onClick={() => handleExport("md")}
-            >
-              <FileText className="h-4 w-4 text-gray-500" />
-              마크다운 (.md)
-            </button>
-            <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
-              onClick={() => handleExport("docx")}
-            >
-              <FileType className="h-4 w-4 text-blue-500" />
-              DOCX (.docx)
-            </button>
-            <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
-              onClick={() => handleExport("pdf")}
-            >
-              <FileType className="h-4 w-4 text-red-500" />
-              PDF (.pdf)
-            </button>
-            <div className="border-t my-1" />
-            <button
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
-              onClick={() => handleExport("hwpx")}
-            >
-              <FileType className="h-4 w-4 text-teal-600" />
-              HWP (.hwpx)
-            </button>
-            {hasProgramForm && (
+        {showMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setShowMenu(false)}
+            />
+            <div className="absolute right-0 top-full mt-1 z-20 w-52 rounded-lg border bg-white shadow-lg py-1">
               <button
-                className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-green-50 text-green-700"
-                onClick={() => handleExport("hwpx", "form")}
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+                onClick={() => handleExport("md")}
               >
-                <FileCheck className="h-4 w-4 text-green-600" />
-                양식 채우기 (.hwpx)
+                <FileText className="h-4 w-4 text-gray-500" />
+                마크다운 (.md)
               </button>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+              <button
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+                onClick={() => handleExport("docx")}
+              >
+                <FileType className="h-4 w-4 text-blue-500" />
+                DOCX (.docx)
+              </button>
+              <button
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+                onClick={() => handleExport("pdf")}
+              >
+                <FileType className="h-4 w-4 text-red-500" />
+                PDF (.pdf)
+              </button>
+              <div className="border-t my-1" />
+              <button
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+                onClick={() => handleExport("hwpx")}
+              >
+                <FileType className="h-4 w-4 text-teal-600" />
+                HWP (.hwpx)
+              </button>
+              {hasProgramForm && (
+                <button
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-green-50 text-green-700"
+                  onClick={() => handleExport("hwpx", "form")}
+                >
+                  <FileCheck className="h-4 w-4 text-green-600" />
+                  양식 채우기 (.hwpx)
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        featureName="다운로드"
+        current={usageInfo.current}
+        limit={usageInfo.limit}
+      />
+    </>
   );
 }

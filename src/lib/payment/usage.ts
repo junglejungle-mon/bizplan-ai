@@ -139,6 +139,10 @@ export async function incrementUsage(
 
   // -1 = 무제한
   if (limitValue !== -1 && currentValue >= limitValue) {
+    // 유료전환 트리거: 한도 초과 시 카카오 알림톡 발송 (비동기, 실패 무시)
+    triggerUpgradeNotification(userId, type, currentValue, limitValue).catch(
+      () => {} // 알림 실패해도 메인 플로우 차단하지 않음
+    );
     return { allowed: false, current: currentValue, limit: limitValue };
   }
 
@@ -195,4 +199,81 @@ export async function checkUsageLimit(
     limit: limitValue,
     remaining,
   };
+}
+
+// ── 유료전환 트리거 ──
+
+const USAGE_TYPE_LABELS: Record<UsageType, string> = {
+  plan_generations: "사업계획서 생성",
+  section_regenerations: "섹션 재생성",
+  ir_generations: "IR PPT 생성",
+  exports: "다운로드",
+};
+
+/**
+ * 무료 플랜 한도 초과 시 카카오 알림톡으로 업그레이드 넛지
+ * - 24시간 내 동일 유형 중복 발송 방지
+ */
+async function triggerUpgradeNotification(
+  userId: string,
+  type: UsageType,
+  current: number,
+  limit: number
+): Promise<void> {
+  const supabase = createAdminClient();
+
+  // 24시간 내 동일 유형 발송 이력 확인 (중복 방지)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentLog } = await supabase
+    .from("notification_logs")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("notification_type", "upgrade_nudge")
+    .gte("created_at", oneDayAgo)
+    .limit(1);
+
+  if (recentLog && recentLog.length > 0) return;
+
+  // 인앱 알림 생성
+  await supabase.from("notifications").insert({
+    user_id: userId,
+    type: "subscription",
+    title: `${USAGE_TYPE_LABELS[type]} 한도 도달`,
+    message: `이번 달 무료 한도(${limit}건)를 모두 사용했습니다. Pro 플랜으로 업그레이드하면 더 많이 사용할 수 있어요.`,
+    link: "/pricing",
+    is_read: false,
+  });
+
+  // 카카오 알림톡 발송 시도
+  try {
+    const { sendKakaoNotification } = await import(
+      "@/lib/notification/notification-service"
+    );
+    await sendKakaoNotification({
+      userId,
+      type: "deadline", // deadline 템플릿 재활용 (업그레이드 넛지)
+      variables: {
+        "#{공고명}": `${USAGE_TYPE_LABELS[type]} 한도 도달`,
+        "#{남은일수}": "0",
+      },
+    });
+  } catch {
+    // Solapi 미설정 시 인앱 알림만으로 충분
+  }
+
+  // 발송 로그 기록
+  await supabase.from("notification_logs").insert({
+    user_id: userId,
+    channel: "in_app",
+    notification_type: "upgrade_nudge",
+    template_id: null,
+    recipient: userId,
+    variables: {
+      usage_type: type,
+      current: String(current),
+      limit: String(limit),
+    },
+    status: "sent",
+    sent_at: new Date().toISOString(),
+  });
 }
