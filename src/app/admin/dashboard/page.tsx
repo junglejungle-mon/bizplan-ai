@@ -30,6 +30,11 @@ interface Stats {
   recentPlans: Array<{ id: string; title: string; status: string; created_at: string }>;
   recentUsers: Array<{ id: string; full_name: string; email: string; created_at: string }>;
   recentPayments: RecentPayment[];
+  // 핵심 지표 (W08 KPI)
+  dau: number;
+  wau: number;
+  retention7d: number;
+  interviewCompletionRate: number;
 }
 
 const STATUS_LABEL: Record<string, { text: string; variant: "success" | "warning" | "destructive" | "secondary" }> = {
@@ -101,6 +106,42 @@ export default function AdminDashboardPage() {
     { label: "레퍼런스", value: stats.references, sub: `${stats.chunks} 청크`, color: "bg-pink-500" },
   ];
 
+  // W08 핵심 KPI 지표 (목표: DAU 5, 리텐션 20%, 인터뷰완료 60%)
+  const coreKpis = [
+    {
+      label: "DAU",
+      value: stats.dau,
+      target: 5,
+      sub: "일일 활성 사용자",
+      color: stats.dau >= 5 ? "bg-green-500" : "bg-red-500",
+      targetLabel: "목표 5",
+    },
+    {
+      label: "WAU",
+      value: stats.wau,
+      target: null,
+      sub: "주간 활성 사용자",
+      color: "bg-blue-500",
+      targetLabel: null,
+    },
+    {
+      label: "7일 리텐션",
+      value: `${stats.retention7d}%`,
+      target: 20,
+      sub: "가입 후 재방문율",
+      color: stats.retention7d >= 20 ? "bg-green-500" : "bg-red-500",
+      targetLabel: "목표 20%",
+    },
+    {
+      label: "인터뷰 완료율",
+      value: `${stats.interviewCompletionRate}%`,
+      target: 60,
+      sub: "5라운드 완주",
+      color: stats.interviewCompletionRate >= 60 ? "bg-green-500" : "bg-red-500",
+      targetLabel: "목표 60%",
+    },
+  ];
+
   const revenueKpis = [
     { label: "활성 구독", value: stats.activeSubscriptions, sub: "유료 사용자", color: "bg-indigo-500" },
     { label: "이번달 매출", value: `${(stats.monthlyRevenue || 0).toLocaleString()}원`, sub: new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long" }), color: "bg-emerald-500" },
@@ -110,6 +151,33 @@ export default function AdminDashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">대시보드</h1>
+
+      {/* 핵심 KPI (W08 목표) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {coreKpis.map((kpi) => (
+          <div key={kpi.label} className="bg-white rounded-xl border border-gray-200 p-5 relative overflow-hidden">
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${kpi.color}`} />
+              <span className="text-xs text-gray-500 font-medium">{kpi.label}</span>
+              {kpi.targetLabel && (
+                <span className="text-[10px] text-gray-400 ml-auto">{kpi.targetLabel}</span>
+              )}
+            </div>
+            <div className="text-2xl font-bold text-gray-900">{kpi.value}</div>
+            <div className="text-xs text-gray-400 mt-1">{kpi.sub}</div>
+            {kpi.target != null && (
+              <div className="mt-2">
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${kpi.color}`}
+                    style={{ width: `${Math.min(100, (typeof kpi.value === 'number' ? kpi.value : parseFloat(String(kpi.value))) / kpi.target * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* 서비스 KPI 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">

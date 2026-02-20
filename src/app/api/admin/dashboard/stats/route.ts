@@ -104,6 +104,82 @@ export async function GET(request: Request) {
         .select('id', { count: 'exact', head: true })
         .gte('apply_end', new Date().toISOString().split('T')[0]);
 
+      // ============================================================
+      // 핵심 지표: DAU / WAU / 리텐션 / 인터뷰 완료율
+      // ============================================================
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      let dau = 0;
+      let wau = 0;
+      let retention7d = 0;
+      let interviewCompletionRate = 0;
+
+      try {
+        // auth.users에서 last_sign_in_at 기반 DAU/WAU/리텐션 계산 (admin client)
+        const { data: authDau } = await supabase.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+        if (authDau?.users) {
+          dau = authDau.users.filter(u =>
+            u.last_sign_in_at && new Date(u.last_sign_in_at) >= new Date(oneDayAgo)
+          ).length;
+          wau = authDau.users.filter(u =>
+            u.last_sign_in_at && new Date(u.last_sign_in_at) >= new Date(sevenDaysAgo)
+          ).length;
+
+          // 7일 리텐션: 7일 전~14일 전 가입자 중 최근 7일 이내 로그인한 비율
+          const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+          const cohort = authDau.users.filter(u =>
+            u.created_at &&
+            new Date(u.created_at) >= new Date(fourteenDaysAgo) &&
+            new Date(u.created_at) < new Date(sevenDaysAgo)
+          );
+          if (cohort.length > 0) {
+            const retained = cohort.filter(u =>
+              u.last_sign_in_at && new Date(u.last_sign_in_at) >= new Date(sevenDaysAgo)
+            ).length;
+            retention7d = Math.round((retained / cohort.length) * 100);
+          }
+        }
+      } catch {
+        // auth.admin이 없을 수 있음 — agent_logs fallback
+        const { data: logUsers24h } = await supabase
+          .from('agent_logs')
+          .select('user_id')
+          .gte('created_at', oneDayAgo);
+        dau = new Set(logUsers24h?.map(l => l.user_id).filter(Boolean)).size;
+
+        const { data: logUsers7d } = await supabase
+          .from('agent_logs')
+          .select('user_id')
+          .gte('created_at', sevenDaysAgo);
+        wau = new Set(logUsers7d?.map(l => l.user_id).filter(Boolean)).size;
+      }
+
+      // 인터뷰 완료율: 전체 기업 중 인터뷰 round 5까지 완료한 기업 비율
+      try {
+        const { data: allCompanies } = await supabase
+          .from('companies')
+          .select('id');
+        const totalCompanies = allCompanies?.length || 0;
+
+        if (totalCompanies > 0) {
+          const { data: completedInterviews } = await supabase
+            .from('company_interviews')
+            .select('company_id, round')
+            .eq('round', 5);
+          const companiesWithRound5 = new Set(
+            completedInterviews?.map(i => i.company_id) || []
+          ).size;
+          interviewCompletionRate = Math.round((companiesWithRound5 / totalCompanies) * 100);
+        }
+      } catch {
+        // company_interviews 테이블이 없을 수 있음
+      }
+
       return {
         companies: companies.count || 0,
         plans: plans.count || 0,
@@ -120,6 +196,11 @@ export async function GET(request: Request) {
         recentPlans: recentPlans || [],
         recentUsers: recentUsers || [],
         recentPayments,
+        // 핵심 지표 (W08 KPI)
+        dau,
+        wau,
+        retention7d,
+        interviewCompletionRate,
       };
     });
 
