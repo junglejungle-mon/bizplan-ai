@@ -321,6 +321,7 @@ export function InterviewChat({
                   : "border-gray-300 hover:border-purple-400 hover:bg-purple-50 text-gray-400 hover:text-purple-600"
               }`}
               title="회사소개서, 사업계획서 등 자료 첨부"
+              aria-label="자료 첨부"
             >
               {uploading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
@@ -340,6 +341,7 @@ export function InterviewChat({
             <textarea
               className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               placeholder="답변을 입력하세요... (Enter로 전송, Shift+Enter로 줄바꿈)"
+              aria-label="인터뷰 답변 입력"
               value={input}
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={(e) => {

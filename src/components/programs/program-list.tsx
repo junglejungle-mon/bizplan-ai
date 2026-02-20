@@ -234,7 +234,7 @@ export function ProgramList({ matchedPrograms, allPrograms, companyId }: Program
       {matchError && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700 flex items-center justify-between">
           <span>{matchError}</span>
-          <button onClick={() => setMatchError(null)} className="text-red-400 hover:text-red-600">
+          <button onClick={() => setMatchError(null)} className="text-red-400 hover:text-red-600" aria-label="오류 메시지 닫기">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -261,6 +261,7 @@ export function ProgramList({ matchedPrograms, allPrograms, companyId }: Program
             }
           }}
           placeholder="지원사업명, 기관명, 키워드로 검색..."
+          aria-label="지원사업 검색"
           className="w-full h-10 pl-10 pr-20 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
         {searchInput && (
@@ -271,6 +272,7 @@ export function ProgramList({ matchedPrograms, allPrograms, companyId }: Program
               setSearchQuery("");
               setPage(1);
             }}
+            aria-label="검색어 지우기"
             className="absolute right-14 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
           >
             <X className="h-3.5 w-3.5" />

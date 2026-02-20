@@ -177,6 +177,7 @@ export function PlanExampleCards() {
           <button
             onClick={() => setExpandedIdx(null)}
             className="text-gray-400 hover:text-gray-600 shrink-0"
+            aria-label="목록으로 돌아가기"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>

@@ -161,6 +161,7 @@ export function NotificationCenter() {
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded p-0.5 text-gray-400 hover:text-gray-600"
+                aria-label="알림 닫기"
               >
                 <X className="h-4 w-4" />
               </button>

@@ -455,6 +455,7 @@ export function DashboardClient({
               <input
                 className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="질문을 입력하세요..."
+                aria-label="AI에게 질문"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {

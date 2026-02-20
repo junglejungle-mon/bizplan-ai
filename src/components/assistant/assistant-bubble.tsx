@@ -118,6 +118,7 @@ export function AssistantBubble() {
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all hover:scale-105"
+        aria-label="AI 사업 비서 열기"
       >
         <Sparkles className="h-6 w-6" />
       </button>
@@ -132,7 +133,7 @@ export function AssistantBubble() {
           <Sparkles className="h-5 w-5 text-white" />
           <span className="font-medium text-white">AI 사업 비서</span>
         </div>
-        <button onClick={() => setIsOpen(false)}>
+        <button onClick={() => setIsOpen(false)} aria-label="대화 창 닫기">
           <X className="h-5 w-5 text-white/80 hover:text-white" />
         </button>
       </div>
@@ -210,6 +211,7 @@ export function AssistantBubble() {
             type="text"
             className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="질문을 입력하세요..."
+            aria-label="AI 비서에게 질문"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

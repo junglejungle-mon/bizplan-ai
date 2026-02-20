@@ -223,6 +223,7 @@ export function IRGeneratorClient({
           <Link
             href={`/plans/${planId}`}
             className="text-gray-400 hover:text-gray-600"
+            aria-label="사업계획서로 돌아가기"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
