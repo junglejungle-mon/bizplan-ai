@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2, FileText, FileType, FileCheck } from "lucide-react";
+import { trackPlanDownload } from "@/lib/analytics";
 
 interface ExportButtonProps {
   planId: string;
@@ -20,6 +21,7 @@ export function ExportButton({ planId, hasProgramForm }: ExportButtonProps) {
   ) => {
     setExporting(true);
     setShowMenu(false);
+    trackPlanDownload(planId, format === "hwpx" ? "docx" : format === "md" ? "md" : format as "docx" | "pdf" | "md");
 
     try {
       const response = await fetch(`/api/plans/${planId}/export`, {

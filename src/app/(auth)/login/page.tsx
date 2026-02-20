@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { trackLogin } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -32,11 +33,13 @@ export default function LoginPage() {
       return;
     }
 
+    trackLogin("email");
     router.push("/dashboard");
     router.refresh();
   };
 
   const handleGoogleLogin = async () => {
+    trackLogin("google");
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -47,6 +50,7 @@ export default function LoginPage() {
   };
 
   const handleKakaoLogin = async () => {
+    trackLogin("kakao");
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "kakao",

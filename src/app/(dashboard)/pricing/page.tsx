@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { PricingCards } from "@/components/payment/PricingCards";
+import { trackPricingView } from "@/lib/analytics";
 
 export default function PricingPage() {
   const [currentPlan, setCurrentPlan] = useState<string>("free");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    trackPricingView();
     async function fetchCurrentPlan() {
       try {
         const res = await fetch("/api/subscriptions");

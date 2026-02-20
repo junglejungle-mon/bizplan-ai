@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { trackPaymentStart, trackPaymentComplete, trackPaymentFail } from "@/lib/analytics";
 
 interface CheckoutButtonProps {
   planId: string;
@@ -26,6 +27,7 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
     setLoading(true);
     setError(null);
 
+    trackPaymentStart(planName, price);
     try {
       // 1. 서버에서 결제 파라미터 받기
       const res = await fetch("/api/payments/checkout", {
@@ -90,9 +92,11 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
       }
 
       // 5. 성공 → 설정 페이지로 이동
+      trackPaymentComplete(planName, price);
       window.location.href = "/settings?payment=complete";
     } catch (err) {
       console.error("결제 오류:", err);
+      trackPaymentFail(planName, err instanceof Error ? err.message : "unknown");
       setError(err instanceof Error ? err.message : "결제 처리 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);

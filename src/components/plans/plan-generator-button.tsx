@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Sparkles, CheckCircle2 } from "lucide-react";
+import { trackPlanGenerateStart, trackPlanGenerateComplete } from "@/lib/analytics";
 
 interface PlanGeneratorButtonProps {
   planId: string;
@@ -40,6 +41,7 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
     setError(null);
     setDone(false);
 
+    trackPlanGenerateStart(planId);
     try {
       const response = await fetch(`/api/plans/${planId}/generate`, {
         method: "POST",
@@ -82,6 +84,7 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
               case "complete":
                 setProgress(100);
                 setDone(true);
+                trackPlanGenerateComplete(planId, event.data?.totalSections || 0);
                 setCurrentStep("완료!");
                 // 2초 후 페이지 새로고침
                 setTimeout(() => {

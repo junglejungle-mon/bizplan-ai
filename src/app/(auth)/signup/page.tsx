@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { trackSignUp } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -63,6 +64,7 @@ export default function SignupPage() {
         .eq("id", signUpData.user.id);
     }
 
+    trackSignUp("email");
     setSuccess(true);
     setLoading(false);
   };
@@ -72,6 +74,7 @@ export default function SignupPage() {
       setError("이용약관과 개인정보처리방침에 동의해주세요.");
       return;
     }
+    trackSignUp("google");
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -86,6 +89,7 @@ export default function SignupPage() {
       setError("이용약관과 개인정보처리방침에 동의해주세요.");
       return;
     }
+    trackSignUp("kakao");
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "kakao",

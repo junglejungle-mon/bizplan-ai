@@ -9,6 +9,7 @@ import { InterviewChat } from "@/components/onboarding/interview-chat";
 import { AnalyzingStep } from "@/components/onboarding/analyzing-step";
 import { CompleteStep } from "@/components/onboarding/complete-step";
 import { TermsStep } from "@/components/onboarding/terms-step";
+import { trackOnboardingStart, trackOnboardingRound, trackOnboardingComplete } from "@/lib/analytics";
 
 interface ChatMessage {
   role: "assistant" | "user" | "system";
@@ -193,6 +194,7 @@ function OnboardingPage() {
   // 회사 생성 완료 → 인터뷰 시작
   const handleCompanyComplete = (newCompanyId: string) => {
     setCompanyId(newCompanyId);
+    trackOnboardingStart();
     setStep("interview");
     setMessages([{ role: "assistant", content: INTERVIEW_INITIAL_QUESTION }]);
   };
@@ -250,6 +252,7 @@ function OnboardingPage() {
       } else {
         const data = await response.json();
         if (data.type === "interview_complete") {
+          trackOnboardingComplete(5);
           setStep("analyzing");
           setAnalysisProgress(5);
           setAnalysisStep("분석 준비 중...");
@@ -316,6 +319,7 @@ function OnboardingPage() {
             if (data.type === "chunk") {
               setStreamingText((prev) => prev + data.text);
             } else if (data.type === "round_complete") {
+              trackOnboardingRound(data.round, 5);
               setRoundTransitionData(data.summary);
               setShowRoundTransition(true);
               setProfileScore(data.interimScore || 0);
@@ -356,6 +360,7 @@ function OnboardingPage() {
         // JSON 응답 (인터뷰 완료 → 인사이트 추출)
         const data = await response.json();
         if (data.type === "interview_complete") {
+          trackOnboardingComplete(5);
           setStep("analyzing");
           setAnalysisProgress(5);
           setAnalysisStep("분석 준비 중...");
