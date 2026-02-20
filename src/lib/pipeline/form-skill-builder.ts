@@ -242,7 +242,7 @@ export async function buildFormSkill(
       await supabase
         .from("form_templates")
         .update({
-          parsed_structure: skill as any,
+          parsed_structure: skill as unknown as Record<string, unknown>,
           form_title: skill.formTitle,
           status: "parsed",
           updated_at: new Date().toISOString(),
@@ -296,14 +296,16 @@ function convertHwpTextToParsedForm(
     sections: Array<{ title: string; content: string }>;
     fields: Array<{ label: string; isEmpty: boolean }>;
   },
-  filePath: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _filePath: string
 ): {
   metadata: { title: string; totalFields: number; complexity: "simple" | "medium" | "complex" };
   structure: FormSection[];
   fields: FormField[];
   rawXmlMap?: Map<string, string>;
 } {
-  const sections: FormSection[] = hwpParsed.sections.map((s, i) => ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sections: FormSection[] = hwpParsed.sections.map((s, _i) => ({
     title: s.title,
     level: 1,
     subsections: [],

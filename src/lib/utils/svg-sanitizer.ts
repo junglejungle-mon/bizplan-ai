@@ -5,8 +5,9 @@
  * DOMPurify 없이 가벼운 서버 호환 구현
  */
 
+/* eslint-disable @typescript-eslint/no-unused-vars -- security reference constants */
 /** 허용되는 SVG 태그 */
-const ALLOWED_TAGS = new Set([
+const _ALLOWED_TAGS = new Set([
   "svg",
   "g",
   "rect",
@@ -35,7 +36,7 @@ const ALLOWED_TAGS = new Set([
 ]);
 
 /** 금지되는 속성 (이벤트 핸들러 + 위험 속성) */
-const BLOCKED_ATTR_PATTERNS = [
+const _BLOCKED_ATTR_PATTERNS = [
   /^on/i, // onclick, onerror, onload 등
   /^xlink:href$/i, // 외부 리소스 참조 (use 태그 제외)
   /^href$/i,
@@ -45,7 +46,8 @@ const BLOCKED_ATTR_PATTERNS = [
 ];
 
 /** 위험한 프로토콜 */
-const DANGEROUS_PROTOCOLS = /^\s*(javascript|data|vbscript)\s*:/i;
+const _DANGEROUS_PROTOCOLS = /^\s*(javascript|data|vbscript)\s*:/i;
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 /**
  * SVG 문자열에서 위험한 요소 제거

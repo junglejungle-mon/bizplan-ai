@@ -23,7 +23,6 @@ import {
 } from "./template-filler";
 import { buildHwpx } from "@/lib/utils/hwpx-builder";
 import { loadExistingSkill } from "@/lib/pipeline/form-skill-builder";
-import { existsSync } from "fs";
 import { join } from "path";
 
 // ===== 메인 진입점 =====
@@ -122,8 +121,6 @@ async function trySmartFill(
   plan: BusinessPlanData,
   supabase: SupabaseClient
 ): Promise<FillResult | null> {
-  const t0 = Date.now();
-
   // 1. 양식 템플릿 조회/다운로드
   let template = await getFormTemplate(supabase, plan.programId!);
   if (!template) {
@@ -144,19 +141,15 @@ async function trySmartFill(
   const localSkill = await tryLoadLocalSkill(supabase, plan.programId!);
 
   // 4. 양식 파싱 (스킬 정보 or DB 캐시 or 새로 파싱)
-  const t1 = Date.now();
   let parsedForm: ParsedForm;
-  let parseSource: string;
 
   if (template.parsed_structure) {
     parsedForm = template.parsed_structure;
     // rawXmlMap은 캐시에 없으므로 다시 파싱
     const freshParsed = await parseForm(hwpxBuffer, false);
     parsedForm.rawXmlMap = freshParsed.rawXmlMap;
-    parseSource = "DB캐시";
   } else {
     parsedForm = await parseForm(hwpxBuffer, true);
-    parseSource = "신규파싱";
 
     // 파싱 결과 DB 캐시
     await supabase
@@ -180,20 +173,16 @@ async function trySmartFill(
   }
 
   // 5. AI 필드 매핑 (스킬 정보 활용)
-  const t2 = Date.now();
   let mappings: FieldMapping[];
-  let mappingSource: string;
 
   if (template.field_mappings && template.field_mappings.length > 0) {
     mappings = template.field_mappings;
-    mappingSource = "DB캐시";
   } else {
     mappings = await mapFieldsToPlan(
       parsedForm.fields,
       plan.sections,
       localSkill || undefined
     );
-    mappingSource = "신규매핑";
 
     // 매핑 결과 DB 캐시
     await supabase
@@ -208,7 +197,6 @@ async function trySmartFill(
 
 
   // 6. 필드별 내용 생성 (스킬의 maxLength 정보 활용)
-  const t3 = Date.now();
   const fieldContents = await generateFieldContents(
     mappings,
     plan.sections,
@@ -216,7 +204,6 @@ async function trySmartFill(
   );
 
   // 7. 양식에 내용 삽입
-  const t4 = Date.now();
   const result = await fillForm(hwpxBuffer, parsedForm, fieldContents);
 
   // 8. business_plans 업데이트
@@ -331,6 +318,7 @@ async function tryFromScratch(
     title: plan.title,
     companyName: plan.companyName,
     sections: plan.sections,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic chart JSONB structure
     chartData: plan.chartData as Record<string, any>,
     kpiData: plan.kpiData as Record<string, unknown>,
     templateType: plan.templateType,

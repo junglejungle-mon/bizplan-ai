@@ -664,7 +664,7 @@ export function ProgramList({ matchedPrograms, allPrograms, companyId }: Program
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         >
                           {BREAKDOWN_LABELS.map((dim) => {
-                            const score = (program.scoreBreakdown as any)?.[dim.key] ?? 0;
+                            const score = (program.scoreBreakdown as Record<string, number> | null)?.[dim.key] ?? 0;
                             const pct = Math.round((score / dim.max) * 100);
                             return (
                               <div key={dim.key} className="flex items-center gap-2 text-[11px]">

@@ -21,7 +21,6 @@ import {
   BarChart3,
   PieChart,
   Download,
-  Eye,
   Layers,
   Monitor,
 } from "lucide-react";
@@ -242,30 +241,29 @@ export default function LandingPage() {
 
                   {/* 빠른 액션 칩 */}
                   <div className="flex flex-wrap gap-2 pl-9">
-                    <span className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
+                    <Link href="/signup" className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
                       맞춤 사업 추천
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
+                    </Link>
+                    <Link href="/signup" className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
                       사업계획서 작성
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
+                    </Link>
+                    <Link href="/signup" className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs text-indigo-600 cursor-pointer hover:bg-indigo-50">
                       전략 상담
-                    </span>
+                    </Link>
                   </div>
                 </div>
 
-                {/* 입력창 */}
-                <div className="border-t border-gray-200 bg-white px-4 py-3 flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="AI 비서에게 질문하세요..."
-                    className="flex-1 text-sm text-gray-500 bg-gray-50 rounded-full px-4 py-2 border border-gray-200 outline-none"
-                    readOnly
-                  />
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
-                    <Send className="h-3.5 w-3.5" />
+                {/* 입력창 — 클릭 시 가입 페이지로 유도 */}
+                <Link href="/signup" className="block border-t border-gray-200 bg-white px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 text-sm text-gray-500 bg-gray-50 rounded-full px-4 py-2 border border-gray-200">
+                      AI 비서에게 질문하세요...
+                    </div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white" aria-hidden="true">
+                      <Send className="h-3.5 w-3.5" />
+                    </div>
                   </div>
-                </div>
+                </Link>
               </div>
 
               {/* 성공률 뱃지 (플로팅) */}

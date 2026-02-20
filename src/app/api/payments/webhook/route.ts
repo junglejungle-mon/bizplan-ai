@@ -103,6 +103,22 @@ async function handlePaymentPaid(paymentId: string) {
   // 구독이 아직 없으면 생성 (verify에서 이미 처리된 경우 스킵)
   let subscriptionId = paymentRecord.subscription_id;
   if (!subscriptionId) {
+    const planId = (paymentRecord.metadata as Record<string, unknown>)?.planId as string;
+    if (planId) {
+      try {
+        const subscription = await createSubscription({
+          userId: paymentRecord.user_id,
+          planId,
+          portonePaymentId: paymentId,
+        });
+        subscriptionId = subscription.id;
+        console.warn("[webhook] 구독 생성 완료:", subscriptionId);
+      } catch (subError) {
+        console.error("[webhook] 구독 생성 실패:", subError);
+      }
+    } else {
+      console.warn("[webhook] metadata에 planId 없음, 구독 생성 스킵:", paymentId);
+    }
   }
 
   await updatePaymentStatus({

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { INTERVIEW_INITIAL_QUESTION } from "@/lib/ai/prompts/interview";
 import { CompanyStep } from "@/components/onboarding/company-step";
 import { InterviewChat } from "@/components/onboarding/interview-chat";
 import { AnalyzingStep } from "@/components/onboarding/analyzing-step";
 import { CompleteStep } from "@/components/onboarding/complete-step";
+import { TermsStep } from "@/components/onboarding/terms-step";
 
 interface ChatMessage {
   role: "assistant" | "user" | "system";
@@ -22,8 +23,27 @@ interface RoundSummary {
   interim_score: number;
 }
 
-export default function OnboardingPage() {
-  const [step, setStep] = useState<"company" | "interview" | "analyzing" | "complete" | "loading">("loading");
+export default function OnboardingPageWrapper() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+          <div className="text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            <p className="mt-3 text-sm text-gray-500">로딩 중...</p>
+          </div>
+        </div>
+      }
+    >
+      <OnboardingPage />
+    </Suspense>
+  );
+}
+
+function OnboardingPage() {
+  const [step, setStep] = useState<"terms" | "company" | "interview" | "analyzing" | "complete" | "loading">("loading");
+  const [termsLoading, setTermsLoading] = useState(false);
+  const searchParams = useSearchParams();
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -44,6 +64,7 @@ export default function OnboardingPage() {
   // 기존 회사 + 인터뷰 데이터 확인 → 이어하기
   useEffect(() => {
     checkExistingProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkExistingProgress = async () => {
@@ -52,6 +73,13 @@ export default function OnboardingPage() {
 
     if (!user) {
       setStep("company");
+      return;
+    }
+
+    // OAuth 가입 후 약관 미동의 → 약관 동의 화면
+    const requireTerms = searchParams.get("require_terms") === "true";
+    if (requireTerms) {
+      setStep("terms");
       return;
     }
 
@@ -134,6 +162,32 @@ export default function OnboardingPage() {
       // 회사만 있고 인터뷰 없음 → company step 표시하되 이름 프리필
       setStep("company");
     }
+  };
+
+  // 약관 동의 처리 (OAuth 사용자)
+  const handleTermsAgree = async () => {
+    setTermsLoading(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user");
+
+      await supabase
+        .from("profiles")
+        .update({
+          agreed_terms_at: new Date().toISOString(),
+          agreed_privacy_at: new Date().toISOString(),
+          terms_version: "2026-02-13",
+          privacy_version: "2026-02-13",
+        })
+        .eq("id", user.id);
+
+      setStep("company");
+    } catch (error) {
+      console.error("Terms agreement error:", error);
+      alert("약관 동의 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
+    }
+    setTermsLoading(false);
   };
 
   // 회사 생성 완료 → 인터뷰 시작
@@ -287,6 +341,14 @@ export default function OnboardingPage() {
               setCurrentRound(data.round);
             } else if (data.type === "error") {
               console.error("Stream error:", data.message);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: `AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요. (${data.message || "알 수 없는 오류"})`,
+                },
+              ]);
+              setStreamingText("");
             }
           }
         }
@@ -341,7 +403,7 @@ export default function OnboardingPage() {
       setStreamingText("");
       setShowRoundTransition(false);
       setRoundTransitionData(null);
-    } catch (err) {
+    } catch {
       alert("리셋 중 오류가 발생했습니다. 다시 시도해 주세요.");
     }
   };
@@ -393,7 +455,9 @@ export default function OnboardingPage() {
                 router.push("/dashboard");
               }, 3000);
             }
-          } catch {}
+          } catch (parseErr) {
+            console.warn("[Insights] SSE 파싱 실패:", parseErr);
+          }
         }
       }
     } catch (error) {
@@ -415,6 +479,11 @@ export default function OnboardingPage() {
         </div>
       </div>
     );
+  }
+
+  // Step 0: 약관 동의 (OAuth 사용자)
+  if (step === "terms") {
+    return <TermsStep onAgree={handleTermsAgree} loading={termsLoading} />;
   }
 
   // Step 1: 회사 생성

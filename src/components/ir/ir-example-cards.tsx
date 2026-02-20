@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -477,11 +478,11 @@ export function IRExampleCards() {
             <p className="text-xs text-purple-700 mt-1">
               사업계획서를 먼저 완성하면 10~15장의 투자유치 PPT가 자동 생성됩니다
             </p>
-            <a href="/programs" className="mt-4">
+            <Link href="/programs" className="mt-4">
               <Button className="gap-2 bg-purple-600 hover:bg-purple-700 text-white">
                 <FileText className="h-4 w-4" /> 사업계획서 먼저 만들기
               </Button>
-            </a>
+            </Link>
           </CardContent>
         </Card>
       </div>

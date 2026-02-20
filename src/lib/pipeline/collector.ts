@@ -51,7 +51,9 @@ interface CollectedProgram {
   apply_period?: string;
   institution: string | null;
   detail_url: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSONB attachment structure varies by source
   attachment_urls: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw API response preserved as-is
   raw_data: Record<string, any>;
 }
 
@@ -196,7 +198,7 @@ export async function collectAllPrograms(): Promise<{
               }
             }
           }
-        } catch (e) {
+        } catch {
           // 양식 캐싱 실패는 무시 (수집 파이프라인 중단하지 않음)
         }
       }
@@ -255,6 +257,7 @@ async function saveAttachmentsLocally(
     source: string;
     source_id: string;
     title: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSONB attachment structure varies by source
     attachment_urls: Record<string, any>;
     detail_url: string | null;
   },
@@ -283,7 +286,7 @@ async function saveAttachmentsLocally(
       const buffer = Buffer.from(arrayBuffer);
 
       // 파일명 추출 (URL 또는 Content-Disposition에서)
-      let fileName = extractFileName(url, response);
+      const fileName = extractFileName(url, response);
       const filePath = join(programDir, fileName);
 
       writeFileSync(filePath, buffer);

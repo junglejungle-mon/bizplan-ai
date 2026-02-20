@@ -48,7 +48,10 @@ export default function AdminReferencesPage() {
   }, [filter]);
 
   useEffect(() => {
-    fetchDocuments();
+    const load = async () => {
+      await fetchDocuments();
+    };
+    load();
   }, [fetchDocuments]);
 
   return (

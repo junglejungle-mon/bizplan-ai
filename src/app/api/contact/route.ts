@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    await supabase.from("contact_inquiries").insert({
+    const { error: dbError } = await supabase.from("contact_inquiries").insert({
       name,
       email,
       category,
@@ -24,9 +24,20 @@ export async function POST(request: NextRequest) {
       status: "pending",
     });
 
+    if (dbError) {
+      console.error("[contact] DB 저장 실패:", dbError);
+      return Response.json(
+        { success: false, error: "문의 접수 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." },
+        { status: 500 }
+      );
+    }
+
     return Response.json({ success: true });
   } catch (error) {
     console.error("[contact] 문의 접수 오류:", error);
-    return Response.json({ success: true }); // 문의는 실패해도 접수로 처리
+    return Response.json(
+      { success: false, error: "서버 오류가 발생했습니다." },
+      { status: 500 }
+    );
   }
 }

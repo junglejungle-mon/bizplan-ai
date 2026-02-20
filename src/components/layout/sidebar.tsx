@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -41,7 +41,9 @@ export function MobileMenuButton() {
 
   // 라우트 변경 시 메뉴 자동 닫기
   useEffect(() => {
-    setIsOpen(false);
+    startTransition(() => {
+      setIsOpen(false);
+    });
   }, [pathname]);
 
   // 프로필 점수 로드
@@ -59,7 +61,7 @@ export function MobileMenuButton() {
           .limit(1)
           .single();
         if (company) setProfileScore(company.profile_score || 0);
-      } catch (e) { /* 무시 */ }
+      } catch { /* 무시 */ }
     }
     fetchProfile();
   }, []);
@@ -167,7 +169,7 @@ export function Sidebar() {
         if (company) {
           setProfileScore(company.profile_score || 0);
         }
-      } catch (e) {
+      } catch {
         // 로그인 안 된 경우 무시
       }
     }

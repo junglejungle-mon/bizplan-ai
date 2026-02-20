@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "대시보드" },
@@ -22,6 +23,31 @@ const NAV_ITEMS = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // 세션 만료 주기적 체크 (5분마다)
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+
+    const checkSession = async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch("/api/admin/dashboard/stats", {
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.status === 401) {
+          router.push("/admin/login");
+        }
+      } catch {
+        // 네트워크 오류 또는 abort는 무시
+      }
+    };
+
+    const interval = setInterval(checkSession, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [pathname, router]);
 
   if (pathname === "/admin/login") {
     return <>{children}</>;

@@ -6,6 +6,7 @@ import {
   buildAssistantPrompt,
 } from "@/lib/ai/prompts/assistant";
 import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
+import { safeErrorMessage } from "@/lib/api/error";
 
 /**
  * POST /api/assistant/chat
@@ -34,10 +35,10 @@ export async function POST(request: NextRequest) {
     .limit(1);
 
   const company = companies?.[0];
-  let companyProfile = company?.business_content || undefined;
+  const companyProfile = company?.business_content || undefined;
 
   // 컨텍스트 로드
-  let currentContext: any = undefined;
+  let currentContext: { type: "program" | "plan" | "general" | "ir"; title: string; details: string } | undefined = undefined;
   if (contextType && contextId) {
     if (contextType === "program") {
       const { data: program } = await supabase
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
 
   const previousMessages = (history ?? [])
     .reverse()
-    .map((h: any) => ({
+    .map((h: { role: string; content: string }) => ({
       role: h.role as "user" | "assistant",
       content: h.content,
     }));
@@ -97,11 +98,12 @@ export async function POST(request: NextRequest) {
       .select("document_type, status")
       .eq("company_id", company.id);
 
-    const extracted = (docs ?? []).filter((d: any) => d.status === "extracted");
+    type DocRow = { document_type: string; status: string };
+    const extracted = (docs ?? []).filter((d: DocRow) => d.status === "extracted");
     documentStatus = {
       totalCount: (docs ?? []).length,
       extractedCount: extracted.length,
-      types: extracted.map((d: any) => d.document_type),
+      types: extracted.map((d: DocRow) => d.document_type),
       profileScore: company.profile_score || 0,
     };
   }
@@ -183,9 +185,10 @@ export async function POST(request: NextRequest) {
         );
         controller.close();
       } catch (error) {
+        console.error("[Assistant] Stream error:", error);
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "error", message: String(error) })}\n\n`
+            `data: ${JSON.stringify({ type: "error", message: safeErrorMessage(error, "AI 응답 처리 중 오류가 발생했습니다") })}\n\n`
           )
         );
         controller.close();

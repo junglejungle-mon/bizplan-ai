@@ -17,7 +17,7 @@ interface Plan {
 }
 
 interface PlanDetail {
-  plan: any;
+  plan: Plan;
   sections: Array<{
     id: string;
     section_name: string;
@@ -27,7 +27,7 @@ interface PlanDetail {
     generation_count: number;
   }>;
   quality: {
-    overall: { total_score: number; feedback: string; criteria_scores: any } | null;
+    overall: { total_score: number; feedback: string; criteria_scores: Record<string, number> } | null;
     by_section: Array<{ section_id: string; total_score: number }>;
   };
   matching: { match_score: number; match_reason: string; fit_level: string } | null;
@@ -398,7 +398,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function PlanDetailPanel({ detail }: { detail: PlanDetail }) {
-  const { plan, sections, quality, matching, ir_presentation } = detail;
+  const { sections, quality, matching, ir_presentation } = detail;
 
   return (
     <div className="space-y-4">

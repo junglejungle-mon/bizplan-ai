@@ -45,20 +45,20 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStats = useCallback(() => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     setError(null);
-    fetch("/api/admin/dashboard/stats")
-      .then((r) => {
-        if (!r.ok) throw new Error(`서버 오류 (${r.status})`);
-        return r.json();
-      })
-      .then((data) => setStats(data))
-      .catch((err) => {
-        console.error("대시보드 통계 조회 실패:", err);
-        setError(err instanceof Error ? err.message : "데이터를 불러오는 중 오류가 발생했습니다.");
-      })
-      .finally(() => setLoading(false));
+    try {
+      const r = await fetch("/api/admin/dashboard/stats");
+      if (!r.ok) throw new Error(`서버 오류 (${r.status})`);
+      const data = await r.json();
+      setStats(data);
+    } catch (err) {
+      console.error("대시보드 통계 조회 실패:", err);
+      setError(err instanceof Error ? err.message : "데이터를 불러오는 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SchedulerClient } from "@/components/scheduler/scheduler-client";
 
+// Supabase join returns programs as array type, but runtime is single object
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SchedulerMatchingRow = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SchedulerProgramRow = Record<string, any>;
+
 export default async function SchedulerPage() {
   const supabase = await createClient();
   const {
@@ -66,15 +72,15 @@ export default async function SchedulerPage() {
 
   // 매칭된 program_id 세트
   const matchedProgramIds = new Set(
-    (matchings || []).map((m: any) => m.programs?.id).filter(Boolean)
+    (matchings || []).map((m: SchedulerMatchingRow) => m.programs?.id).filter(Boolean)
   );
 
   // 캘린더 이벤트 데이터로 변환
   const events = [
     // 매칭된 프로그램 (우선 표시)
     ...(matchings || [])
-      .filter((m: any) => m.programs?.apply_end)
-      .map((m: any) => ({
+      .filter((m: SchedulerMatchingRow) => m.programs?.apply_end)
+      .map((m: SchedulerMatchingRow) => ({
         id: m.id,
         programId: m.programs.id,
         title: m.programs.title,
@@ -92,8 +98,8 @@ export default async function SchedulerPage() {
       })),
     // 미매칭 프로그램 (연한 색으로)
     ...(upcomingPrograms || [])
-      .filter((p: any) => !matchedProgramIds.has(p.id))
-      .map((p: any) => ({
+      .filter((p: SchedulerProgramRow) => !matchedProgramIds.has(p.id))
+      .map((p: SchedulerProgramRow) => ({
         id: `prog-${p.id}`,
         programId: p.id,
         title: p.title,

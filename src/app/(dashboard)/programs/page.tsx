@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ProgramList } from "@/components/programs/program-list";
 
+// Supabase join returns programs as array type, but runtime is single object
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MatchingJoinRow = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ProgramRow = Record<string, any>;
+
 export default async function ProgramsPage({
   searchParams,
 }: {
@@ -38,7 +44,7 @@ export default async function ProgramsPage({
     .order("collected_at", { ascending: false })
     .limit(300);
 
-  const matchedPrograms = matchings?.map((m: any) => ({
+  const matchedPrograms = matchings?.map((m: MatchingJoinRow) => ({
     ...m.programs,
     matchScore: m.match_score,
     matchReason: m.match_reason,
@@ -52,18 +58,18 @@ export default async function ProgramsPage({
   })) ?? [];
 
   const unmatchedPrograms = (programs ?? []).filter(
-    (p: any) => !matchedPrograms.find((mp: any) => mp.id === p.id)
+    (p: ProgramRow) => !matchedPrograms.find((mp: ProgramRow) => mp.id === p.id)
   );
 
   // 소스 간 중복 제거 (제목+기관 기준, 매칭된 프로그램 우선)
   const seenTitles = new Set<string>();
-  const dedupedMatched = matchedPrograms.filter((p: any) => {
+  const dedupedMatched = matchedPrograms.filter((p: ProgramRow) => {
     const key = `${(p.title || "").trim().toLowerCase()}::${(p.institution || "").trim().toLowerCase()}`;
     if (seenTitles.has(key)) return false;
     seenTitles.add(key);
     return true;
   });
-  const dedupedUnmatched = unmatchedPrograms.filter((p: any) => {
+  const dedupedUnmatched = unmatchedPrograms.filter((p: ProgramRow) => {
     const key = `${(p.title || "").trim().toLowerCase()}::${(p.institution || "").trim().toLowerCase()}`;
     if (seenTitles.has(key)) return false;
     seenTitles.add(key);

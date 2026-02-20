@@ -299,7 +299,6 @@ export function autoScoreSection(
     const weight = weights[key] || 0;
     const ratio = max > 0 ? raw / max : 0;
     // 가중 점수를 원래 max 범위로 스케일링 (DB 컬럼 호환)
-    const weighted = Math.round(ratio * (weight / 100) * max * 100) / 100;
     // 가중치가 0인 항목은 만점 처리 (해당 섹션과 무관한 항목)
     if (weight === 0) {
       rawScores[key] = { raw: max, max };

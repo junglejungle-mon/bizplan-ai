@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
+// Supabase join returns programs as array type, but runtime is single object
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MatchingRow = Record<string, any>;
+
+type DocRow = { document_type: string; status: string };
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
@@ -71,12 +77,12 @@ export default async function DashboardPage() {
 
   // 마감 임박 사업 필터링 + D-Day 계산
   const urgentPrograms = (urgentMatchings || [])
-    .filter((m: any) => {
+    .filter((m: MatchingRow) => {
       if (!m.programs?.apply_end) return false;
       const endDate = new Date(m.programs.apply_end);
       return endDate >= today && endDate <= sevenDaysLater;
     })
-    .map((m: any) => {
+    .map((m: MatchingRow) => {
       const endDate = new Date(m.programs.apply_end);
       const dDay = Math.ceil(
         (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
@@ -92,12 +98,12 @@ export default async function DashboardPage() {
         dDay,
       };
     })
-    .sort((a: any, b: any) => a.dDay - b.dDay);
+    .sort((a, b) => a.dDay - b.dDay);
 
   // 30일 이내 마감 사업 수
   const thirtyDaysLater = new Date(today);
   thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-  const deadlineSoonCount = (urgentMatchings || []).filter((m: any) => {
+  const deadlineSoonCount = (urgentMatchings || []).filter((m: MatchingRow) => {
     if (!m.programs?.apply_end) return false;
     const endDate = new Date(m.programs.apply_end);
     return endDate >= today && endDate <= thirtyDaysLater;
@@ -110,13 +116,13 @@ export default async function DashboardPage() {
     .eq("company_id", company.id);
 
   const extractedDocTypes = (companyDocs ?? [])
-    .filter((d: any) => d.status === "extracted")
-    .map((d: any) => d.document_type);
+    .filter((d: DocRow) => d.status === "extracted")
+    .map((d: DocRow) => d.document_type);
 
   // 최근 매칭 사업 Top 5 (점수 높은 순)
   const topMatchings = (urgentMatchings || [])
-    .filter((m: any) => m.programs?.apply_end)
-    .map((m: any) => {
+    .filter((m: MatchingRow) => m.programs?.apply_end)
+    .map((m: MatchingRow) => {
       const endDate = new Date(m.programs.apply_end);
       const dDay = Math.ceil(
         (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
@@ -133,7 +139,7 @@ export default async function DashboardPage() {
         dDay,
       };
     })
-    .sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0))
+    .sort((a, b) => ((b.matchScore as number) || 0) - ((a.matchScore as number) || 0))
     .slice(0, 5);
 
   // 미션 생성 로직
@@ -246,12 +252,12 @@ export default async function DashboardPage() {
   });
 
   const weekEvents = (urgentMatchings || [])
-    .filter((m: any) => {
+    .filter((m: MatchingRow) => {
       if (!m.programs?.apply_end) return false;
       const endDate = new Date(m.programs.apply_end);
       return endDate >= weekDays[0] && endDate <= weekDays[6];
     })
-    .map((m: any) => ({
+    .map((m: MatchingRow) => ({
       date: m.programs.apply_end,
       title: m.programs.title,
       score: m.match_score,

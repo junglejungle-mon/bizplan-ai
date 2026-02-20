@@ -26,9 +26,8 @@ export async function POST(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  // format 지원: pptx (기본), pdf는 Phase 6에서 추가
-  const _format = body.format || "pptx";
+  await request.json().catch(() => ({}));
+  // format 지원: pptx (기본), pdf는 Phase 6에서 추가 예정
 
   // IR 프레젠테이션 로드 (완료된 것만)
   const { data: presentation } = await supabase
@@ -40,7 +39,7 @@ export async function POST(
     .limit(1)
     .single();
 
-  if (!presentation || (presentation as any).companies?.user_id !== user.id) {
+  if (!presentation || (presentation as { companies?: { user_id?: string; name?: string } }).companies?.user_id !== user.id) {
     // status=completed 가 없으면 generating 중인지 확인
     const { data: pendingPres } = await supabase
       .from("ir_presentations")
@@ -84,7 +83,7 @@ export async function POST(
     );
   }
 
-  const companyName = (presentation as any).companies?.name || "회사명";
+  const companyName = (presentation as { companies?: { user_id?: string; name?: string } }).companies?.name || "회사명";
 
   // custom_ci 템플릿인 경우 브랜드 색상 로드
   let customColors: {
@@ -107,7 +106,7 @@ export async function POST(
         .limit(1);
 
       if (companies && companies.length > 0) {
-        const content = (companies[0] as any)?.business_content || "";
+        const content = (companies[0] as { business_content?: string })?.business_content || "";
         const match = content.match(/\[BRAND_COLORS\]\n([\s\S]*?)\n\[\/BRAND_COLORS\]/);
         if (match) {
           const parsed = JSON.parse(match[1]);
@@ -131,11 +130,11 @@ export async function POST(
   try {
     const pptxBuffer = await buildPptx({
       companyName,
-      template: templateName as any,
-      slides: slides.map((s: any) => ({
-        slide_type: s.slide_type,
+      template: templateName as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
+      slides: slides.map((s) => ({
+        slide_type: s.slide_type as "cover" | "problem" | "solution" | "market" | "business_model" | "traction" | "competition" | "team" | "financials" | "ask" | "roadmap" | "tech",
         title: s.title,
-        content: s.content || {},
+        content: (s.content || {}) as Record<string, unknown>,
         notes: s.notes,
       })),
       customColors,

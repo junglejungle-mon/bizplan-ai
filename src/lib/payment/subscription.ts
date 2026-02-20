@@ -96,13 +96,55 @@ export async function getActiveSubscription(
 /**
  * 새 구독 생성
  */
+// 동시 구독 생성 방지를 위한 인메모리 락
+const subscriptionLocks = new Map<string, Promise<Subscription>>();
+
 export async function createSubscription(params: {
   userId: string;
   planId: string;
   portonePaymentId?: string;
   portoneBillingKey?: string;
 }): Promise<Subscription> {
+  // 동일 사용자 동시 요청 방지 (verify + webhook 동시 도착 시)
+  const existingLock = subscriptionLocks.get(params.userId);
+  if (existingLock) {
+    console.warn("[subscription] 동시 요청 감지, 기존 결과 대기:", params.userId);
+    return existingLock;
+  }
+
+  const promise = _createSubscriptionInternal(params);
+  subscriptionLocks.set(params.userId, promise);
+
+  try {
+    const result = await promise;
+    return result;
+  } finally {
+    subscriptionLocks.delete(params.userId);
+  }
+}
+
+async function _createSubscriptionInternal(params: {
+  userId: string;
+  planId: string;
+  portonePaymentId?: string;
+  portoneBillingKey?: string;
+}): Promise<Subscription> {
   const supabase = createAdminClient();
+
+  // 이미 같은 결제로 구독이 생성되었는지 확인 (멱등성)
+  if (params.portonePaymentId) {
+    const { data: existingSub } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("portone_customer_id", params.portonePaymentId)
+      .eq("status", "active")
+      .single();
+
+    if (existingSub) {
+      console.warn("[subscription] 이미 생성된 구독 반환:", existingSub.id);
+      return existingSub;
+    }
+  }
 
   // 기존 활성 구독 만료 처리
   await supabase
@@ -302,8 +344,13 @@ export async function createPaymentRecord(params: {
   amount: number;
   portonePaymentId: string;
   subscriptionId?: string;
+  planId?: string;
+  metadata?: Record<string, unknown>;
 }): Promise<string> {
   const supabase = createAdminClient();
+
+  const baseMetadata = params.planId ? { planId: params.planId } : {};
+  const mergedMetadata = { ...baseMetadata, ...(params.metadata || {}) };
 
   const { data, error } = await supabase
     .from("payments")
@@ -314,7 +361,7 @@ export async function createPaymentRecord(params: {
       status: "pending",
       portone_payment_id: params.portonePaymentId,
       subscription_id: params.subscriptionId || null,
-      metadata: {},
+      metadata: mergedMetadata,
     })
     .select("id")
     .single();
@@ -442,4 +489,142 @@ export async function getAllPayments(params: {
     data: data || [],
     total: count || 0,
   };
+}
+
+// ── 비례환불 (프로레이션) ──
+
+export interface ProrateResult {
+  /** 기존 구독 남은 일수 */
+  remainingDays: number;
+  /** 기존 구독 전체 기간 (일) */
+  totalDays: number;
+  /** 기존 구독 일일 단가 (원) */
+  dailyRate: number;
+  /** 잔여 기간 크레딧 (원) */
+  credit: number;
+  /** 새 플랜 가격 (원) */
+  newPlanPrice: number;
+  /** 실제 결제 금액 (새 플랜 가격 - 크레딧, 최소 0) */
+  chargeAmount: number;
+}
+
+/**
+ * 업그레이드 비례환불 금액 계산
+ *
+ * 기존 구독의 남은 기간에 대한 비례 크레딧을 계산하고,
+ * 새 플랜 가격에서 차감한 실 결제 금액을 반환합니다.
+ *
+ * @param currentSub - 현재 활성 구독 (플랜 정보 포함)
+ * @param newPlan - 업그레이드할 새 플랜
+ * @returns 비례환불 계산 결과
+ */
+export function calculateProration(
+  currentSub: Subscription & { plan: SubscriptionPlan },
+  newPlan: SubscriptionPlan
+): ProrateResult {
+  const now = new Date();
+  const periodStart = currentSub.current_period_start
+    ? new Date(currentSub.current_period_start)
+    : now;
+  const periodEnd = currentSub.current_period_end
+    ? new Date(currentSub.current_period_end)
+    : addMonths(now, 1);
+
+  // 전체 기간 (일)
+  const totalDays = Math.max(
+    1,
+    Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24))
+  );
+
+  // 남은 일수
+  const remainingDays = Math.max(
+    0,
+    Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  );
+
+  // 기존 플랜 가격
+  const currentPrice = Number(currentSub.plan.price) || 0;
+
+  // 일일 단가
+  const dailyRate = totalDays > 0 ? Math.round(currentPrice / totalDays) : 0;
+
+  // 잔여 크레딧
+  const credit = dailyRate * remainingDays;
+
+  // 새 플랜 가격
+  const newPlanPrice = Number(newPlan.price) || 0;
+
+  // 실 결제 금액 (크레딧 차감, 최소 0)
+  const chargeAmount = Math.max(0, newPlanPrice - credit);
+
+  return {
+    remainingDays,
+    totalDays,
+    dailyRate,
+    credit,
+    newPlanPrice,
+    chargeAmount,
+  };
+}
+
+/**
+ * 업그레이드 구독 생성 (비례환불 적용)
+ *
+ * 기존 구독을 만료하고, 크레딧이 적용된 새 구독을 생성합니다.
+ * 결제 기록에 프로레이션 메타데이터를 포함합니다.
+ */
+export async function upgradeSubscription(params: {
+  userId: string;
+  newPlanId: string;
+  portonePaymentId?: string;
+  proration: ProrateResult;
+}): Promise<Subscription> {
+  const supabase = createAdminClient();
+  const now = new Date();
+
+  // 기존 활성 구독 만료 (업그레이드 사유 메타데이터 추가)
+  const { data: expiredSubs } = await supabase
+    .from("subscriptions")
+    .update({
+      status: "expired",
+      updated_at: now.toISOString(),
+      metadata: {
+        expired_reason: "upgrade",
+        upgraded_at: now.toISOString(),
+        upgrade_credit: params.proration.credit,
+      },
+    })
+    .eq("user_id", params.userId)
+    .in("status", ["active", "trialing"])
+    .select("id");
+
+  const expiredSubId = expiredSubs?.[0]?.id || null;
+
+  // 새 구독 생성 (1개월)
+  const periodEnd = addMonths(now, 1);
+
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .insert({
+      user_id: params.userId,
+      plan_id: params.newPlanId,
+      status: "active",
+      current_period_start: now.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+      portone_customer_id: params.portonePaymentId || null,
+      metadata: {
+        upgraded_from: expiredSubId,
+        proration: {
+          credit: params.proration.credit,
+          remaining_days: params.proration.remainingDays,
+          charge_amount: params.proration.chargeAmount,
+          original_price: params.proration.newPlanPrice,
+        },
+      },
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`업그레이드 구독 생성 실패: ${error.message}`);
+  return data;
 }

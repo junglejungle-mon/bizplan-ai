@@ -408,7 +408,6 @@ function addDoughnutChart(
       const obj = val as Record<string, unknown>;
       const v = obj.value ?? obj.amount ?? 0;
       const u = (obj.unit as string) || "";
-      const l = (obj.label as string) || "";
       return { text: `${v}${u}`, num: parseFloat(String(v).replace(/[^0-9.]/g, "") || "0") };
     }
     return { text: String(val), num: parseFloat(String(val).replace(/[^0-9.]/g, "") || "0") };
@@ -760,7 +759,7 @@ function addChartToSlide(
       const tlData = chart.data as Record<string, unknown>;
       const rawEvents = (tlData.events || tlData.milestones || tlData.timeline) as Array<Record<string, string>> | undefined;
       if (rawEvents && rawEvents.length > 0) {
-        const events = rawEvents.map((e: any) => ({
+        const events = rawEvents.map((e) => ({
           date: e.date || e.period || e.month || "",
           event: e.event || e.title || e.name || e.kpi || "",
           desc: e.description || e.detail || (Array.isArray(e.tasks) ? e.tasks[0] || "" : "") || "",
@@ -1129,7 +1128,8 @@ function addSlideChrome(
 /**
  * 섹션 구분 슬라이드 (선택사항 — 대형 섹션 제목)
  */
-function addSectionDivider(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _addSectionDivider(
   slide: PptxGenJS.Slide,
   sectionTitle: string,
   sectionNum: string,

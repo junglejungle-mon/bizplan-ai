@@ -81,6 +81,7 @@ interface FileAnalyzerProps {
   onDataExtracted?: (fields: AnalysisResult["applicable_fields"]) => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- will be used for per-company file storage
 export function FileAnalyzer({ companyId, onDataExtracted }: FileAnalyzerProps) {
   const [analyzedFiles, setAnalyzedFiles] = useState<AnalyzedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -131,8 +132,9 @@ export function FileAnalyzer({ companyId, onDataExtracted }: FileAnalyzerProps) 
       if (data.analysis?.applicable_fields && onDataExtracted) {
         onDataExtracted(data.analysis.applicable_fields);
       }
-    } catch (err: any) {
-      setError(err.message || "파일 분석 중 오류가 발생했습니다");
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "파일 분석 중 오류가 발생했습니다";
+      setError(errMsg);
     } finally {
       setUploading(false);
       // input 초기화

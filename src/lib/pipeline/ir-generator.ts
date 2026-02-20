@@ -52,16 +52,17 @@ const CHART_PRIORITY: Partial<Record<SlideType, string[]>> = {
 /**
  * 차트 데이터를 슬라이드에 매핑 (post-AI enrichment)
  */
+ 
+/* eslint-disable @typescript-eslint/no-explicit-any -- dynamic AI-generated slide/chart JSONB structures */
 function mapChartsToSlides(
-  slides: any[],
-  chartData: any[],
-  kpiData: any
-): any[] {
+  slides: Array<Record<string, any>>,
+  chartData: Array<Record<string, any>>,
+  kpiData: Record<string, any> | null
+): Array<Record<string, any>> {
+/* eslint-enable @typescript-eslint/no-explicit-any */
   if (!chartData || chartData.length === 0) {
     return slides;
   }
-
-  let enrichedCount = 0;
 
   const enriched = slides.map((slide) => {
     const slideType = slide.slide_type as SlideType;
@@ -69,7 +70,7 @@ function mapChartsToSlides(
     if (!matchingSections) return slide; // cover 등 매핑 없는 타입
 
     // 매칭 섹션에서 차트 찾기 (부분 매칭 지원)
-    const availableCharts = chartData.filter((c: any) => {
+    const availableCharts = chartData.filter((c) => {
       const sectionName = c.section_name || "";
       return matchingSections.some(
         (ms) =>
@@ -86,7 +87,7 @@ function mapChartsToSlides(
     let selectedChart = null;
     for (const chartType of priorities) {
       selectedChart = availableCharts.find(
-        (c: any) => c.chart_type === chartType || c.type === chartType
+        (c) => c.chart_type === chartType || c.type === chartType
       );
       if (selectedChart) break;
     }
@@ -98,8 +99,6 @@ function mapChartsToSlides(
 
     // KPI stats 인리치먼트
     const stats = enrichStatsForSlide(slideType, kpiData);
-
-    enrichedCount++;
 
     return {
       ...slide,
@@ -121,9 +120,11 @@ function mapChartsToSlides(
 /**
  * KPI 데이터에서 슬라이드별 stats 카드 생성
  */
+ 
 function enrichStatsForSlide(
   slideType: SlideType,
-  kpiData: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic KPI JSONB from DB
+  kpiData: Record<string, any> | null
 ): Array<{ icon?: string; value: string; label: string }> {
   if (!kpiData) return [];
   const kpis = kpiData.kpis || kpiData;
@@ -207,7 +208,7 @@ function enrichStatsForSlide(
         break;
       }
     }
-  } catch (e) {
+  } catch {
     // KPI 파싱 실패는 무시 (stats 없이 진행)
   }
 
@@ -218,7 +219,7 @@ export async function* generateIRPresentation(
   opts: IRGenerateOptions
 ): AsyncGenerator<{
   type: "progress" | "slide_done" | "complete" | "error";
-  data: any;
+  data: Record<string, unknown>;
 }> {
   const supabase = createAdminClient();
 
@@ -241,9 +242,12 @@ export async function* generateIRPresentation(
     if (!plan) throw new Error("사업계획서를 찾을 수 없습니다");
 
     // 차트/KPI 데이터 추출 (evaluation_criteria에 저장됨)
-    const evalCriteria = (plan as any).evaluation_criteria || {};
-    const chartData: any[] = evalCriteria.chart_data || [];
-    const kpiData: any = evalCriteria.kpi_data || null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const evalCriteria: Record<string, any> = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chartData: Array<Record<string, any>> = evalCriteria.chart_data || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kpiData: Record<string, any> | null = evalCriteria.kpi_data || null;
 
 
     const { data: sections } = await supabase
@@ -295,10 +299,10 @@ export async function* generateIRPresentation(
     // 3. Claude로 슬라이드 콘텐츠 생성
     // 입력 크기를 줄여서 응답 속도 향상 (각 섹션 최대 800자)
     const planSections = (sections ?? [])
-      .filter((s: any) => s.content)
-      .map((s: any) => ({
+      .filter((s: { section_name: string; content: string | null }) => s.content)
+      .map((s: { section_name: string; content: string | null }) => ({
         section_name: s.section_name,
-        content: s.content.substring(0, 800),
+        content: (s.content || "").substring(0, 800),
       }));
 
     // DB 패턴이 있으면 시스템 프롬프트에 주입
@@ -329,7 +333,8 @@ export async function* generateIRPresentation(
     };
 
     // 4. JSON 파싱 (Claude 응답에서 JSON 추출)
-    let slides: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let slides: Array<Record<string, any>> = [];
     try {
       let jsonStr = "";
 
@@ -431,7 +436,7 @@ export async function* generateIRPresentation(
     // 6. 자동 품질 채점
     let pptScore = 0;
     try {
-      const scoreResult = await scoreAndSavePpt(presentation.id, slides);
+      const scoreResult = await scoreAndSavePpt(presentation.id, slides as Array<{ slide_type: string; title: string; content: Record<string, unknown>; notes?: string }>);
       pptScore = scoreResult.total_score;
     } catch (e) {
       console.warn("[IR Gen] PPT 자동 채점 실패:", e);

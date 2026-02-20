@@ -133,10 +133,11 @@ export async function sendBulkKakaoNotification(params: {
     .in("user_id", userIds);
 
   const enabledUserIds = new Set(
-    (enabledSettings ?? []).map((s: any) => s.user_id)
+    (enabledSettings ?? []).map((s: { user_id: string }) => s.user_id)
   );
 
   // 2. 전화번호 조회
+  type ProfileRow = { id: string; phone: string | null };
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, phone")
@@ -154,9 +155,9 @@ export async function sendBulkKakaoNotification(params: {
   }
 
   // 4. 발송 대상 구성
-  const messages = profiles
-    .filter((p: any) => p.phone && params.userVariables.has(p.id))
-    .map((p: any) => ({
+  const messages = (profiles as ProfileRow[])
+    .filter((p) => p.phone && params.userVariables.has(p.id))
+    .map((p) => ({
       to: p.phone as string,
       variables: params.userVariables.get(p.id)!,
     }));
@@ -169,9 +170,9 @@ export async function sendBulkKakaoNotification(params: {
   const result = await sendBulkAlimtalk(messages, templateId);
 
   // 6. 로그 저장 (일괄)
-  const logs = profiles
-    .filter((p: any) => p.phone && params.userVariables.has(p.id))
-    .map((p: any) => ({
+  const logs = (profiles as ProfileRow[])
+    .filter((p) => p.phone && params.userVariables.has(p.id))
+    .map((p) => ({
       user_id: p.id,
       channel: "kakao" as const,
       notification_type: params.type,

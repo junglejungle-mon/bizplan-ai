@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2, Pencil, Check, X, MessageSquarePlus, Send, Wand2 } from "lucide-react";
-import { SectionContent } from "./section-content";
 import { InterleavedContent } from "./interleaved-content";
 
 interface SectionCardProps {
@@ -44,18 +43,7 @@ export function SectionCard({ planId, section, index }: SectionCardProps) {
     }
   }, [editing]);
 
-  // 자동저장 (2초 디바운스)
-  const autoSave = useCallback(
-    (content: string) => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        await saveContent(content);
-      }, 2000);
-    },
-    [planId, section.id]
-  );
-
-  const saveContent = async (content: string) => {
+  const saveContent = useCallback(async (content: string) => {
     setSaving(true);
     try {
       const res = await fetch(
@@ -70,11 +58,22 @@ export function SectionCard({ planId, section, index }: SectionCardProps) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       }
-    } catch (e) {
+    } catch {
       setError("저장 실패");
     }
     setSaving(false);
-  };
+  }, [planId, section.id]);
+
+  // 자동저장 (2초 디바운스)
+  const autoSave = useCallback(
+    (content: string) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        await saveContent(content);
+      }, 2000);
+    },
+    [saveContent]
+  );
 
   const handleEditChange = (value: string) => {
     setEditContent(value);

@@ -18,8 +18,8 @@ export default async function ConsultantPage() {
   if (!company) redirect("/onboarding");
 
   // 샘플 계획서 (완성된 것 1개)
-  let samplePlan: any = null;
-  let sampleIR: any = null;
+  let samplePlan: { title: string; companyName: string; sections: Array<{ section_name: string; content_preview: string; section_order: number }> } | null = null;
+  let sampleIR: { title: string; template: string; slides: Array<{ slide_type: string; title: string }> } | null = null;
 
   const { data: samplePlanData } = await supabase
     .from("business_plans")
@@ -36,8 +36,8 @@ export default async function ConsultantPage() {
 
     samplePlan = {
       title: samplePlanData[0].title,
-      companyName: (samplePlanData[0] as any).companies?.name || "샘플 기업",
-      sections: (sections || []).map((s: any) => ({
+      companyName: (samplePlanData[0] as { companies?: { name?: string } | null }).companies?.name || "샘플 기업",
+      sections: (sections || []).map((s: { section_name: string; section_order: number; content: string | null }) => ({
         section_name: s.section_name,
         content_preview: s.content ? s.content.substring(0, 200) : "",
         section_order: s.section_order,
@@ -62,7 +62,7 @@ export default async function ConsultantPage() {
     sampleIR = {
       title: sampleIRData[0].title,
       template: sampleIRData[0].template,
-      slides: (slides || []).map((s: any) => ({
+      slides: (slides || []).map((s: { slide_type: string; title: string; slide_order: number }) => ({
         slide_type: s.slide_type,
         title: s.title,
       })),

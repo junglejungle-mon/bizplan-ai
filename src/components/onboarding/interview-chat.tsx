@@ -140,9 +140,10 @@ export function InterviewChat({
       if (onFileAnalyzed) {
         onFileAnalyzed(fileSummary);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (onFileAnalyzed) {
-        onFileAnalyzed(`⚠️ 파일 분석 실패: ${err.message}`);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        onFileAnalyzed(`⚠️ 파일 분석 실패: ${errMsg}`);
       }
     } finally {
       setUploading(false);

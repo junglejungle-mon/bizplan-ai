@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -250,11 +251,11 @@ export function PlanExampleCards() {
                         동일한 품질로 작성합니다
                       </p>
                     </div>
-                    <a href="/programs" className="w-full">
+                    <Link href="/programs" className="w-full">
                       <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold">
                         <Sparkles className="h-4 w-4" /> 내 계획서 만들기
                       </Button>
-                    </a>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

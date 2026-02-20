@@ -95,7 +95,7 @@ export async function GET(request: Request) {
           .select('institution')
           .not('institution', 'is', null)
           .not('institution', 'eq', '');
-        return [...new Set((institutions || []).map((i: any) => i.institution).filter(Boolean))].sort();
+        return [...new Set((institutions || []).map((i: { institution: string | null }) => i.institution).filter((v): v is string => Boolean(v)))].sort();
       },
     );
 

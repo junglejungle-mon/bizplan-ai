@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +16,6 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
-  const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +35,7 @@ export default function SignupPage() {
     }
 
     const supabase = createClient();
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -52,11 +50,28 @@ export default function SignupPage() {
       return;
     }
 
+    // 약관 동의 기록 DB 저장
+    if (signUpData.user) {
+      await supabase
+        .from("profiles")
+        .update({
+          agreed_terms_at: new Date().toISOString(),
+          agreed_privacy_at: new Date().toISOString(),
+          terms_version: "2026-02-13",
+          privacy_version: "2026-02-13",
+        })
+        .eq("id", signUpData.user.id);
+    }
+
     setSuccess(true);
     setLoading(false);
   };
 
   const handleGoogleSignup = async () => {
+    if (!agreeTerms || !agreePrivacy) {
+      setError("이용약관과 개인정보처리방침에 동의해주세요.");
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -67,6 +82,10 @@ export default function SignupPage() {
   };
 
   const handleKakaoSignup = async () => {
+    if (!agreeTerms || !agreePrivacy) {
+      setError("이용약관과 개인정보처리방침에 동의해주세요.");
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "kakao",
@@ -153,6 +172,7 @@ export default function SignupPage() {
                     setAgreeTerms(e.target.checked);
                     setAgreePrivacy(e.target.checked);
                   }}
+                  aria-label="전체 약관 동의"
                   className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-600">
@@ -164,6 +184,7 @@ export default function SignupPage() {
                   type="checkbox"
                   checked={agreeTerms}
                   onChange={(e) => setAgreeTerms(e.target.checked)}
+                  aria-label="이용약관 동의"
                   className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-xs text-gray-500">
@@ -175,6 +196,7 @@ export default function SignupPage() {
                   type="checkbox"
                   checked={agreePrivacy}
                   onChange={(e) => setAgreePrivacy(e.target.checked)}
+                  aria-label="개인정보처리방침 동의"
                   className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-xs text-gray-500">
@@ -199,7 +221,7 @@ export default function SignupPage() {
           </div>
 
           <div className="space-y-2">
-            <Button variant="outline" className="w-full gap-2" onClick={handleGoogleSignup}>
+            <Button variant="outline" className="w-full gap-2" onClick={handleGoogleSignup} aria-label="Google 계정으로 회원가입">
               <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
                 <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -213,6 +235,7 @@ export default function SignupPage() {
               variant="outline"
               className="w-full gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD800] border-[#FEE500]"
               onClick={handleKakaoSignup}
+              aria-label="카카오 계정으로 회원가입"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path

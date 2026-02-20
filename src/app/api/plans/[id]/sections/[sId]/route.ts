@@ -27,7 +27,7 @@ export async function PATCH(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  if (!plan || (plan as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 

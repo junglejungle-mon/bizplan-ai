@@ -194,9 +194,9 @@ export function buildBizDevContext(ctx: BizDevContext): string {
 // ── 설득력 품질 체크 ─────────────────────────────
 export function checkPersuasiveness(
   content: string,
-  sectionName: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _sectionName: string
 ): PersuasivenessCheck {
-  const lower = content.toLowerCase();
   const suggestions: string[] = [];
 
   const hasPainPoint =

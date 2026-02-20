@@ -76,7 +76,7 @@ async function sendDeadlineNotifications() {
     return { total: 0, sent: 0, skipped: 0 };
   }
 
-  const programIds = urgentPrograms.map((p: any) => p.id);
+  const programIds = urgentPrograms.map((p: { id: string; title: string; apply_end: string }) => p.id);
 
   // 이 공고에 매칭된 사용자 조회 (match_score >= 60)
   const { data: matchings } = await supabase
@@ -90,7 +90,7 @@ async function sendDeadlineNotifications() {
   }
 
   // company_id → user_id 매핑
-  const companyIds = [...new Set(matchings.map((m: any) => m.company_id))];
+  const companyIds = [...new Set(matchings.map((m: { company_id: string; program_id: string }) => m.company_id))];
   const { data: companies } = await supabase
     .from("companies")
     .select("id, user_id, name")
@@ -100,8 +100,10 @@ async function sendDeadlineNotifications() {
     return { total: 0, sent: 0, skipped: 0 };
   }
 
-  const companyMap = new Map(companies.map((c: any) => [c.id, c]));
-  const programMap = new Map(urgentPrograms.map((p: any) => [p.id, p]));
+  type CompanyRow = { id: string; user_id: string; name: string };
+  type ProgramRow = { id: string; title: string; apply_end: string };
+  const companyMap = new Map(companies.map((c: CompanyRow) => [c.id, c]));
+  const programMap = new Map(urgentPrograms.map((p: ProgramRow) => [p.id, p]));
 
   // userId → 알림 변수 (가장 긴급한 공고 기준)
   const userVariables = new Map<string, Record<string, string>>();

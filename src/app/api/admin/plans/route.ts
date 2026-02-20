@@ -68,13 +68,13 @@ export async function GET(request: Request) {
         ]);
 
         const qualityScore = qualityResult.data?.[0]?.total_score ?? null;
-        const matchScore = (matchingResult as any).data?.[0]?.match_score ?? null;
+        const matchScore = (matchingResult as { data?: { match_score?: number }[] | null }).data?.[0]?.match_score ?? null;
 
         return {
           ...plan,
-          company_name: (plan as any).companies?.name || "—",
-          company_industry: (plan as any).companies?.industry || "",
-          program_title: (plan as any).programs?.title || null,
+          company_name: (plan as { companies?: { name?: string; industry?: string } | null }).companies?.name || "—",
+          company_industry: (plan as { companies?: { name?: string; industry?: string } | null }).companies?.industry || "",
+          program_title: (plan as { programs?: { title?: string } | null }).programs?.title || null,
           quality_score: qualityScore,
           match_score: matchScore,
           section_count: sectionResult.count || 0,

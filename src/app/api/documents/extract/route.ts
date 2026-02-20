@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 권한 확인
-  if ((doc as any).companies?.user_id !== user.id) {
+  if ((doc as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 
@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     });
 
     // JSON 파싱
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let extractedData: Record<string, any> = {};
     try {
       const jsonMatch = result.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
@@ -334,12 +335,15 @@ function getExtractionPrompt(documentType: string): string {
  * 추출된 데이터를 companies 테이블에 반영
  */
 async function applyExtractedData(
-  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client type varies by import
+  supabase: { from: (table: string) => any },
   companyId: string,
   documentType: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic extracted data from AI
   data: Record<string, any>
 ) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic company field updates
     const updates: Record<string, any> = {};
 
     switch (documentType) {

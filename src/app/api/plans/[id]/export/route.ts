@@ -57,7 +57,10 @@ export async function POST(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  type PlanCompanies = { user_id?: string; name?: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type PlanEvalCriteria = Record<string, any>;
+  if (!plan || (plan as { companies?: PlanCompanies }).companies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -74,17 +77,18 @@ export async function POST(
     );
   }
 
-  const companyName = (plan as any).companies?.name || "회사명";
+  const companyName = (plan as { companies?: PlanCompanies }).companies?.name || "회사명";
   const dateStr = new Date().toISOString().slice(0, 10);
 
   // evaluation_criteria에서 chart_data, kpi_data 추출
-  const evalCriteria = (plan as any).evaluation_criteria || {};
+  const evalCriteria: PlanEvalCriteria = (plan as { evaluation_criteria?: PlanEvalCriteria }).evaluation_criteria || {};
   const rawChartData = evalCriteria.chart_data || [];
   const rawKpiData = evalCriteria.kpi_data || {};
   const templateType = evalCriteria.template_type || "custom";
 
   // kpi_data 정규화: {kpis: {revenue: [...], ...}} → {revenue: "50억원", ...}
   const kpis = rawKpiData.kpis || rawKpiData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kpiData: Record<string, any> = {};
   if (kpis.revenue) {
     kpiData.revenue = Array.isArray(kpis.revenue)
@@ -108,9 +112,11 @@ export async function POST(
   const MAX_CHARTS_PER_SECTION = 3;
   const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartData: Record<string, any[]> = {};
   if (Array.isArray(rawChartData)) {
     // 섹션별로 그룹핑
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const grouped: Record<string, any[]> = {};
     for (const chart of rawChartData) {
       const sectionKey = `section_${chart.section_order || 1}`;
@@ -133,6 +139,7 @@ export async function POST(
     }
   } else if (typeof rawChartData === "object") {
     // 이미 올바른 형태인 경우에도 섹션당 제한 적용
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const [key, charts] of Object.entries(rawChartData as Record<string, any[]>)) {
       chartData[key] = (charts || []).slice(0, MAX_CHARTS_PER_SECTION);
     }
@@ -144,7 +151,7 @@ export async function POST(
       const buffer = await buildDocx({
         title: plan.title,
         companyName,
-        sections: sections.map((s: any) => ({
+        sections: sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
           section_name: s.section_name,
           content: s.content,
           section_order: s.section_order,
@@ -196,7 +203,7 @@ export async function POST(
       const pdfBuffer = await buildPdf({
         title: plan.title,
         companyName,
-        sections: sections.map((s: any) => ({
+        sections: sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
           section_name: s.section_name,
           content: s.content,
           section_order: s.section_order,
@@ -236,7 +243,7 @@ export async function POST(
             title: plan.title,
             companyName,
             programId: plan.program_id || undefined,
-            sections: sections.map((s: any) => ({
+            sections: sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
               section_name: s.section_name,
               content: s.content,
               section_order: s.section_order,
@@ -254,7 +261,7 @@ export async function POST(
         hwpxBuffer = await buildHwpx({
           title: plan.title,
           companyName,
-          sections: sections.map((s: any) => ({
+          sections: sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
             section_name: s.section_name,
             content: s.content,
             section_order: s.section_order,

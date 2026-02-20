@@ -130,6 +130,7 @@ export async function fetchMssBizPrograms(pageNo = 1, numOfRows = 100) {
       attachment_urls: item.fileUrl
         ? { file: item.fileUrl, fileName: item.fileName }
         : {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw API response preserved as-is
       raw_data: item as unknown as Record<string, any>,
     };
   });

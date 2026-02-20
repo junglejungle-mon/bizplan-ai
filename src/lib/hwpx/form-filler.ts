@@ -36,7 +36,6 @@ function findParagraphPositions(
 ): Array<{ start: number; end: number; full: string }> {
   const positions: Array<{ start: number; end: number; full: string }> = [];
   const openTag = /<hp:p[\s>]/g;
-  const closeTag = /<\/hp:p>/g;
 
   let openMatch;
   while ((openMatch = openTag.exec(xml)) !== null) {

@@ -14,13 +14,13 @@ interface DocumentUploadButtonProps {
 export function DocumentUploadButton({
   documentType,
   source,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   documentName,
   onUploadComplete,
 }: DocumentUploadButtonProps) {
   const [status, setStatus] = useState<
     "idle" | "uploading" | "extracting" | "done" | "error"
   >("idle");
-  const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleClick = () => {
@@ -32,7 +32,6 @@ export function DocumentUploadButton({
     if (!file) return;
 
     setStatus("uploading");
-    setErrorMessage("");
 
     try {
       // 1. 파일 업로드
@@ -76,7 +75,6 @@ export function DocumentUploadButton({
       }, 2000);
     } catch (error) {
       setStatus("error");
-      setErrorMessage(String(error));
       console.error("[Upload]", error);
     } finally {
       // 파일 입력 초기화

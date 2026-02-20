@@ -26,7 +26,7 @@ export default function DashboardError({
           문제가 발생했습니다
         </h2>
         <p className="text-sm text-gray-500 mb-6">
-          {error.message || "페이지를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
+          페이지를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.
         </p>
         <div className="flex gap-3 justify-center">
           <button

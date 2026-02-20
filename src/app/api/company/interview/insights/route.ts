@@ -40,13 +40,14 @@ export async function POST(request: NextRequest) {
   // Admin client 사용 (세션 만료 문제 방지)
   const supabase = createAdminClient();
 
-  // 전체 Q&A 로드
+  // 전체 Q&A 로드 (최대 50건 — 10라운드 × 3문답 + 여유)
   const { data: allQA } = await supabase
     .from("company_interviews")
     .select("question, answer, question_order")
     .eq("company_id", companyId)
     .not("answer", "is", null)
-    .order("question_order", { ascending: true });
+    .order("question_order", { ascending: true })
+    .limit(50);
 
   if (!allQA || allQA.length === 0) {
     return Response.json({ error: "No interview data found" }, { status: 404 });
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
 
           // 매칭을 기다리지 않고 백그라운드에서 실행
           runMatchingPipeline(companyId)
-            .then((result) => {
+            .then(() => {
             })
             .catch((err) => {
               console.error("[Insights] 백그라운드 매칭 실패:", err);

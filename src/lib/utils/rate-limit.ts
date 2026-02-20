@@ -4,10 +4,6 @@
  * Redis 사용 가능 시: 분산 환경 지원 (Vercel, 다중 인스턴스)
  * Redis 불가 시: 기존 인메모리 방식으로 자동 폴백
  */
-import { createLogger } from "@/lib/logger";
-
-const log = createLogger("rate-limit");
-
 // ─── 인메모리 Store (폴백용 + Redis 불가 시) ─────
 interface RateLimitEntry {
   count: number;

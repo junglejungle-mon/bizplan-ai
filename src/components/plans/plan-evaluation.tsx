@@ -56,7 +56,8 @@ interface PlanEvaluationProps {
   planStatus: string;
 }
 
-const GRADE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+type LucideIcon = typeof CheckCircle2;
+const GRADE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
   S: { label: "제출 가능", color: "text-green-700", bg: "bg-green-50", icon: CheckCircle2 },
   A: { label: "소폭 보완", color: "text-blue-700", bg: "bg-blue-50", icon: Star },
   B: { label: "보완 필요", color: "text-yellow-700", bg: "bg-yellow-50", icon: AlertTriangle },
@@ -64,7 +65,7 @@ const GRADE_CONFIG: Record<string, { label: string; color: string; bg: string; i
   D: { label: "재작성 필요", color: "text-red-700", bg: "bg-red-50", icon: XCircle },
 };
 
-const SCORE_LABELS: Record<string, { label: string; icon: any }> = {
+const SCORE_LABELS: Record<string, { label: string; icon: LucideIcon }> = {
   structure_match: { label: "구조 일치도", icon: Target },
   content_fulfillment: { label: "내용 충족도", icon: TrendingUp },
   competitiveness: { label: "경쟁력", icon: Award },

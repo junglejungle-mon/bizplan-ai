@@ -10,7 +10,7 @@
  *       └── 2026-W08 주간 회의 (날짜별 자동 생성)
  */
 
-import type { TeamAnalysisOutput, ServiceMetrics } from './meeting-types';
+import type { ServiceMetrics } from './meeting-types';
 
 // ─── 노션 설정 ─────────────────────────────────────────────────
 const NOTION_API_KEY = process.env.NOTION_API_KEY || '';

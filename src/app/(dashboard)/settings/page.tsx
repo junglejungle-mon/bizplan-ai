@@ -38,6 +38,27 @@ interface NotificationSettings {
   };
 }
 
+const Toggle = ({
+  enabled,
+  onClick,
+}: {
+  enabled: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+      enabled ? "bg-blue-600" : "bg-gray-200"
+    }`}
+  >
+    <span
+      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+        enabled ? "translate-x-6" : "translate-x-1"
+      }`}
+    />
+  </button>
+);
+
 const DEFAULT_SETTINGS: NotificationSettings = {
   kakao: {
     enabled: false,
@@ -53,9 +74,18 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   },
 };
 
+type ProfileData = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  phone_verified: boolean | null;
+};
+
 export default function SettingsPage() {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string; created_at?: string; app_metadata?: Record<string, string> } | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] =
     useState<NotificationSettings>(DEFAULT_SETTINGS);
@@ -139,7 +169,7 @@ export default function SettingsPage() {
       .update({ name: name.trim() })
       .eq("id", user.id);
 
-    setProfile((prev: any) => (prev ? { ...prev, name: name.trim() } : prev));
+    setProfile((prev) => (prev ? { ...prev, name: name.trim() } : prev));
     setNameSaving(false);
     showSaved();
     toast.success("이름이 변경되었습니다.");
@@ -163,7 +193,7 @@ export default function SettingsPage() {
 
     // 현재 비밀번호로 재인증
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email!,
+      email: user?.email ?? "",
       password: currentPassword,
     });
 
@@ -203,7 +233,7 @@ export default function SettingsPage() {
       .eq("id", user.id);
 
     setPhone(cleaned);
-    setProfile((prev: any) => (prev ? { ...prev, phone: cleaned } : prev));
+    setProfile((prev) => (prev ? { ...prev, phone: cleaned } : prev));
     setPhoneSaving(false);
     showSaved();
   };
@@ -280,27 +310,6 @@ export default function SettingsPage() {
       </div>
     );
   }
-
-  const Toggle = ({
-    enabled,
-    onClick,
-  }: {
-    enabled: boolean;
-    onClick: () => void;
-  }) => (
-    <button
-      onClick={onClick}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        enabled ? "bg-blue-600" : "bg-gray-200"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          enabled ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
-  );
 
   return (
     <div className="space-y-6">

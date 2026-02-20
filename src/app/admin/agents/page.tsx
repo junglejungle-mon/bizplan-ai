@@ -429,24 +429,31 @@ export default function AdminAgentsPage() {
   }, []);
 
   useEffect(() => {
-    if (tab === "patterns") {
-      setLoading(true);
-      fetch("/api/admin/quality/patterns")
-        .then((r) => r.json())
-        .then((data) => setPatterns(data.patterns || []))
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
-    if (tab === "logs") {
-      setLoading(true);
-      fetch("/api/admin/system/status")
-        .then((r) => r.json())
-        .then((data) => setLogs(data.recentLogs || []))
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
-    if (tab === "missions") fetchMissions();
-    if (tab === "meetings") fetchMeetings();
+    let cancelled = false;
+    const loadData = async () => {
+      if (tab === "patterns") {
+        setLoading(true);
+        try {
+          const r = await fetch("/api/admin/quality/patterns");
+          const data = await r.json();
+          if (!cancelled) setPatterns(data.patterns || []);
+        } catch {}
+        if (!cancelled) setLoading(false);
+      }
+      if (tab === "logs") {
+        setLoading(true);
+        try {
+          const r = await fetch("/api/admin/system/status");
+          const data = await r.json();
+          if (!cancelled) setLogs(data.recentLogs || []);
+        } catch {}
+        if (!cancelled) setLoading(false);
+      }
+      if (tab === "missions") fetchMissions();
+      if (tab === "meetings") fetchMeetings();
+    };
+    loadData();
+    return () => { cancelled = true; };
   }, [tab, fetchMissions, fetchMeetings]);
 
   const filteredTeams = TEAM_CATALOG.filter((t) => {

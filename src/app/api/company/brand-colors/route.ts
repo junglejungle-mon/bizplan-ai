@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         .eq("id", companies[0].id)
         .single();
 
-      let existingContent = (company as any)?.business_content || "";
+      let existingContent = (company as { business_content?: string } | null)?.business_content || "";
 
       // brand_colors JSON을 business_content 앞에 추가
       const brandColorJson = `[BRAND_COLORS]\n${JSON.stringify(brandColors)}\n[/BRAND_COLORS]\n`;
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
  * GET /api/company/brand-colors
  * 저장된 브랜드 색상 조회
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ brandColors: null });
   }
 
-  const content = (companies[0] as any)?.business_content || "";
+  const content = (companies[0] as { business_content?: string })?.business_content || "";
   const match = content.match(/\[BRAND_COLORS\]\n([\s\S]*?)\n\[\/BRAND_COLORS\]/);
 
   if (!match) {

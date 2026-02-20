@@ -20,12 +20,13 @@ export default async function IRPage() {
   // 사용자의 기존 IR 확인
   const { data: rawUserIRs } = await supabase
     .from("ir_presentations")
-    .select("id, title, template, status, created_at, business_plans(title)")
+    .select("id, plan_id, title, template, status, created_at, business_plans(title)")
     .eq("company_id", company.id)
     .order("created_at", { ascending: false });
 
-  const userIRs = (rawUserIRs || []).map((ir: any) => ({
+  const userIRs = (rawUserIRs || []).map((ir: { id: string; plan_id: string | null; title: string; template: string; status: string; created_at: string; business_plans: unknown }) => ({
     id: ir.id,
+    plan_id: ir.plan_id as string,
     title: ir.title,
     template: ir.template,
     status: ir.status,

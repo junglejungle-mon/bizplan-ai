@@ -7,6 +7,7 @@ import {
   buildRoundSummaryPrompt,
 } from "@/lib/ai/prompts/interview";
 import { calculateProfileScore } from "@/lib/utils/profile-score";
+import { safeErrorMessage } from "@/lib/api/error";
 
 // Vercel 타임아웃 확장
 export const maxDuration = 60;
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
   const fileAnalysisSummaries = extractedDocs
     .filter((d) => d.extracted_data)
     .map((d) => {
-      const data = d.extracted_data as any;
+      const data = d.extracted_data as { summary?: string; full_analysis?: string } | null;
       return data?.summary || data?.full_analysis?.slice(0, 300) || "";
     })
     .filter(Boolean);
@@ -82,9 +83,10 @@ export async function POST(request: NextRequest) {
 
   // ========================================
   // 5라운드 완료 시 → 최초 완료인 경우만 인사이트 추출
-  // 이미 business_content가 있으면 추가 인터뷰 모드 → 계속 진행
+  // 이미 business_content가 있으면 추가 인터뷰 모드 → 최대 10라운드까지
   // ========================================
   const isFirstCompletion = !company?.business_content;
+  const MAX_ROUNDS = 10; // 추가 인터뷰 포함 최대 라운드
   if (currentRound >= 5 && roundComplete && isFirstCompletion) {
     return Response.json({
       type: "interview_complete",
@@ -93,10 +95,20 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // 추가 인터뷰 모드에서도 최대 라운드 제한
+  if (currentRound >= MAX_ROUNDS && roundComplete) {
+    return Response.json({
+      type: "interview_complete",
+      companyId,
+      totalAnswered,
+      message: "추가 인터뷰가 최대 라운드에 도달했습니다.",
+    });
+  }
+
   // ========================================
   // 라운드 전환 시 → 중간 요약 + 점수 업데이트
   // ========================================
-  let roundSummary: any = null;
+  let roundSummary: { interim_score?: number; [key: string]: unknown } | null = null;
 
   if (roundComplete && currentRound < 5) {
     try {
@@ -119,26 +131,27 @@ export async function POST(request: NextRequest) {
       try {
         const jsonMatch = summaryJson.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          roundSummary = JSON.parse(jsonMatch[0]);
+          const parsed = JSON.parse(jsonMatch[0]) as { interim_score?: number; [key: string]: unknown };
+          roundSummary = parsed;
 
           // 중간 점수 업데이트 (유틸 함수 기반 계산)
-          {
-            const answeredCount = totalAnswered; // 이미 현재 답변 포함됨
-            const newScore = calculateProfileScore(company || {}, answeredCount);
-            // AI interim_score와 유틸 계산 중 큰 값 사용
-            const finalScore = Math.max(newScore, roundSummary.interim_score || 0);
-            await supabase
-              .from("companies")
-              .update({
-                profile_score: finalScore,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", companyId);
-            // SSE로 보낼 점수도 갱신
-            roundSummary.interim_score = finalScore;
-          }
+          const answeredCount = totalAnswered; // 이미 현재 답변 포함됨
+          const newScore = calculateProfileScore(company || {}, answeredCount);
+          // AI interim_score와 유틸 계산 중 큰 값 사용
+          const finalScore = Math.max(newScore, parsed.interim_score || 0);
+          await supabase
+            .from("companies")
+            .update({
+              profile_score: finalScore,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", companyId);
+          // SSE로 보낼 점수도 갱신
+          parsed.interim_score = finalScore;
         }
-      } catch {}
+      } catch (parseErr) {
+        console.warn("[Interview] JSON 파싱 실패 (라운드 요약):", parseErr);
+      }
     } catch (e) {
       console.error("[Interview] Round summary error:", e);
     }
@@ -147,7 +160,7 @@ export async function POST(request: NextRequest) {
   // ========================================
   // 다음 질문 생성 (SSE 스트리밍)
   // ========================================
-  const nextRound = roundComplete ? Math.min(currentRound + 1, 5) : currentRound;
+  const nextRound = roundComplete ? Math.min(currentRound + 1, MAX_ROUNDS) : currentRound;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -227,8 +240,9 @@ export async function POST(request: NextRequest) {
         );
         controller.close();
       } catch (error) {
+        console.error("[Interview] Stream error:", error);
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", message: String(error) })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ type: "error", message: safeErrorMessage(error, "AI 인터뷰 처리 중 오류가 발생했습니다") })}\n\n`)
         );
         controller.close();
       }

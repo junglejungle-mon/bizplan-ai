@@ -53,16 +53,16 @@ export async function GET(
     return Response.json({ error: "슬라이드가 없습니다." }, { status: 400 });
   }
 
-  const companyName = (presentation as any).companies?.name || "회사명";
+  const companyName = (presentation as { companies?: { name?: string } | null }).companies?.name || "회사명";
 
   try {
     const pptxBuffer = await buildPptx({
       companyName,
-      template: (presentation.template as any) || "minimal",
-      slides: slides.map((s: any) => ({
-        slide_type: s.slide_type,
+      template: (presentation.template as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci") || "minimal",
+      slides: slides.map((s) => ({
+        slide_type: s.slide_type as "cover" | "problem" | "solution" | "market" | "business_model" | "traction" | "competition" | "team" | "financials" | "ask" | "roadmap" | "tech",
         title: s.title,
-        content: s.content || {},
+        content: (s.content || {}) as Record<string, unknown>,
         notes: s.notes,
       })),
     });

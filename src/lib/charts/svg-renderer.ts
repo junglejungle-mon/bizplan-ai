@@ -292,8 +292,8 @@ function renderBar(chart: ChartDataItem, opts: SvgRenderOptions): string {
     const startX = groupX + (groupW - totalBarsW) / 2;
 
     datasets.forEach((ds, di) => {
-      const val = ds.values[i] || 0;
-      const barH = (val / maxVal) * chartH;
+      const val = (ds.values && i < ds.values.length ? ds.values[i] : 0) || 0;
+      const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
       const x = startX + di * (barW + barGap);
       const y = chartBottom - barH;
 
@@ -1145,7 +1145,7 @@ function renderOrgChart(chart: ChartDataItem, opts: SvgRenderOptions): string {
     members?: Array<{ role: string; name: string; title: string; detail?: string }>;
     structure?: { ceo?: string; departments?: Array<{ name: string; roles?: string[] }> };
   };
-  let members = data.members || [];
+  const members = data.members || [];
 
   // structure 형식을 members로 변환
   if (members.length === 0 && data.structure) {

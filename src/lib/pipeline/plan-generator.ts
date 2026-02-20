@@ -33,7 +33,6 @@ import {
 import {
   classifyBizDevSection,
   buildBizDevContext,
-  BIZDEV_SYSTEM,
 } from "@/lib/agents/bizdev-agent";
 import {
   classifyMarketSection,
@@ -81,6 +80,7 @@ interface GenerateOptions {
  */
 export async function* generateBusinessPlan(
   opts: GenerateOptions
+ 
 ): AsyncGenerator<{
   type:
     | "progress"
@@ -91,7 +91,7 @@ export async function* generateBusinessPlan(
     | "chart_data"
     | "complete"
     | "error";
-  data: any;
+  data: Record<string, unknown>;
 }> {
   const supabase = createAdminClient();
 
@@ -109,7 +109,9 @@ export async function* generateBusinessPlan(
 
     // 2. 프로그램 정보 로드 (있는 경우)
     let programInfo = "";
-    let evaluationCriteria: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let evaluationCriteria: Array<{ 항목: string; 배점: number; [key: string]: any }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let programAttachmentUrls: Record<string, any> | null = null;
 
     if (opts.programId) {
@@ -126,12 +128,13 @@ export async function* generateBusinessPlan(
           program.institution ? `주관기관: ${program.institution}` : "",
           program.summary ? `공고 요약: ${program.summary}` : "",
           program.target ? `지원대상/자격요건: ${program.target}` : "",
-          (program as any).hashtags?.length ? `분야 키워드: ${(program as any).hashtags.join(", ")}` : "",
-          (program as any).apply_start ? `접수기간: ${(program as any).apply_start} ~ ${(program as any).apply_end || "미정"}` : "",
+          (program as { hashtags?: string[] }).hashtags?.length ? `분야 키워드: ${(program as { hashtags?: string[] }).hashtags!.join(", ")}` : "",
+          (program as { apply_start?: string }).apply_start ? `접수기간: ${(program as { apply_start?: string }).apply_start} ~ ${(program as { apply_end?: string }).apply_end || "미정"}` : "",
         ].filter(Boolean);
 
         // raw_data에서 추가 정보 추출 (지원금액, 상세 자격요건 등)
-        const rawData = (program as any).raw_data;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawData = (program as { raw_data?: Record<string, any> }).raw_data;
         if (rawData) {
           if (rawData.support_amount || rawData.지원규모 || rawData.지원금액) {
             programParts.push(`지원금액/규모: ${rawData.support_amount || rawData.지원규모 || rawData.지원금액}`);
@@ -145,7 +148,8 @@ export async function* generateBusinessPlan(
         }
 
         programInfo = programParts.join("\n");
-        programAttachmentUrls = (program as any).attachment_urls;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        programAttachmentUrls = (program as { attachment_urls?: Record<string, any> | null }).attachment_urls ?? null;
       }
     }
 
@@ -230,7 +234,8 @@ export async function* generateBusinessPlan(
         .eq("id", opts.planId)
         .single();
 
-      const evalCrit = (planData as any)?.evaluation_criteria;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const evalCrit = (planData as { evaluation_criteria?: Record<string, any> } | null)?.evaluation_criteria;
       if (evalCrit?.template_type) {
         templateType = evalCrit.template_type as TemplateType;
       }
@@ -291,7 +296,7 @@ export async function* generateBusinessPlan(
 
     if (isResume) {
       // 이어쓰기: DB에서 섹션 구조 복원
-      sections = existingSections!.map((es: any) => ({
+      sections = existingSections!.map((es) => ({
         section_name: es.section_name,
         guidelines: es.guidelines || "",
         section_order: es.section_order,
@@ -379,7 +384,7 @@ export async function* generateBusinessPlan(
       for (const section of sections) {
         const evalWeight =
           evaluationCriteria.find(
-            (c: any) =>
+            (c) =>
               section.section_name.includes(c.항목) ||
               c.항목.includes(section.section_name)
           )?.배점 || null;
@@ -399,7 +404,8 @@ export async function* generateBusinessPlan(
         .select("evaluation_criteria")
         .eq("id", opts.planId)
         .single();
-      const evalCrit = (planData as any)?.evaluation_criteria;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const evalCrit = (planData as { evaluation_criteria?: Record<string, any> } | null)?.evaluation_criteria;
       if (evalCrit?.criteria) {
         evaluationCriteria = evalCrit.criteria;
       } else if (Array.isArray(evalCrit)) {
@@ -432,7 +438,8 @@ export async function* generateBusinessPlan(
       console.warn("[PlanGen] DB 패턴 로드 실패 (하드코딩 폴백 사용):", e);
     }
 
-    const allChartData: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allChartData: Array<Record<string, any>> = [];
 
     // ★ v5: 재무 수치 일관성 추적 — CFO 내부감사 에이전트
     let accumulatedFinancialData = "";
@@ -562,7 +569,7 @@ export async function* generateBusinessPlan(
       // Step C: 섹션 작성 (Sonnet — SSE 스트리밍 + templateType 전달)
       const evalWeight =
         evaluationCriteria.find(
-          (c: any) =>
+          (c) =>
             section.section_name.includes(c.항목) ||
             c.항목.includes(section.section_name)
         )?.배점 || undefined;
@@ -716,8 +723,10 @@ export async function* generateBusinessPlan(
       ]);
 
       // 통합 결과에서 품질 + 차트 분리 파싱
-      let qualityScore: any = null;
-      let chartData: any = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let qualityScore: Record<string, any> | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let chartData: Array<Record<string, any>> | null = null;
       if (qualityChartResult.status === "fulfilled") {
         try {
           const jsonMatch = qualityChartResult.value.match(
@@ -741,13 +750,11 @@ export async function* generateBusinessPlan(
 
       // 자동 채점 결과 로깅 + 재작성 루프
       let autoScore: number | null = null;
-      let rewriteAttempted = false;
       if (scorerResult.status === "fulfilled" && scorerResult.value) {
         autoScore = scorerResult.value.total_score;
 
         // ★ 40점 미만이면 자동 재작성 1회 시도 (비용 최적화: 60→40)
         if (autoScore < 40 && sectionId) {
-          rewriteAttempted = true;
           const suggestions = scorerResult.value.improvement_suggestions || [];
 
           try {
@@ -835,11 +842,12 @@ export async function* generateBusinessPlan(
       }
 
       // 차트 데이터 (통합 결과에서 이미 파싱됨)
-      let sectionCharts: any[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let sectionCharts: Array<Record<string, any>> = [];
       if (chartData && Array.isArray(chartData)) {
         sectionCharts = chartData;
         allChartData.push(
-          ...sectionCharts.map((c: any) => ({
+          ...sectionCharts.map((c) => ({
             ...c,
             section_name: section.section_name,
             section_order: section.section_order,
@@ -882,7 +890,8 @@ export async function* generateBusinessPlan(
     };
 
     // 전체 사업계획서에서 KPI 추출
-    let kpiData: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let kpiData: Record<string, any> | null = null;
     try {
       const kpiResult = await callClaude({
         model: "claude-haiku-4-5-20251001",
@@ -919,8 +928,8 @@ export async function* generateBusinessPlan(
     // ========================================
     // 완성 처리
     // ========================================
-    const completionData: any = {
-      status: "completed",
+    const completionData = {
+      status: "completed" as const,
       updated_at: new Date().toISOString(),
     };
 
@@ -950,8 +959,7 @@ export async function* generateBusinessPlan(
     // 전체 품질 점수 계산 (scorer로 전체 플랜 평균 계산 + DB 저장)
     try {
       const { scorePlan } = await import("@/lib/quality/scorer");
-      const scoreResults = await scorePlan(opts.planId);
-      const avgTotal = scoreResults.reduce((s, r) => s + r.total_score, 0) / scoreResults.length;
+      await scorePlan(opts.planId);
     } catch (e) {
       console.warn("[PlanGen] 전체 품질 점수 계산 실패:", e);
     }

@@ -6,25 +6,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude } from "@/lib/ai/claude";
 import {
-  REGION_MATCH_SYSTEM,
-  COMPANY_MATCH_SYSTEM,
-  buildCompanyMatchPrompt,
   DEEP_ANALYSIS_SYSTEM,
   buildDeepAnalysisPrompt,
 } from "@/lib/ai/prompts/matching";
 import { sendKakaoNotification } from "@/lib/notification/notification-service";
-
-interface MatchResult {
-  programId: string;
-  programTitle: string;
-  regionMatch: boolean;
-  matchScore: number;
-  matchReason: string;
-  matchKeywords: string[];
-  matchDetail: string;
-  scoreBreakdown: Record<string, number> | null;
-  fitLevel: string;
-}
 
 /**
  * 배치 지역 매칭: 한번의 AI 호출로 여러 프로그램의 지역 적합성 판단
@@ -88,7 +73,7 @@ async function batchCompanyMatch(
   businessContent: string,
   programs: Array<{ id: string; title: string; summary?: string; target?: string; hashtags?: string[] }>
 ): Promise<Map<string, { score: number; reason: string; keywords: string[]; detail: string; breakdown: Record<string, number> | null; fitLevel: string }>> {
-  const results = new Map<string, any>();
+  const results = new Map<string, { score: number; reason: string; keywords: string[]; detail: string; breakdown: Record<string, number> | null; fitLevel: string }>();
 
   const programList = programs.map((p, i) => {
     const parts = [
@@ -98,7 +83,8 @@ async function batchCompanyMatch(
       `키워드: ${(p.hashtags || []).join(", ") || "없음"}`,
     ];
     // raw_data에서 추가 자격요건/지원분야 정보 추출
-    const raw = (p as any).raw_data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = (p as { raw_data?: Record<string, any> }).raw_data;
     if (raw) {
       if (raw.support_detail || raw.지원내용) {
         parts.push(`지원내용: ${(raw.support_detail || raw.지원내용 || "").slice(0, 200)}`);
@@ -249,21 +235,24 @@ export async function runMatchingPipeline(companyId: string): Promise<{
     .eq("company_id", companyId);
 
   const matchedProgramIds = new Set(
-    (existingMatchings ?? []).map((m: any) => m.program_id)
+    (existingMatchings ?? []).map((m: { program_id: string }) => m.program_id)
   );
 
-  // 3. 미매칭 + 마감 안 된 프로그램 로드
+  // 3. 미매칭 + 마감 안 된 + 최근 수집 프로그램 로드
   const today = new Date().toISOString().split("T")[0];
+  const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString().split("T")[0];
 
   const { data: programs } = await supabase
     .from("programs")
     .select("*")
     .or(`apply_end.is.null,apply_end.gte.${today}`)
+    .gte("collected_at", oneMonthAgo)
     .order("collected_at", { ascending: false })
-    .limit(500);
+    .limit(200);
 
   const unmatchedPrograms = (programs ?? []).filter(
-    (p: any) => !matchedProgramIds.has(p.id)
+    (p) => !matchedProgramIds.has(p.id)
   );
 
   if (unmatchedPrograms.length === 0) {
@@ -295,7 +284,7 @@ export async function runMatchingPipeline(companyId: string): Promise<{
     }
   }
 
-  const regionPassedPrograms = unmatchedPrograms.filter((p: any) => regionPassedIds.has(p.id));
+  const regionPassedPrograms = unmatchedPrograms.filter((p) => regionPassedIds.has(p.id));
   skipped = unmatchedPrograms.length - regionPassedPrograms.length;
 
 

@@ -49,11 +49,13 @@ export default function CompanyPage() {
   const [saving, setSaving] = useState(false);
   const [showInterviews, setShowInterviews] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [ocrResult, setOcrResult] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {

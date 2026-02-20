@@ -57,15 +57,15 @@ export async function searchReferences(
     return [];
   }
 
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    documentId: row.document_id,
-    content: row.content,
-    sectionName: row.section_name,
-    chunkIndex: row.chunk_index,
-    templateType: row.template_type,
-    referenceType: row.reference_type,
-    similarity: row.similarity,
+  return (data || []).map((row: Record<string, unknown>) => ({
+    id: row.id as string,
+    documentId: row.document_id as string,
+    content: row.content as string,
+    sectionName: (row.section_name as string) || null,
+    chunkIndex: row.chunk_index as number,
+    templateType: (row.template_type as string) || null,
+    referenceType: row.reference_type as string,
+    similarity: row.similarity as number,
   }));
 }
 

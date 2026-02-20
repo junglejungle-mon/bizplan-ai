@@ -15,6 +15,7 @@ import { PROGRAM_PDF_OCR_SYSTEM } from "@/lib/ai/prompts/writing";
  * K-Startup: {} → null
  */
 export function extractPdfUrlFromProgram(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSONB attachment_urls from DB
   attachmentUrls: Record<string, any>
 ): string | null {
   if (!attachmentUrls || typeof attachmentUrls !== "object") return null;

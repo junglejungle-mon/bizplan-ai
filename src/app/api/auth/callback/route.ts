@@ -28,14 +28,15 @@ export async function GET(request: Request) {
       // 회사 정보가 있는지 확인
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 카카오 로그인 시 전화번호를 profiles에 저장
+        const admin = createAdminClient();
         const provider = user.app_metadata?.provider;
+
+        // 카카오 로그인 시 전화번호를 profiles에 저장
         if (provider === "kakao") {
           const phone = user.user_metadata?.phone_number;
           const kakaoId = user.user_metadata?.provider_id || user.user_metadata?.sub;
 
           if (phone || kakaoId) {
-            const admin = createAdminClient();
             await admin
               .from("profiles")
               .update({
@@ -46,12 +47,26 @@ export async function GET(request: Request) {
           }
         }
 
+        // 약관 동의 여부 확인 (OAuth 사용자)
+        const { data: profile } = await admin
+          .from("profiles")
+          .select("agreed_terms_at, agreed_privacy_at")
+          .eq("id", user.id)
+          .single();
+
+        const needsTerms = !profile?.agreed_terms_at || !profile?.agreed_privacy_at;
+
         const { data: companies } = await supabase
           .from("companies")
           .select("id")
           .eq("user_id", user.id)
           .order("updated_at", { ascending: false })
           .limit(1);
+
+        // 약관 미동의 → 온보딩에서 약관 동의 필수
+        if (needsTerms) {
+          return NextResponse.redirect(`${origin}/onboarding?require_terms=true`);
+        }
 
         // 회사 정보가 있으면 대시보드, 없으면 온보딩
         const redirectTo = companies && companies.length > 0 ? "/dashboard" : "/onboarding";

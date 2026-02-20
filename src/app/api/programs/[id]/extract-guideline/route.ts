@@ -93,10 +93,13 @@ export async function POST(
     return NextResponse.json({ error: "프로그램을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const attachmentUrls = (program as any).attachment_urls;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type ProgramData = { id: string; title: string; attachment_urls?: Record<string, any> | null; raw_data?: Record<string, any> | null };
+  const attachmentUrls = (program as ProgramData).attachment_urls;
 
   // 이미 추출된 구조가 있는지 확인 (raw_data.guideline_structure)
-  const rawData = (program as any).raw_data || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawData: Record<string, any> = (program as ProgramData).raw_data || {};
   if (rawData.guideline_structure) {
     return NextResponse.json({
       success: true,
@@ -146,7 +149,8 @@ export async function POST(
     });
 
     // JSON 파싱
-    let structure: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let structure: Record<string, any> | null = null;
     try {
       const jsonMatch = structureJson.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -227,7 +231,8 @@ export async function GET(
     return NextResponse.json({ error: "프로그램을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const rawData = (program as any).raw_data || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawData: Record<string, any> = (program as { raw_data?: Record<string, any> | null }).raw_data || {};
 
   if (!rawData.guideline_structure) {
     return NextResponse.json({

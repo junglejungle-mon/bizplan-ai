@@ -134,14 +134,29 @@ export function ConsultantPageClient({
                 { role: "assistant", content: data.content },
               ]);
               setStreamingText("");
+            } else if (data.type === "error") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: `⚠️ ${data.message || "AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요."}`,
+                },
+              ]);
+              setStreamingText("");
             }
-          } catch {}
+          } catch (parseErr) {
+            console.warn("[Consultant] SSE parse error:", parseErr);
+          }
         }
       }
-    } catch {
+    } catch (error) {
+      console.error("[Consultant] Chat error:", error);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "죄송합니다, 오류가 발생했습니다." },
+        {
+          role: "assistant",
+          content: "⚠️ AI 서비스에 연결할 수 없습니다. 네트워크를 확인하시거나 잠시 후 다시 시도해주세요.",
+        },
       ]);
       setStreamingText("");
     }

@@ -118,6 +118,7 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: [
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Anthropic SDK message content union type
             contentBlock as any,
             {
               type: "text",

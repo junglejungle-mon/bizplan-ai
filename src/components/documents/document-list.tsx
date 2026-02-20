@@ -10,12 +10,10 @@ import {
   BarChart3,
   Target,
   Gift,
-  ArrowRight,
   Upload,
   Download,
   Sparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { DocumentUploadButton } from "./document-upload-button";
 import { useState } from "react";
 
@@ -63,7 +61,8 @@ interface DocumentInfo {
   id: string;
   document_type: string;
   status: string;
-  extracted_data: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extracted_data: Record<string, any> | null;
   file_url: string | null;
 }
 
@@ -287,7 +286,7 @@ export function DocumentList({ documents }: DocumentListProps) {
                   ANALYZED_TYPE_LABELS[doc.document_type] ||
                   doc.document_type.replace("analyzed_", "");
                 const summary =
-                  (doc.extracted_data as any)?.summary || "분석 완료";
+                  (doc.extracted_data as { summary?: string } | null)?.summary || "분석 완료";
                 return (
                   <div
                     key={doc.id}

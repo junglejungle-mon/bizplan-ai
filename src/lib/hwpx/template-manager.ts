@@ -18,7 +18,6 @@ import type { FormTemplate } from "./types";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import {
-  convertHwpToText,
   convertHwpToHwpx,
   isHwpConverterAvailable,
 } from "./hwp-converter";
@@ -61,20 +60,20 @@ export function extractFormUrls(
 
   // 여러 가지 가능한 구조 처리
   // 1. { files: [{ url, name }] }
-  if (Array.isArray((attachmentUrls as any).files)) {
-    for (const file of (attachmentUrls as any).files) {
-      const url = file.url || file.href || file.link;
+  if (Array.isArray(attachmentUrls.files)) {
+    for (const file of attachmentUrls.files) {
+      const f = file as Record<string, unknown>;
+      const url = (f.url || f.href || f.link) as string | undefined;
       if (url && isFormUrl(url)) urls.push(url);
     }
   }
 
   // 2. { url: "...", urls: ["..."] }
-  if (typeof (attachmentUrls as any).url === "string") {
-    const url = (attachmentUrls as any).url;
-    if (isFormUrl(url)) urls.push(url);
+  if (typeof attachmentUrls.url === "string") {
+    if (isFormUrl(attachmentUrls.url)) urls.push(attachmentUrls.url);
   }
-  if (Array.isArray((attachmentUrls as any).urls)) {
-    for (const url of (attachmentUrls as any).urls) {
+  if (Array.isArray(attachmentUrls.urls)) {
+    for (const url of attachmentUrls.urls) {
       if (typeof url === "string" && isFormUrl(url)) urls.push(url);
     }
   }
@@ -408,11 +407,13 @@ async function loadFromLocal(
  */
 async function tryConvertHwp(
   hwpBuffer: Buffer,
-  programId: string,
-  supabase: SupabaseClient
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _programId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _supabase: SupabaseClient
 ): Promise<Buffer | null> {
   const { tmpdir } = await import("os");
-  const { writeFileSync: writeTmp, unlinkSync, existsSync: tmpExists } = await import("fs");
+  const { writeFileSync: writeTmp, unlinkSync } = await import("fs");
   const tmpPath = join(tmpdir(), `hwp-input-${Date.now()}.hwp`);
 
   try {

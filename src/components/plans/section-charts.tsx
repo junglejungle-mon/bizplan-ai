@@ -127,7 +127,7 @@ export function SectionCharts({
       } else {
         setError("이 섹션에서 시각화할 데이터를 찾지 못했습니다. 내용을 보강한 후 다시 시도해보세요.");
       }
-    } catch (e) {
+    } catch {
       setError("차트 추출 중 오류가 발생했습니다");
     }
 
@@ -239,6 +239,7 @@ export function SectionCharts({
               {/* 차트 타입 라벨 */}
               <div className="flex items-center justify-between px-3 py-1.5 bg-orange-50 border-b border-orange-100">
                 <div className="flex items-center gap-1.5">
+                  {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react SVG icon, not an img element */}
                   <Image className="h-3 w-3 text-orange-500" />
                   <span className="text-[10px] font-medium text-orange-700">
                     {CHART_TYPE_LABELS[chart.chart_type] || chart.chart_type}

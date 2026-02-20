@@ -8,8 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getPayment, verifyPaymentAmount } from "@/lib/payment/portone";
 import {
   createSubscription,
+  upgradeSubscription,
   updatePaymentStatus,
 } from "@/lib/payment/subscription";
+import type { ProrateResult } from "@/lib/payment/subscription";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError } from "@/lib/api/error";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
@@ -67,12 +69,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 구독 생성
-    const subscription = await createSubscription({
-      userId: user.id,
-      planId,
-      portonePaymentId: paymentId,
-    });
+    // 업그레이드 결제인지 확인
+    const metadata = (paymentRecord.metadata || {}) as Record<string, unknown>;
+    const isUpgrade = metadata.type === "upgrade";
+    const prorationData = metadata.proration as ProrateResult | undefined;
+
+    // 구독 생성 (업그레이드 vs 신규)
+    const subscription = isUpgrade && prorationData
+      ? await upgradeSubscription({
+          userId: user.id,
+          newPlanId: planId,
+          portonePaymentId: paymentId,
+          proration: prorationData,
+        })
+      : await createSubscription({
+          userId: user.id,
+          planId,
+          portonePaymentId: paymentId,
+        });
 
     // 결제 상태 → paid
     const methodType = portonePayment.method?.type || "unknown";

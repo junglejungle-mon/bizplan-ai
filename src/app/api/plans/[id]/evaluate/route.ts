@@ -129,7 +129,8 @@ export async function POST(
   }
 
   // 3. 공고 지침서 구조 가져오기 (있으면)
-  const program = (plan as any).programs;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const program = (plan as { programs?: Record<string, any> | null }).programs;
   let guidelineContext = "";
 
   if (program?.raw_data?.guideline_structure) {
@@ -188,7 +189,8 @@ export async function POST(
     });
 
     // JSON 파싱
-    let evaluation: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let evaluation: Record<string, any> | null = null;
     try {
       const jsonMatch = evaluationJson.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -204,7 +206,8 @@ export async function POST(
     }
 
     // 6. DB에 평가 결과 저장 (evaluation_criteria JSONB에 추가)
-    const existingCriteria = (plan as any).evaluation_criteria || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existingCriteria = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria || {};
     const updatedCriteria = {
       ...existingCriteria,
       plan_evaluation: evaluation,
@@ -257,7 +260,9 @@ export async function GET(
     return NextResponse.json({ error: "사업계획서를 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const evaluation = (plan as any).evaluation_criteria?.plan_evaluation;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evalCriteria = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria;
+  const evaluation = evalCriteria?.plan_evaluation;
 
   if (!evaluation) {
     return NextResponse.json({
@@ -269,6 +274,6 @@ export async function GET(
   return NextResponse.json({
     evaluated: true,
     evaluation,
-    evaluated_at: (plan as any).evaluation_criteria?.evaluated_at,
+    evaluated_at: evalCriteria?.evaluated_at,
   });
 }

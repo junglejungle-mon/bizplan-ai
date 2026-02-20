@@ -62,27 +62,30 @@ export async function GET(
         .limit(1),
     ]);
 
-    const sections = (sectionsResult.data || []).map((s: any) => ({
+    type SectionRow = { id: string; section_name: string; section_order: number; content: string | null; generation_count: number; created_at: string };
+    type QualityRow = { section_id: string | null; total_score: number; criteria_scores: unknown; feedback: string | null; created_at: string };
+
+    const sections = (sectionsResult.data || []).map((s: SectionRow) => ({
       ...s,
       content_preview: s.content ? s.content.substring(0, 500) + (s.content.length > 500 ? "..." : "") : "",
       content_length: s.content ? s.content.length : 0,
     }));
 
     // 품질점수: 전체(section_id=null) + 섹션별
-    const overallQuality = (qualityResult.data || []).find((q: any) => !q.section_id);
-    const sectionQualities = (qualityResult.data || []).filter((q: any) => q.section_id);
+    const overallQuality = (qualityResult.data || []).find((q: QualityRow) => !q.section_id);
+    const sectionQualities = (qualityResult.data || []).filter((q: QualityRow) => q.section_id);
 
-    const matching = (matchingResult as any)?.data?.[0] || null;
+    const matching = (matchingResult as { data?: Record<string, unknown>[] | null })?.data?.[0] || null;
     const irPresentation = irResult.data?.[0] || null;
 
     return NextResponse.json({
       plan: {
         ...plan,
-        company_name: (plan as any).companies?.name || "—",
-        company_industry: (plan as any).companies?.industry || "",
-        company_region: (plan as any).companies?.region || "",
-        program_title: (plan as any).programs?.title || null,
-        program_institution: (plan as any).programs?.institution || null,
+        company_name: (plan as { companies?: { name?: string; industry?: string; region?: string } | null }).companies?.name || "—",
+        company_industry: (plan as { companies?: { name?: string; industry?: string; region?: string } | null }).companies?.industry || "",
+        company_region: (plan as { companies?: { name?: string; industry?: string; region?: string } | null }).companies?.region || "",
+        program_title: (plan as { programs?: { title?: string; institution?: string } | null }).programs?.title || null,
+        program_institution: (plan as { programs?: { title?: string; institution?: string } | null }).programs?.institution || null,
       },
       sections,
       quality: {
@@ -94,7 +97,7 @@ export async function GET(
               created_at: overallQuality.created_at,
             }
           : null,
-        by_section: sectionQualities.map((q: any) => ({
+        by_section: sectionQualities.map((q: QualityRow) => ({
           section_id: q.section_id,
           total_score: q.total_score,
           criteria_scores: q.criteria_scores,

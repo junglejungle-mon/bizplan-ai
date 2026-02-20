@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import Link from "next/link";
 import { useEffect } from "react";
 
 export default function LegalError({
@@ -30,12 +31,12 @@ export default function LegalError({
           >
             다시 시도
           </button>
-          <a
+          <Link
             href="/"
             className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
           >
             홈으로
-          </a>
+          </Link>
         </div>
       </div>
     </div>

@@ -25,6 +25,7 @@ interface PricingCardsProps {
 export function PricingCards({ currentPlanName }: PricingCardsProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlans();
@@ -32,8 +33,9 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
 
   async function fetchPlans() {
     try {
+      setFetchError(null);
       const res = await fetch("/api/subscriptions");
-      const data = await res.json();
+      await res.json();
 
       // 플랜 목록은 별도 API가 필요할 수 있으나, 일단 직접 조회
       const plansRes = await fetch("/api/payments/plans");
@@ -41,8 +43,8 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
         const plansData = await plansRes.json();
         setPlans(plansData.plans || []);
       }
-    } catch (error) {
-      console.error("플랜 조회 실패:", error);
+    } catch {
+      setFetchError("요금제 정보를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -128,6 +130,7 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -173,10 +176,15 @@ export function PricingCards({ currentPlanName }: PricingCardsProps) {
   );
 }
 
+/**
+ * API 실패 시 표시할 기본 플랜 (참고용).
+ * id는 placeholder UUID — 결제 버튼은 price > 0 일 때만 활성화되므로
+ * 실제 checkout 시에는 반드시 서버 플랜 ID가 사용됩니다.
+ */
 function getDefaultPlans(): Plan[] {
   return [
     {
-      id: "free",
+      id: "00000000-0000-4000-8000-000000000001",
       name: "free",
       display_name: "무료",
       description: "서비스 체험",
@@ -188,7 +196,7 @@ function getDefaultPlans(): Plan[] {
       sort_order: 0,
     },
     {
-      id: "pro",
+      id: "00000000-0000-4000-8000-000000000002",
       name: "pro",
       display_name: "프로",
       description: "사업자 필수 플랜",
@@ -200,7 +208,7 @@ function getDefaultPlans(): Plan[] {
       sort_order: 1,
     },
     {
-      id: "allfree",
+      id: "00000000-0000-4000-8000-000000000003",
       name: "allfree",
       display_name: "올프리",
       description: "무제한 사용",

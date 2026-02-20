@@ -411,8 +411,6 @@ export function checkFinanceQuality(
   content: string,
   sectionName: string,
 ): FinanceQualityCheck {
-  const lower = content.toLowerCase();
-
   // 산출근거 테이블 존재
   const hasCalculationBasis =
     /\|.*단가.*\|.*수량.*\|/i.test(content) ||

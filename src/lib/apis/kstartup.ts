@@ -110,6 +110,7 @@ export async function fetchKStartupPrograms(page = 1, perPage = 100) {
         institution: item.pbanc_ntrp_nm || item.sprv_inst || "K-Startup",
         detail_url: item.detl_pg_url || null,
         attachment_urls: {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw API response preserved as-is
         raw_data: item as unknown as Record<string, any>,
       };
     });

@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     }
 
     // 4. 배치 조회: subscriptions + plans (2 쿼리)
-    let subscriptionMap: Record<
+    const subscriptionMap: Record<
       string,
       {
         id: string;

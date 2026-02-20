@@ -40,14 +40,15 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "무료 플랜은 결제가 필요 없습니다." }, { status: 400 });
     }
 
-    // 고유 결제 ID 생성
-    const paymentId = `payment_${Date.now()}_${user.id.slice(0, 8)}`;
+    // 고유 결제 ID 생성 (UUID v4 — 충돌 방지 + 추측 불가)
+    const paymentId = crypto.randomUUID();
 
-    // pending 결제 레코드 생성
+    // pending 결제 레코드 생성 (planId를 metadata에 저장 → webhook에서 구독 생성 시 사용)
     await createPaymentRecord({
       userId: user.id,
       amount: plan.price,
       portonePaymentId: paymentId,
+      planId: plan.id,
     });
 
     // 사용자 프로필 조회

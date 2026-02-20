@@ -14,7 +14,6 @@ import {
   Target,
   FileSearch,
   TrendingUp,
-  MessageSquarePlus,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";

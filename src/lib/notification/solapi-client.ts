@@ -70,11 +70,12 @@ export async function sendAlimtalk(params: SendKakaoAlimtalkParams): Promise<{
       success: true,
       messageId: result.messageId,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Solapi] 알림톡 발송 실패:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return {
       success: false,
-      error: error.message || String(error),
+      error: errMsg,
     };
   }
 }

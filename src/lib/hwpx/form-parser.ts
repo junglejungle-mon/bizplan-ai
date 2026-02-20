@@ -530,7 +530,6 @@ export async function parseForm(
 
   // 1. 규칙 기반 필드 탐지
   let fields = detectFields(allNodes);
-  const ruleBasedCount = fields.length;
 
   // 2. AI 보조 파싱 (필드가 부족하고 AI 사용 가능한 경우)
   if (useAI && fields.length < 3 && allNodes.length > 10) {

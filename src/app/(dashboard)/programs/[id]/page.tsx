@@ -13,7 +13,6 @@ import {
   ExternalLink,
   FileText,
   Star,
-  MapPin,
   Target,
   Zap,
   Shield,
@@ -22,7 +21,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-const BREAKDOWN_LABELS: Record<string, { label: string; max: number; icon: any }> = {
+type LucideIcon = typeof Target;
+const BREAKDOWN_LABELS: Record<string, { label: string; max: number; icon: LucideIcon }> = {
   keyword_relevance: { label: "키워드 연관도", max: 30, icon: Target },
   direction_fit: { label: "사업방향 일치", max: 25, icon: TrendingUp },
   eligibility: { label: "자격요건 부합", max: 20, icon: Shield },
@@ -62,7 +62,8 @@ export default async function ProgramDetailPage({
 
   const company = companies?.[0];
 
-  let matching: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let matching: Record<string, any> | null = null;
   if (company) {
     const { data } = await supabase
       .from("matchings")
@@ -560,7 +561,7 @@ export default async function ProgramDetailPage({
           {/* 공고 지침서 구조 분석 */}
           <GuidelineViewer
             programId={program.id}
-            hasAttachment={!!(program as any).attachment_urls}
+            hasAttachment={!!(program as { attachment_urls?: unknown }).attachment_urls}
           />
 
           {/* 원문 링크 */}

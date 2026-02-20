@@ -52,6 +52,7 @@ function mapBizinfoItem(item: BizinfoItem) {
       pdf: item.printFlpthNm,
       file: item.flpthNm,
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw API response preserved as-is
     raw_data: item as unknown as Record<string, any>,
   };
 }

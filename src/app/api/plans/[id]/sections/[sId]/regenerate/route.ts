@@ -56,7 +56,8 @@ export async function POST(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  const planCompanies = plan ? (plan as { companies?: { user_id?: string; business_content?: string; [key: string]: unknown } }).companies : undefined;
+  if (!plan || planCompanies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -101,14 +102,14 @@ export async function POST(
     }
   }
 
-  const company = (plan as any).companies;
+  const company = planCompanies;
   const evaluationWeight = section.evaluation_weight || undefined;
 
   // RAG 레퍼런스 검색
   let referenceExamples: string | undefined;
   try {
     const ragQuery = `${section.section_name} ${(section.guidelines || "").slice(0, 200)}`;
-    const evalCrit = (plan as any).evaluation_criteria;
+    const evalCrit = (plan as { evaluation_criteria?: { template_type?: string } }).evaluation_criteria;
     const templateType = evalCrit?.template_type || undefined;
     const ragResults = await searchReferences({
       query: ragQuery,

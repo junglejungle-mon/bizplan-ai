@@ -14,16 +14,12 @@ import {
   Flame,
   Lightbulb,
   CheckSquare,
-  Sparkles,
   CalendarDays,
-  Building2,
   Send,
   Loader2,
   Bot,
   TrendingUp,
-  Clock,
   AlertTriangle,
-  Presentation,
 } from "lucide-react";
 
 interface Mission {
@@ -128,7 +124,6 @@ export function DashboardClient({
   topMatchings,
   weekDays,
   weekEvents,
-  extractedDocTypes,
 }: DashboardClientProps) {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -204,7 +199,6 @@ export function DashboardClient({
   });
 
   const profileTarget = 70;
-  const profileRemaining = Math.max(0, profileTarget - profileScore);
 
   return (
     <div className="space-y-6">

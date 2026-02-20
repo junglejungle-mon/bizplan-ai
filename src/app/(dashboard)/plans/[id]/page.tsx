@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Presentation, Download, Sparkles } from "lucide-react";
+import { ArrowLeft, Presentation, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { PlanGeneratorButton } from "@/components/plans/plan-generator-button";
 import { SectionCard } from "@/components/plans/section-card";
@@ -89,7 +89,7 @@ export default async function PlanEditorPage({
         {/* 좌측: 섹션 목차 (모바일에서 숨김) */}
         <div className="hidden lg:block space-y-2">
           <h3 className="text-sm font-medium text-gray-500 px-3">목차</h3>
-          {sections?.map((section: any, i: number) => (
+          {sections?.map((section: { id: string; section_name: string; content: string | null; guidelines: string | null; section_order: number }, i: number) => (
             <a
               key={section.id}
               href={`#section-${section.id}`}
@@ -108,12 +108,12 @@ export default async function PlanEditorPage({
           {sections && sections.length > 0 ? (
             <>
               {/* 미완성 섹션이 있으면 이어쓰기 버튼 표시 */}
-              {sections.some((s: any) => !s.content || s.content.length < 100) && (
+              {sections.some((s: { content: string | null }) => !s.content || s.content.length < 100) && (
                 <Card className="border-blue-200 bg-blue-50">
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
                       <p className="text-sm font-medium text-blue-900">
-                        {sections.filter((s: any) => s.content && s.content.length >= 100).length}/{sections.length}개 섹션 완성
+                        {sections.filter((s: { content: string | null }) => s.content && s.content.length >= 100).length}/{sections.length}개 섹션 완성
                       </p>
                       <p className="text-xs text-blue-700 mt-0.5">
                         이어쓰기를 클릭하면 미완성 섹션부터 이어서 생성합니다
@@ -123,7 +123,7 @@ export default async function PlanEditorPage({
                   </CardContent>
                 </Card>
               )}
-              {sections.map((section: any, i: number) => (
+              {sections.map((section: { id: string; section_name: string; content: string | null; guidelines: string | null; section_order: number }, i: number) => (
                 <SectionCard
                   key={section.id}
                   planId={id}

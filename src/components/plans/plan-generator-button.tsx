@@ -92,7 +92,9 @@ export function PlanGeneratorButton({ planId, hasContent, label }: PlanGenerator
                 setError(event.data.message || "알 수 없는 오류");
                 break;
             }
-          } catch {}
+          } catch (parseErr) {
+            console.warn("[PlanGenerator] SSE 이벤트 파싱 실패:", parseErr);
+          }
         }
       }
     } catch (err) {

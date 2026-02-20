@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderChartToSvg, getChartSize } from "@/lib/charts/svg-renderer";
-import { getThemeForTemplate } from "@/lib/charts/themes";
 
 /**
  * GET /api/plans/[id]/charts
@@ -27,12 +26,14 @@ export async function GET(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  if (!plan || (plan as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
-  const evalCriteria = (plan as any).evaluation_criteria || {};
-  const rawChartData: any[] = evalCriteria.chart_data || [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evalCriteria: Record<string, any> = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawChartData: Array<Record<string, any>> = evalCriteria.chart_data || [];
   const templateType = evalCriteria.template_type || "custom";
 
   if (rawChartData.length === 0) {
@@ -41,8 +42,6 @@ export async function GET(
 
   // 섹션 필터
   const sectionOrder = request.nextUrl.searchParams.get("sectionOrder");
-
-  const theme = getThemeForTemplate(templateType);
 
   // 각 차트를 SVG로 렌더링
   const renderedCharts = rawChartData
@@ -105,7 +104,6 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => ({}));
-  const sectionId = body.sectionId;
   const sectionName = body.sectionName;
   const sectionContent = body.sectionContent;
   const sectionOrder = body.sectionOrder;
@@ -121,7 +119,7 @@ export async function POST(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  if (!plan || (plan as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
@@ -145,12 +143,13 @@ export async function POST(
     });
 
     // JSON 파싱
-    let newCharts: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let newCharts: Array<Record<string, any>> = [];
     try {
       const jsonMatch = result.match(/\{[\s\S]*"charts"[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        newCharts = (parsed.charts || []).map((c: any) => ({
+        newCharts = (parsed.charts || []).map((c: Record<string, unknown>) => ({
           ...c,
           section_order: sectionOrder || 1,
         }));
@@ -158,10 +157,12 @@ export async function POST(
     } catch {}
 
     // 기존 차트 데이터에서 해당 섹션 제외하고 새 차트로 교체
-    const evalCriteria = (plan as any).evaluation_criteria || {};
-    const existingCharts: any[] = evalCriteria.chart_data || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const evalCriteria: Record<string, any> = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria || {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existingCharts: Array<Record<string, any>> = evalCriteria.chart_data || [];
     const otherCharts = existingCharts.filter(
-      (c: any) => String(c.section_order) !== String(sectionOrder)
+      (c) => String(c.section_order) !== String(sectionOrder)
     );
     const updatedCharts = [...otherCharts, ...newCharts];
 
@@ -180,7 +181,7 @@ export async function POST(
 
     // 새 차트들의 SVG도 렌더
     const templateType = evalCriteria.template_type || "custom";
-    const renderedNewCharts = newCharts.map((chart: any) => {
+    const renderedNewCharts = newCharts.map((chart) => {
       const chartType = chart.chart_type || chart.type;
       const size = getChartSize(chartType);
       let svg = "";
@@ -200,7 +201,7 @@ export async function POST(
         height: size.height,
         svg,
       };
-    }).filter((c: any) => c.svg);
+    }).filter((c) => c.svg);
 
     return NextResponse.json({
       success: true,

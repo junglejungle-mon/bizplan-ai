@@ -90,7 +90,7 @@ async function isRedisAvailable(): Promise<boolean> {
 // ─── 캐시 헬퍼 ─────────────────────────────────
 
 // 인메모리 폴백 캐시
-const memCache = new Map<string, { data: any; expiresAt: number }>();
+const memCache = new Map<string, { data: unknown; expiresAt: number }>();
 
 export const cache = {
   /**

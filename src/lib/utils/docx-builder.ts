@@ -25,7 +25,7 @@ import {
   ImageRun,
 } from "docx";
 import { chartsToImages, ChartImageResult } from "@/lib/charts/chart-to-image";
-import { getThemeForTemplate, ChartTheme } from "@/lib/charts/themes";
+import { getThemeForTemplate } from "@/lib/charts/themes";
 
 // ===== 색상 팔레트 (테마 기반 + 폴백) =====
 function getColors(templateType?: string) {
@@ -731,12 +731,13 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
 
     case "highlight_cards": {
       // data.items 또는 data.cards 형태 모두 지원
-      const rawItems = (chart.data as any).items || (chart.data as any).cards;
+      const cardData = chart.data as Record<string, unknown>;
+      const rawItems = (cardData.items || cardData.cards) as Array<{ icon?: string; label: string; value?: string }> | undefined;
       if (rawItems && rawItems.length > 0) {
         result.push(
           ...buildStyledTable(
-            rawItems.map((item: any) => `${item.icon || ""} ${item.label}`),
-            [rawItems.map((item: any) => item.value || "")]
+            rawItems.map((item) => `${item.icon || ""} ${item.label}`),
+            [rawItems.map((item) => item.value || "")]
           )
         );
       }
@@ -811,7 +812,6 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
       if (points && points.length > 0) {
         const kpiLike: KpiData = {};
         points.forEach((p, i) => {
-          const key = `pain_${i}` as keyof KpiData;
           (kpiLike as Record<string, string>)[`custom_${i}`] = `${p.icon} ${p.value}`;
         });
         // 테이블로 표현
@@ -896,7 +896,7 @@ function buildChartElement(chart: ChartDataItem): Paragraph[] {
 
     case "ecosystem_map": {
       // 협력 생태계 → 테이블
-      const { center, partners } = chart.data as { center?: string; partners?: Array<{ name: string; role: string; detail: string; period: string }> };
+      const { partners } = chart.data as { center?: string; partners?: Array<{ name: string; role: string; detail: string; period: string }> };
       if (partners && partners.length > 0) {
         result.push(
           ...buildStyledTable(

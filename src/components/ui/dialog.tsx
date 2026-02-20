@@ -6,7 +6,6 @@ import {
   type HTMLAttributes,
   type ReactNode,
   useEffect,
-  useRef,
   useState,
   createContext,
   useContext,
@@ -51,6 +50,7 @@ function Dialog({ open: controlledOpen, onOpenChange, children }: DialogProps) {
 function DialogTrigger({
   children,
   className,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   asChild,
   ...props
 }: HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }) {
@@ -82,8 +82,6 @@ function DialogOverlay({ className, ...props }: HTMLAttributes<HTMLDivElement>) 
 const DialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
     const { open, onOpenChange } = useContext(DialogContext);
-    const dialogRef = useRef<HTMLDivElement>(null);
-
     useEffect(() => {
       const handleEscape = (e: KeyboardEvent) => {
         if (e.key === "Escape") onOpenChange(false);

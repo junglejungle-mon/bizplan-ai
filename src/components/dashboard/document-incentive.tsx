@@ -28,7 +28,6 @@ interface DocumentIncentiveProps {
 
 export function DocumentIncentive({
   uploadedTypes,
-  profileScore,
 }: DocumentIncentiveProps) {
   const uploadedCount = uploadedTypes.length;
   const pptUnlocked = uploadedCount >= 3;

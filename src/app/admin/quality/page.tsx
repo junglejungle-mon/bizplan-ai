@@ -48,7 +48,6 @@ export default function AdminQualityPage() {
   const [documents, setDocuments] = useState<ReferenceDocument[]>([]);
   const [scores, setScores] = useState<QualityScore[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
   const [filter, setFilter] = useState({ referenceType: "", status: "" });
 
   const fetchDocuments = useCallback(async () => {
@@ -75,8 +74,11 @@ export default function AdminQualityPage() {
   }, []);
 
   useEffect(() => {
-    if (tab === "references") fetchDocuments();
-    if (tab === "scores") fetchScores();
+    const load = async () => {
+      if (tab === "references") await fetchDocuments();
+      if (tab === "scores") await fetchScores();
+    };
+    load();
   }, [tab, fetchDocuments, fetchScores]);
 
   const scoreItems = [
@@ -142,7 +144,6 @@ export default function AdminQualityPage() {
               </select>
             </div>
             <button
-              onClick={() => setShowUpload(true)}
               className="h-9 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
             >
               + 업로드
@@ -225,7 +226,7 @@ export default function AdminQualityPage() {
                   {/* 항목별 점수 바 */}
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 mt-3">
                     {scoreItems.map((item) => {
-                      const val = (score as any)[item.key] || 0;
+                      const val = score[item.key as keyof QualityScore] as number || 0;
                       const pct = Math.round((val / item.max) * 100);
                       return (
                         <div key={item.key} className="text-center">

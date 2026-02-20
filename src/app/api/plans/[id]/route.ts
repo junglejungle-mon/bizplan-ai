@@ -20,7 +20,7 @@ export async function GET(
 
   const { data: plan } = await supabase
     .from("business_plans")
-    .select("*, programs(*)")
+    .select("*, programs(*), companies(user_id)")
     .eq("id", id)
     .single();
 
@@ -28,13 +28,23 @@ export async function GET(
     return new Response("Not Found", { status: 404 });
   }
 
+  // 소유권 검증 — 본인 계획서만 조회 가능
+  const ownerUserId = (plan.companies as { user_id?: string })?.user_id;
+  if (ownerUserId && ownerUserId !== user.id) {
+    return Response.json({ error: "조회 권한이 없습니다" }, { status: 403 });
+  }
+
+  // companies 내부 정보는 클라이언트에 노출하지 않음
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { companies: _companies, ...planData } = plan;
+
   const { data: sections } = await supabase
     .from("plan_sections")
     .select("*")
     .eq("plan_id", id)
     .order("section_order");
 
-  return Response.json({ plan, sections });
+  return Response.json({ plan: planData, sections });
 }
 
 /** 업데이트 허용 필드 화이트리스트 (임의 필드 주입 방지) */
@@ -69,9 +79,8 @@ export async function PUT(
     return Response.json({ error: "계획서를 찾을 수 없습니다" }, { status: 404 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ownerUserId = (existing.companies as any)?.user_id;
-  if (ownerUserId !== user.id) {
+  const existingOwner = (existing.companies as { user_id?: string })?.user_id;
+  if (existingOwner !== user.id) {
     return Response.json({ error: "수정 권한이 없습니다" }, { status: 403 });
   }
 
@@ -138,8 +147,8 @@ export async function DELETE(
     return Response.json({ error: "계획서를 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const ownerUserId = (plan.companies as any)?.user_id;
-  if (ownerUserId !== user.id) {
+  const deleteOwner = (plan.companies as { user_id?: string })?.user_id;
+  if (deleteOwner !== user.id) {
     return Response.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
   }
 
@@ -150,7 +159,7 @@ export async function DELETE(
     .eq("plan_id", id);
 
   if (irPresentations && irPresentations.length > 0) {
-    const irIds = irPresentations.map((ir: any) => ir.id);
+    const irIds = irPresentations.map((ir: { id: string }) => ir.id);
     await supabase.from("ir_slides").delete().in("presentation_id", irIds);
     await supabase.from("ir_presentations").delete().eq("plan_id", id);
   }
@@ -159,7 +168,7 @@ export async function DELETE(
   await supabase.from("plan_sections").delete().eq("plan_id", id);
 
   // 3. 계획서 삭제
-  const { error, count } = await supabase
+  const { error } = await supabase
     .from("business_plans")
     .delete()
     .eq("id", id)

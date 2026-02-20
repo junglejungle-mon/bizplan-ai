@@ -45,7 +45,11 @@ export async function POST(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  type PlanCompanies = { user_id?: string; name?: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type PlanEvalCriteria = Record<string, any>;
+
+  if (!plan || (plan as { companies?: PlanCompanies }).companies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -59,12 +63,13 @@ export async function POST(
     return Response.json({ error: "섹션이 없습니다" }, { status: 400 });
   }
 
-  const companyName = (plan as any).companies?.name || "회사명";
-  const evalCriteria = (plan as any).evaluation_criteria || {};
+  const companyName = (plan as { companies?: PlanCompanies }).companies?.name || "회사명";
+  const evalCriteria: PlanEvalCriteria = (plan as { evaluation_criteria?: PlanEvalCriteria }).evaluation_criteria || {};
   const templateType = evalCriteria.template_type || "custom";
 
   // chart_data 변환
   const rawChartData = evalCriteria.chart_data || [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartData: Record<string, any[]> = {};
   if (Array.isArray(rawChartData)) {
     for (const chart of rawChartData) {
@@ -85,7 +90,7 @@ export async function POST(
         title: plan.title,
         companyName,
         programId: plan.program_id || undefined,
-        sections: sections.map((s: any) => ({
+        sections: sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
           section_name: s.section_name,
           content: s.content,
           section_order: s.section_order,
@@ -145,7 +150,7 @@ export async function GET(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  if (!plan || (plan as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -179,7 +184,7 @@ export async function GET(
           title: formTemplate.form_title,
           status: formTemplate.status,
           fileType: formTemplate.file_type,
-          fieldCount: (formTemplate.parsed_structure as any)?.metadata?.totalFields ?? null,
+          fieldCount: (formTemplate.parsed_structure as { metadata?: { totalFields?: number } } | null)?.metadata?.totalFields ?? null,
           error: formTemplate.error_message,
         }
       : null,

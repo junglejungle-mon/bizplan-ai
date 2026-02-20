@@ -48,7 +48,7 @@ export default async function PlansPage({
 
       {!showEmpty && plans && plans.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {plans.map((plan: any) => (
+          {plans.map((plan: { id: string; title: string; status: string; created_at: string; programs?: { title?: string } | null }) => (
             <Link key={plan.id} href={`/plans/${plan.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">

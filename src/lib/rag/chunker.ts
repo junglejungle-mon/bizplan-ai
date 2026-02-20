@@ -79,6 +79,7 @@ function splitBySections(text: string): Section[] {
   return sections;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function splitByParagraphs(text: string, _sectionName: string): string[] {
   const paragraphs = text.split(/\n\s*\n/);
   const result: string[] = [];

@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         .select('id, name, email, created_at')
         .order('created_at', { ascending: false })
         .limit(5);
-      const recentUsers = (recentUsersRaw || []).map((u: any) => ({ ...u, full_name: u.name }));
+      const recentUsers = (recentUsersRaw || []).map((u: { id: string; name: string | null; email: string | null; created_at: string }) => ({ ...u, full_name: u.name }));
 
       // Quality scores average
       const { data: qualityAvg } = await supabase
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
 
       const avgScore =
         qualityAvg && qualityAvg.length > 0
-          ? qualityAvg.reduce((sum: number, q: any) => sum + (q.total_score || 0), 0) / qualityAvg.length
+          ? qualityAvg.reduce((sum: number, q: { total_score: number | null }) => sum + (q.total_score || 0), 0) / qualityAvg.length
           : 0;
 
       // Active programs (deadline not passed)

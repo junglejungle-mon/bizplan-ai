@@ -51,6 +51,7 @@ export async function PATCH(
   const body = await request.json();
 
   const allowedFields = ["title", "reference_type", "template_type"];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };

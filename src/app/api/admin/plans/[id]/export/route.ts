@@ -51,17 +51,19 @@ export async function GET(
     return Response.json({ error: "섹션이 없습니다." }, { status: 400 });
   }
 
-  const companyName = (plan as any).companies?.name || "회사명";
+  const companyName = (plan as { companies?: { name?: string } | null }).companies?.name || "회사명";
   const dateStr = new Date().toISOString().slice(0, 10);
 
   // evaluation_criteria에서 chart_data, kpi_data 추출
-  const evalCriteria = (plan as any).evaluation_criteria || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evalCriteria: Record<string, any> = (plan as { evaluation_criteria?: Record<string, any> }).evaluation_criteria || {};
   const rawChartData = evalCriteria.chart_data || [];
   const rawKpiData = evalCriteria.kpi_data || {};
   const templateType = evalCriteria.template_type || "custom";
 
   // kpi_data 정규화
   const kpis = rawKpiData.kpis || rawKpiData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kpiData: Record<string, any> = {};
   if (kpis.revenue) {
     kpiData.revenue = Array.isArray(kpis.revenue)
@@ -80,6 +82,7 @@ export async function GET(
   if (rawKpiData.company_name) kpiData.company_name = rawKpiData.company_name;
 
   // chart_data 변환
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartData: Record<string, any[]> = {};
   if (Array.isArray(rawChartData)) {
     for (const chart of rawChartData) {
@@ -95,7 +98,7 @@ export async function GET(
     Object.assign(chartData, rawChartData);
   }
 
-  const sectionsMapped = sections.map((s: any) => ({
+  const sectionsMapped = sections.map((s: { section_name: string; content: string | null; section_order: number }) => ({
     section_name: s.section_name,
     content: s.content,
     section_order: s.section_order,

@@ -189,7 +189,8 @@ ${analysisPrompt}
     });
 
     // JSON 파싱 시도
-    let parsedResult: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI-extracted dynamic JSON structure
+    let parsedResult: Record<string, any> | null = null;
     try {
       // JSON 블록 추출
       const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -230,6 +231,7 @@ ${analysisPrompt}
     let autoUpdated = false;
 
     if (applicableFields && typeof applicableFields === "object") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: Record<string, any> = {};
 
       // 기존에 비어있는 필드만 채우기 (이미 입력된 데이터는 덮어쓰지 않음)

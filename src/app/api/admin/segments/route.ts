@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const userIds = users.map((u) => u.id);
 
     // 구독 정보 가져오기
-    let subscriptionMap: Record<string, string> = {};
+    const subscriptionMap: Record<string, string> = {};
     try {
       const { data: subs } = await supabase
         .from("subscriptions")
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     (companyList || []).forEach((c) => { companyIdMap[c.user_id] = c.id; });
 
     const companyIds = Object.values(companyIdMap);
-    let planCountMap: Record<string, number> = {};
+    const planCountMap: Record<string, number> = {};
     if (companyIds.length > 0) {
       const { data: plans } = await supabase
         .from("business_plans")

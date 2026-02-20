@@ -1,19 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Presentation,
   ArrowRight,
   Palette,
-  Layers,
   Download,
   Sparkles,
   FileText,
   CheckCircle2,
-  Monitor,
 } from "lucide-react";
 import { IRExampleCards } from "./ir-example-cards";
 
@@ -23,20 +21,6 @@ const TEMPLATES = [
   { key: "classic", label: "클래식", desc: "네이비 & 레드 포인트", colors: ["#2C3E50", "#003366", "#E74C3C"] },
   { key: "professional", label: "프로페셔널", desc: "틸블루 & 골드 고급", colors: ["#0F2B46", "#1B4F72", "#D4A843"] },
   { key: "vibrant", label: "바이브런트", desc: "퍼플 & 코랄 스타트업", colors: ["#2D1B69", "#6C3CE0", "#FF6B6B"] },
-];
-
-const SLIDE_TYPES = [
-  { type: "cover", title: "표지 슬라이드", icon: "🎬" },
-  { type: "problem", title: "문제 정의", icon: "❗" },
-  { type: "solution", title: "솔루션", icon: "💡" },
-  { type: "market", title: "시장 분석 (TAM/SAM/SOM)", icon: "📊" },
-  { type: "business_model", title: "비즈니스 모델", icon: "💰" },
-  { type: "traction", title: "트랙션·성과", icon: "📈" },
-  { type: "competitive", title: "경쟁 우위", icon: "🏆" },
-  { type: "team", title: "팀 소개", icon: "👥" },
-  { type: "financials", title: "재무 계획", icon: "💵" },
-  { type: "roadmap", title: "로드맵", icon: "🗺️" },
-  { type: "ask", title: "투자 요청", icon: "🤝" },
 ];
 
 const PROCESS_STEPS = [
@@ -69,6 +53,7 @@ const PROCESS_STEPS = [
 interface IRShowcaseProps {
   userIRs: {
     id: string;
+    plan_id: string;
     title: string;
     template: string;
     status: string;
@@ -83,7 +68,8 @@ interface IRShowcaseProps {
   completedPlans: { id: string; title: string }[];
 }
 
-export function IRShowcase({ userIRs, sampleIR, completedPlans }: IRShowcaseProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- sampleIR reserved for sample preview feature
+export function IRShowcase({ userIRs, sampleIR: _sampleIR, completedPlans }: IRShowcaseProps) {
   const hasPlans = completedPlans.length > 0;
   const hasIRs = userIRs.length > 0;
 
@@ -108,7 +94,7 @@ export function IRShowcase({ userIRs, sampleIR, completedPlans }: IRShowcaseProp
       {hasIRs && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {userIRs.map((ir) => (
-            <Link key={ir.id} href={`/plans/${ir.id}`}>
+            <Link key={ir.id} href={`/plans/${ir.plan_id}/ir`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-2 mb-3">

@@ -49,16 +49,17 @@ async function withRetry<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { status?: number; error?: { type?: string }; message?: string };
       const isRetryable =
-        error?.status === 429 || // Rate limit
-        error?.status === 500 || // Server error
-        error?.status === 502 ||
-        error?.status === 503 ||
-        error?.status === 529 || // Anthropic overloaded
-        error?.error?.type === "overloaded_error" ||
-        error?.message?.includes("ECONNRESET") ||
-        error?.message?.includes("ETIMEDOUT");
+        err?.status === 429 || // Rate limit
+        err?.status === 500 || // Server error
+        err?.status === 502 ||
+        err?.status === 503 ||
+        err?.status === 529 || // Anthropic overloaded
+        err?.error?.type === "overloaded_error" ||
+        err?.message?.includes("ECONNRESET") ||
+        err?.message?.includes("ETIMEDOUT");
 
       if (!isRetryable || attempt === maxRetries) {
         throw error;
@@ -66,7 +67,7 @@ async function withRetry<T>(
 
       const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
       console.warn(
-        `[AI Retry] ${caller} attempt ${attempt + 1}/${maxRetries} failed (${error?.status || error?.message}), retrying in ${Math.round(delay)}ms`
+        `[AI Retry] ${caller} attempt ${attempt + 1}/${maxRetries} failed (${err?.status || err?.message}), retrying in ${Math.round(delay)}ms`
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -80,7 +81,7 @@ async function logAICall(data: {
   caller: string;
   model: string;
   system?: string;
-  messages: any[];
+  messages: { role: string; content: string }[];
   response: string;
   durationMs: number;
 }) {
@@ -125,7 +126,15 @@ export async function callClaude({
       anthropicClient.messages.create({
         model,
         max_tokens: maxTokens,
-        ...(system && { system }),
+        ...(system && {
+          system: [
+            {
+              type: "text" as const,
+              text: system,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
+        }),
         messages: messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -173,7 +182,15 @@ export async function* streamClaude({
       anthropicClient.messages.stream({
         model,
         max_tokens: maxTokens,
-        ...(system && { system }),
+        ...(system && {
+          system: [
+            {
+              type: "text" as const,
+              text: system,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
+        }),
         messages: messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -229,7 +246,7 @@ export async function callClaudeVision({
       if (typeof m.content === "string") return m;
       if (Array.isArray(m.content)) {
         // 이미지 블록을 텍스트로 변환
-        const textParts = m.content.map((block: any) => {
+        const textParts = m.content.map((block: { type: string; text?: string }) => {
           if (block.type === "text") return block.text;
           if (block.type === "image") {
             return "[이미지/문서 파일이 첨부되었습니다. 파일 내용을 직접 볼 수 없으므로, 주어진 텍스트 정보를 기반으로 최대한 분석해주세요.]";
@@ -247,7 +264,15 @@ export async function callClaudeVision({
       anthropicVision.messages.create({
         model,
         max_tokens: maxTokens,
-        ...(system && { system }),
+        ...(system && {
+          system: [
+            {
+              type: "text" as const,
+              text: system,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
+        }),
         messages: processedMessages,
         temperature,
       }),

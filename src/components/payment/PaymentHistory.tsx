@@ -37,6 +37,7 @@ const METHOD_LABELS: Record<string, string> = {
 export function PaymentHistory() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayments();
@@ -44,15 +45,17 @@ export function PaymentHistory() {
 
   async function fetchPayments() {
     try {
+      setError(null);
       const res = await fetch("/api/payments/history");
       if (res.ok) {
         const data = await res.json();
         setPayments(data.payments || []);
       } else {
+        setError("결제 내역을 불러오지 못했습니다.");
         setPayments([]);
       }
-    } catch (error) {
-      console.error("결제 이력 조회 실패:", error);
+    } catch {
+      setError("결제 내역을 불러오는 중 오류가 발생했습니다.");
       setPayments([]);
     } finally {
       setLoading(false);
@@ -69,6 +72,27 @@ export function PaymentHistory() {
           <div className="animate-pulse space-y-3">
             <div className="h-10 bg-gray-100 rounded" />
             <div className="h-10 bg-gray-100 rounded" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>결제 내역</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <p className="text-sm text-red-500">{error}</p>
+            <button
+              onClick={() => { setLoading(true); fetchPayments(); }}
+              className="mt-2 text-sm text-blue-600 hover:underline"
+            >
+              다시 시도
+            </button>
           </div>
         </CardContent>
       </Card>

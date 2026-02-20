@@ -51,9 +51,16 @@ export async function validateBody<T>(
 /** UUID v4 문자열 */
 const uuid = z.string().uuid("유효한 UUID가 아닙니다");
 
-/** 안전한 문자열 (XSS 기본 방지) */
+/** 안전한 문자열 (XSS 방지 — 스크립트 태그 + 이벤트 핸들러 + javascript: 프로토콜 제거) */
 const safeString = (maxLen = 500) =>
-  z.string().max(maxLen).transform((s) => s.replace(/<script/gi, ""));
+  z.string().max(maxLen).transform((s) =>
+    s
+      .replace(/<script[\s>]/gi, "")          // <script> 태그
+      .replace(/<\/script>/gi, "")              // </script> 닫기
+      .replace(/on\w+\s*=/gi, "")               // onerror=, onload=, onclick= 등
+      .replace(/javascript\s*:/gi, "")          // javascript: 프로토콜
+      .replace(/data\s*:\s*text\/html/gi, "")   // data:text/html 프로토콜
+  );
 
 // ─── Admin Auth ─────────────────────────────────
 

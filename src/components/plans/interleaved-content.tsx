@@ -165,11 +165,6 @@ export function InterleavedContent({
     }
 
     // 블록 수에 맞춰 차트 분배: 첫 블록 뒤부터 차트 배치
-    const numBlocks = contentBlocks.length;
-    // 차트를 넣을 수 있는 슬롯: 각 블록 뒤 (마지막 블록 포함)
-    const slots = numBlocks;
-    const chartsPerSlot = Math.ceil(charts.length / Math.max(1, slots - 1 || 1));
-
     let chartIdx = 0;
 
     for (let i = 0; i < contentBlocks.length; i++) {
@@ -205,6 +200,7 @@ export function InterleavedContent({
     >
       <div className="flex items-center justify-between px-3 py-1.5 bg-orange-50 border-b border-orange-100">
         <div className="flex items-center gap-1.5">
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <Image className="h-3 w-3 text-orange-500" />
           <span className="text-[10px] font-medium text-orange-700">
             {CHART_TYPE_LABELS[chart.chart_type] || chart.chart_type}

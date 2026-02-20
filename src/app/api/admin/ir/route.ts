@@ -65,9 +65,9 @@ export async function GET(request: Request) {
 
         return {
           ...pres,
-          company_name: (pres as any).companies?.name || "—",
-          company_industry: (pres as any).companies?.industry || "",
-          plan_title: (pres as any).business_plans?.title || null,
+          company_name: (pres as { companies?: { name?: string; industry?: string } | null }).companies?.name || "—",
+          company_industry: (pres as { companies?: { name?: string; industry?: string } | null }).companies?.industry || "",
+          plan_title: (pres as { business_plans?: { title?: string } | null }).business_plans?.title || null,
           slide_count: slideResult.count || 0,
           quality_score: qualityScore,
         };

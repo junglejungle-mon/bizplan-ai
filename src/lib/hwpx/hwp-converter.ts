@@ -13,8 +13,8 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync } from "fs";
-import { join, dirname, basename } from "path";
+import { existsSync, readFileSync, mkdirSync, unlinkSync, readdirSync } from "fs";
+import { join } from "path";
 import { tmpdir } from "os";
 
 /** LibreOffice 실행 파일 경로 */

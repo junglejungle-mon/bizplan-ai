@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateBusinessPlan } from "@/lib/pipeline/plan-generator";
 import { rateLimit, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 import { incrementUsage } from "@/lib/payment/usage";
+import { safeErrorMessage } from "@/lib/api/error";
 
 // Vercel serverless function 타임아웃 확장 (SSE 스트리밍 — 최대 300초)
 export const maxDuration = 300;
@@ -36,7 +37,7 @@ export async function POST(
     .eq("id", planId)
     .single();
 
-  if (!plan || (plan as any).companies?.user_id !== user.id) {
+  if (!plan || (plan as { companies?: { user_id?: string } }).companies?.user_id !== user.id) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -48,7 +49,7 @@ export async function POST(
     .not("content", "is", null);
 
   const isResume = existingSections && existingSections.some(
-    (s: any) => s.content && s.content.length > 100
+    (s: { id: string; content: string | null }) => s.content && s.content.length > 100
   );
 
   // 사용량 체크 (무료: 1건/월, 유료: 플랜별 제한)
@@ -86,9 +87,10 @@ export async function POST(
           );
         }
       } catch (error) {
+        console.error("[PlanGenerate] Stream error:", error);
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "error", data: { message: String(error) } })}\n\n`
+            `data: ${JSON.stringify({ type: "error", data: { message: safeErrorMessage(error, "사업계획서 생성 중 오류가 발생했습니다") } })}\n\n`
           )
         );
       }

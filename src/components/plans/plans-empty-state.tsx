@@ -15,7 +15,6 @@ import {
   DollarSign,
   Building2,
   GitCompare,
-  Eye,
   Sparkles,
 } from "lucide-react";
 import { SamplePreview } from "@/components/dashboard/sample-preview";

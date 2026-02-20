@@ -5,7 +5,6 @@ import {
   type ReactNode,
   useState,
   useRef,
-  type HTMLAttributes,
 } from "react";
 
 interface TooltipProps {

@@ -15,8 +15,6 @@ import type {
   ServiceMetrics,
   StrategyOutput,
   TeamAnalysisOutput,
-  MeetingPhase,
-  TeamConfig,
 } from './meeting-types';
 import { MEETING_TEAMS } from './meeting-types';
 import { TEAM_PROMPTS } from './meeting-prompts';

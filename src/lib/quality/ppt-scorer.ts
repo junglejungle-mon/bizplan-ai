@@ -111,7 +111,7 @@ export function autoScorePpt(slides: SlideInput[]): Omit<PptScoreResult, "presen
     if (countMatches(text, numberPattern) > 0) slidesWithNumbers++;
   }
   const numberRatio = slidesWithNumbers / Math.max(slides.length, 1);
-  let scoreNumeric = Math.round(numberRatio * 15);
+  const scoreNumeric = Math.round(numberRatio * 15);
   if (numberRatio < 0.5) {
     suggestions.push("슬라이드의 50% 이상에 정량 데이터를 포함하세요");
   }
@@ -140,7 +140,6 @@ export function autoScorePpt(slides: SlideInput[]): Omit<PptScoreResult, "presen
   let flowScore = 0;
 
   // 순서 일치도 체크 (Levenshtein 대신 간단한 순서 비교)
-  const idealPresent = IDEAL_FLOW.filter(t => slideTypes.includes(t));
   const actualOrder = slideTypes.filter(t => IDEAL_FLOW.includes(t));
 
   let correctOrder = 0;
