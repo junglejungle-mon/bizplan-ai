@@ -26,6 +26,27 @@ export async function GET(request: Request) {
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
       ]);
 
+      // 알림 & 서류 통계
+      let notificationsSent = 0;
+      let notificationsFailed = 0;
+      let documentsUploaded = 0;
+      let documentsExtracted = 0;
+
+      try {
+        const [nSent, nFailed, dUploaded, dExtracted] = await Promise.all([
+          supabase.from('notification_logs').select('id', { count: 'exact', head: true }).eq('status', 'sent'),
+          supabase.from('notification_logs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+          supabase.from('company_documents').select('id', { count: 'exact', head: true }),
+          supabase.from('company_documents').select('id', { count: 'exact', head: true }).eq('status', 'extracted'),
+        ]);
+        notificationsSent = nSent.count || 0;
+        notificationsFailed = nFailed.count || 0;
+        documentsUploaded = dUploaded.count || 0;
+        documentsExtracted = dExtracted.count || 0;
+      } catch {
+        // notification_logs/company_documents 없을 수 있음
+      }
+
       // Subscription & payment stats (with graceful fallback)
       let activeSubscriptions = 0;
       let totalRevenue = 0;
@@ -201,6 +222,11 @@ export async function GET(request: Request) {
         wau,
         retention7d,
         interviewCompletionRate,
+        // 운영 통계
+        notificationsSent,
+        notificationsFailed,
+        documentsUploaded,
+        documentsExtracted,
       };
     });
 

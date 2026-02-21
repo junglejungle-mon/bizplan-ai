@@ -35,6 +35,11 @@ interface Stats {
   wau: number;
   retention7d: number;
   interviewCompletionRate: number;
+  // 운영 통계
+  notificationsSent: number;
+  notificationsFailed: number;
+  documentsUploaded: number;
+  documentsExtracted: number;
 }
 
 const STATUS_LABEL: Record<string, { text: string; variant: "success" | "warning" | "destructive" | "secondary" }> = {
@@ -68,6 +73,9 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchStats();
+    // 30초마다 자동 갱신
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, [fetchStats]);
 
   if (loading) {
@@ -194,8 +202,25 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* 매출 KPI 카드 */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-4">
         {revenueKpis.map((kpi) => (
+          <div key={kpi.label} className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${kpi.color}`} />
+              <span className="text-xs text-gray-500">{kpi.label}</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-900">{kpi.value}</div>
+            <div className="text-xs text-gray-400 mt-1">{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 운영 KPI 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {[
+          { label: "서류 업로드", value: stats.documentsUploaded ?? 0, sub: `${stats.documentsExtracted ?? 0}건 분석완료`, color: "bg-cyan-500" },
+          { label: "알림 발송", value: stats.notificationsSent ?? 0, sub: `${stats.notificationsFailed ?? 0}건 실패`, color: "bg-rose-500" },
+        ].map((kpi) => (
           <div key={kpi.label} className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-2 mb-2">
               <div className={`w-2 h-2 rounded-full ${kpi.color}`} />

@@ -68,6 +68,59 @@ import {
   KPI_EXTRACTOR_SYSTEM,
 } from "@/lib/ai/prompts/writing";
 
+/**
+ * 시장 데이터 신뢰도 스코어 계산
+ * Perplexity 리서치 결과의 품질을 평가하여 계획서 품질 향상에 반영
+ */
+function calculateMarketDataConfidence(researchData: string): {
+  score: number; // 0-100
+  factors: string[];
+} {
+  const factors: string[] = [];
+  let score = 50; // 기본 점수
+
+  // 1. 수치 데이터 포함 여부 (%, 원, 억 등)
+  const numericPatterns = /(\d+[%만억원조달러]|\d+\.\d+%|\d{1,3}(,\d{3})+)/g;
+  const numericMatches = researchData.match(numericPatterns);
+  if (numericMatches && numericMatches.length >= 3) {
+    score += 15;
+    factors.push(`수치 데이터 ${numericMatches.length}건 발견`);
+  } else if (numericMatches && numericMatches.length >= 1) {
+    score += 5;
+    factors.push(`수치 데이터 ${numericMatches.length}건 발견 (부족)`);
+  }
+
+  // 2. 연도 정보 포함 (최신성)
+  const currentYear = new Date().getFullYear();
+  const yearPatterns = new RegExp(`(${currentYear}|${currentYear - 1})년?`, "g");
+  const yearMatches = researchData.match(yearPatterns);
+  if (yearMatches && yearMatches.length >= 2) {
+    score += 15;
+    factors.push("최신 연도 데이터 포함");
+  }
+
+  // 3. 출처 언급 여부
+  const sourcePatterns = /(통계청|산업통상자원부|중소벤처기업부|한국은행|KOSIS|NICE|KDI|KOTRA|과학기술정보통신부|국토교통부)/g;
+  const sourceMatches = researchData.match(sourcePatterns);
+  if (sourceMatches) {
+    score += 10;
+    factors.push(`공식 출처 ${new Set(sourceMatches).size}곳 인용`);
+  }
+
+  // 4. 시장 규모/성장률 관련 키워드
+  const marketKeywords = /(시장 규모|CAGR|성장률|시장 점유율|전년 대비|market size|YoY)/gi;
+  const marketMatches = researchData.match(marketKeywords);
+  if (marketMatches && marketMatches.length >= 2) {
+    score += 10;
+    factors.push("시장 분석 핵심 지표 포함");
+  }
+
+  return {
+    score: Math.min(100, Math.max(0, score)),
+    factors,
+  };
+}
+
 interface GenerateOptions {
   planId: string;
   companyId: string;

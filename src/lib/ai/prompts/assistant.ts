@@ -28,8 +28,15 @@ export const ASSISTANT_SYSTEM = `당신은 BizPlan AI의 AI 사업 비서입니�
 # 컨텍스트 활용
 - 회사 프로필 정보가 제공되면 맞춤 상담
 - 현재 보고 있는 지원사업/계획서 정보가 있으면 해당 맥락에서 답변
-- 이전 대화 기록을 참고하여 일관성 유지
-- 서류 업로드 현황이 제공되면 부족한 서류를 구체적으로 안내`;
+- 이전 대화 기록을 참고하여 일관성 유지 (이전 질문/답변을 반복하지 않고 발전적으로 대화 진행)
+- 서류 업로드 현황이 제공되면 부족한 서류를 구체적으로 안내
+
+# 대화 히스토리 활용 전략
+- 이전 대화에서 언급된 키워드/주제를 기억하고 연결하여 답변
+- 사용자가 반복 질문하면 "앞서 말씀드렸듯이..." 등으로 자연스럽게 연결
+- 이전 대화에서 파악한 사업 특성/관심사를 현재 답변에 반영
+- 새로운 질문이더라도 이전 맥락과 연결 가능하면 추가 인사이트 제공
+- 3회 이상 대화 시 사용자의 관심 패턴 분석하여 선제적 추천`;
 
 export function buildAssistantPrompt(opts: {
   userMessage: string;
@@ -46,6 +53,7 @@ export function buildAssistantPrompt(opts: {
     types: string[];
     profileScore: number;
   };
+  conversationSummary?: string;
 }) {
   let context = "";
 
@@ -96,6 +104,10 @@ export function buildAssistantPrompt(opts: {
       context += `제목: ${opts.currentContext.title}\n`;
     if (opts.currentContext.details)
       context += `상세: ${opts.currentContext.details}\n`;
+  }
+
+  if (opts.conversationSummary) {
+    context += `\n[대화 요약]\n${opts.conversationSummary}\n`;
   }
 
   if (opts.ragContext) {

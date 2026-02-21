@@ -5,7 +5,7 @@ import {
   ASSISTANT_SYSTEM,
   buildAssistantPrompt,
 } from "@/lib/ai/prompts/assistant";
-import { searchReferences, formatReferenceExamples } from "@/lib/rag/search";
+import { hybridSearchReferences, extractKeywords, formatReferenceExamples } from "@/lib/rag/search";
 import { safeErrorMessage } from "@/lib/api/error";
 
 /**
@@ -84,6 +84,17 @@ export async function POST(request: NextRequest) {
       content: h.content,
     }));
 
+  // 대화가 3건 이상이면 요약 생성 (최근 대화 맥락 파악)
+  let conversationSummary: string | undefined;
+  if (previousMessages.length >= 6) {
+    const recentTopics = previousMessages
+      .filter(m => m.role === "user")
+      .slice(-5)
+      .map(m => m.content.slice(0, 50))
+      .join(", ");
+    conversationSummary = `사용자의 최근 관심사: ${recentTopics}`;
+  }
+
   // 서류 업로드 현황 (서류 유도 컨텍스트용)
   let documentStatus: {
     totalCount: number;
@@ -119,13 +130,15 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // RAG 검색 (사업계획서 관련 질문일 때)
+  // RAG 검색 (하이브리드: 벡터 + 키워드)
   let ragContext: string | undefined;
   try {
-    const ragResults = await searchReferences({
+    const keywords = extractKeywords(message);
+    const ragResults = await hybridSearchReferences({
       query: message,
       topK: 3,
       threshold: 0.3,
+      keywords,
     });
     if (ragResults.length > 0) {
       ragContext = formatReferenceExamples(ragResults);
@@ -147,6 +160,7 @@ export async function POST(request: NextRequest) {
           currentContext,
           ragContext,
           documentStatus,
+          conversationSummary,
         });
 
         for await (const chunk of streamClaude({

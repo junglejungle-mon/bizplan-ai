@@ -82,3 +82,58 @@ export function formatReferenceExamples(results: SearchResult[]): string {
     )
     .join("\n\n");
 }
+
+/**
+ * 하이브리드 검색: 벡터 유사도 + 키워드 매칭
+ * 벡터 검색 결과에 키워드 부스팅을 적용하여 정확도 향상
+ */
+export async function hybridSearchReferences(
+  opts: SearchOptions & { keywords?: string[] }
+): Promise<SearchResult[]> {
+  // 1. 벡터 유사도 검색 (기존)
+  const vectorResults = await searchReferences({
+    ...opts,
+    topK: (opts.topK || 3) * 2, // 넉넉하게 가져와서 리랭킹
+  });
+
+  if (!opts.keywords || opts.keywords.length === 0) {
+    return vectorResults.slice(0, opts.topK || 3);
+  }
+
+  // 2. 키워드 부스팅 - 키워드가 포함된 결과에 가산점
+  const boostedResults = vectorResults.map((result) => {
+    const keywordMatches = opts.keywords!.filter((kw) =>
+      result.content.toLowerCase().includes(kw.toLowerCase())
+    ).length;
+    const boost = keywordMatches * 0.05; // 키워드 하나당 5% 부스트
+    return {
+      ...result,
+      similarity: Math.min(1, result.similarity + boost),
+    };
+  });
+
+  // 3. 부스팅된 점수로 재정렬
+  boostedResults.sort((a, b) => b.similarity - a.similarity);
+
+  return boostedResults.slice(0, opts.topK || 3);
+}
+
+/**
+ * 메시지에서 핵심 키워드 추출 (간단한 한국어 키워드 추출)
+ */
+export function extractKeywords(message: string): string[] {
+  // 불용어 제거 후 2글자 이상 단어 추출
+  const stopWords = new Set([
+    "그리고", "또한", "하지만", "그러나", "따라서", "이것", "저것", "그것",
+    "우리", "나는", "이런", "저런", "어떤", "무엇", "어떻게", "왜",
+    "있다", "없다", "하다", "되다", "이다", "않다", "수", "것", "등",
+    "위해", "대해", "대한", "통해", "있는", "하는", "된", "할", "한",
+    "좀", "주세요", "알려", "해주", "부탁", "감사",
+  ]);
+
+  return message
+    .replace(/[^\w가-힣\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && !stopWords.has(w))
+    .slice(0, 5);
+}

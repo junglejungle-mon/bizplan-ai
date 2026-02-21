@@ -89,6 +89,66 @@ export default function RootLayout({
             }),
           }}
         />
+        {/* FAQPage Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: [
+                {
+                  "@type": "Question",
+                  name: "BizPlan AI는 무엇인가요?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "BizPlan AI는 AI 기술을 활용하여 정부지원사업 매칭, 사업계획서 자동 작성, IR PPT 생성을 제공하는 서비스입니다.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "사업계획서 자동 작성에 비용이 드나요?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "무료 체험 플랜으로 시작할 수 있으며, 프로 플랜은 월 99,000원, 올프리 플랜은 월 299,000원입니다.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "정부지원사업 매칭은 어떻게 작동하나요?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "회사 프로필과 업종, 지역, 직원수 등을 분석하여 296개 이상의 정부지원사업 중 적합한 사업을 AI가 자동으로 매칭해드립니다.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "HWPX(한글) 파일도 지원하나요?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "네, BizPlan AI는 HWPX, DOCX, PDF 형식의 사업계획서 출력을 지원하며, 정부기관 제출 양식에 맞춤 변환됩니다.",
+                  },
+                },
+              ],
+            }),
+          }}
+        />
+        {/* BreadcrumbList Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "홈", item: siteUrl },
+                { "@type": "ListItem", position: 2, name: "요금제", item: `${siteUrl}/pricing` },
+                { "@type": "ListItem", position: 3, name: "자주 묻는 질문", item: `${siteUrl}/faq` },
+                { "@type": "ListItem", position: 4, name: "문의하기", item: `${siteUrl}/contact` },
+              ],
+            }),
+          }}
+        />
         {gaId && (
           <>
             <Script
