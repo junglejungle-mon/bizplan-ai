@@ -32,6 +32,10 @@ interface PptxOptions {
   template?: "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci";
   slides: SlideData[];
   kpiData?: Record<string, unknown>;
+  /** true면 Playwright HTML→이미지 고품질 차트 사용, false면 pptxgenjs 네이티브 차트 */
+  useHtmlCharts?: boolean;
+  /** 미리 렌더링된 차트 이미지 맵 (슬라이드 인덱스 → { chart?: Buffer, stats?: Buffer }) */
+  preRenderedImages?: Map<number, { chart?: Buffer; stats?: Buffer }>;
   customColors?: {
     primary: string;
     secondary: string;
@@ -1159,7 +1163,7 @@ function _addSectionDivider(
 }
 
 export async function buildPptx(options: PptxOptions): Promise<Buffer> {
-  const { companyName, template = "minimal", slides, customColors } = options;
+  const { companyName, template = "minimal", slides, customColors, preRenderedImages } = options;
 
   // custom_ci 템플릿: 사용자가 업로드한 로고에서 추출한 색상 사용
   let colors: TemplateColors;
@@ -1306,7 +1310,14 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
       let yPos = 1.15;
 
       // 스탯 카드 (stats 데이터가 있으면 우선 표시)
-      if (slideData.content.stats && slideData.content.stats.length > 0) {
+      // HTML 이미지 모드: 미리 렌더링된 stats 이미지 사용 (고품질)
+      const rendered = preRenderedImages?.get(slideIdx);
+      if (rendered?.stats && slideData.content.stats && slideData.content.stats.length > 0) {
+        // HTML→이미지 고품질 stats 카드
+        const statsImgData = "image/png;base64," + rendered.stats.toString("base64");
+        slide.addImage({ data: statsImgData, x: 0.3, y: yPos, w: 9.2, h: 1.1 });
+        yPos += 1.2;
+      } else if (slideData.content.stats && slideData.content.stats.length > 0) {
         yPos = addStatsCards(slide, slideData.content.stats, colors, yPos);
         yPos += 0.15;
       }
@@ -1331,8 +1342,14 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
         yPos += 0.5;
       }
 
-      // 차트 삽입 (chart 데이터가 있으면)
-      if (slideData.content.chart) {
+      // 차트 삽입 — HTML 이미지 모드 또는 네이티브 pptxgenjs 차트
+      if (rendered?.chart && slideData.content.chart) {
+        // HTML→이미지 고품질 차트 (Playwright 렌더링)
+        const chartImgData = "image/png;base64," + rendered.chart.toString("base64");
+        const chartH = 2.8;
+        slide.addImage({ data: chartImgData, x: 0.3, y: yPos, w: 9.2, h: chartH });
+        yPos += chartH + 0.1;
+      } else if (slideData.content.chart) {
         yPos = addChartToSlide(slide, slideData.content.chart, colors, yPos);
       }
 

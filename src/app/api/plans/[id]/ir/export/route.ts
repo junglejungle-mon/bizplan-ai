@@ -12,8 +12,78 @@ function makeContentDisposition(filename: string): string {
 }
 
 /**
+ * HTML→이미지 차트 렌더링 (Playwright 사용 가능 시)
+ * Playwright가 없으면 빈 Map 반환 → pptxgenjs 네이티브 차트로 폴백
+ */
+async function tryRenderChartImages(
+  slides: Array<{ slide_type: string; content: Record<string, unknown> }>,
+  templateName: string
+): Promise<Map<number, { chart?: Buffer; stats?: Buffer }>> {
+  const imageMap = new Map<number, { chart?: Buffer; stats?: Buffer }>();
+
+  try {
+    // dynamic import — Playwright가 설치되지 않은 환경(Vercel 등)에서는 실패
+    const { renderChartImage, renderStatsImage, closeBrowser } = await import("@/lib/pptx/chart-renderer");
+
+    // 템플릿 색상 매핑
+    const TEMPLATE_COLORS: Record<string, {
+      primary: string; secondary: string; accent: string; bg: string;
+      textDark: string; textLight: string; chartColors: string[]; positive: string;
+    }> = {
+      minimal: { primary: "1A1A2E", secondary: "023793", accent: "4361EE", bg: "FFFFFF", textDark: "1A1A2E", textLight: "6B7280", chartColors: ["023793", "4361EE", "6C8EF2", "A0B4F5", "D0DBF9"], positive: "22C55E" },
+      tech: { primary: "58A6FF", secondary: "388BFD", accent: "7EE787", bg: "0D1117", textDark: "FFFFFF", textLight: "8B949E", chartColors: ["58A6FF", "388BFD", "7EE787", "D2A8FF", "F778BA"], positive: "7EE787" },
+      classic: { primary: "2C3E50", secondary: "003366", accent: "E74C3C", bg: "FFFFFF", textDark: "2C3E50", textLight: "7F8C8D", chartColors: ["2C3E50", "E74C3C", "3498DB", "2ECC71", "F39C12"], positive: "2ECC71" },
+      professional: { primary: "1E3A5F", secondary: "2E5D8A", accent: "3B82F6", bg: "FFFFFF", textDark: "1E3A5F", textLight: "64748B", chartColors: ["1E3A5F", "3B82F6", "60A5FA", "93C5FD", "BFDBFE"], positive: "22C55E" },
+      vibrant: { primary: "4F46E5", secondary: "6366F1", accent: "A855F7", bg: "FFFFFF", textDark: "1E1B4B", textLight: "6B7280", chartColors: ["4F46E5", "A855F7", "EC4899", "F59E0B", "10B981"], positive: "10B981" },
+    };
+    const colors = TEMPLATE_COLORS[templateName] || TEMPLATE_COLORS.minimal;
+
+    // 각 슬라이드의 차트/stats를 병렬 렌더링
+    const renderPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < slides.length; i++) {
+      const content = slides[i].content || {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chart = content.chart as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const stats = content.stats as any[];
+
+      if (chart || (stats && stats.length > 0)) {
+        const idx = i;
+        renderPromises.push((async () => {
+          const images: { chart?: Buffer; stats?: Buffer } = {};
+          try {
+            if (chart && chart.type && chart.data) {
+              images.chart = await renderChartImage(chart, colors);
+            }
+            if (stats && stats.length > 0) {
+              images.stats = await renderStatsImage(stats, colors);
+            }
+            if (images.chart || images.stats) {
+              imageMap.set(idx, images);
+            }
+          } catch (renderErr) {
+            console.warn(`[IR Export] 슬라이드 ${idx} 차트 렌더링 실패 (폴백):`, renderErr);
+          }
+        })());
+      }
+    }
+
+    await Promise.all(renderPromises);
+    await closeBrowser(); // 브라우저 정리
+
+    console.log(`[IR Export] HTML 차트 ${imageMap.size}개 슬라이드 렌더링 완료`);
+  } catch (importErr) {
+    // Playwright 미설치 or import 실패 → 네이티브 차트로 폴백
+    console.log("[IR Export] Playwright 미사용 (네이티브 차트 모드):", (importErr as Error).message?.substring(0, 80));
+  }
+
+  return imageMap;
+}
+
+/**
  * POST /api/plans/[id]/ir/export
- * PPTX 내보내기 (pptxgenjs 기반)
+ * PPTX 내보내기 (하이브리드: Playwright HTML차트 + pptxgenjs)
  */
 export async function POST(
   request: NextRequest,
@@ -41,7 +111,6 @@ export async function POST(
     .single();
 
   if (!presentation || (presentation as { companies?: { user_id?: string; name?: string } }).companies?.user_id !== user.id) {
-    // status=completed 가 없으면 generating 중인지 확인
     const { data: pendingPres } = await supabase
       .from("ir_presentations")
       .select("status")
@@ -71,30 +140,19 @@ export async function POST(
 
   if (slidesError) {
     console.error("[IR Export] 슬라이드 로드 실패:", slidesError.message);
-    return Response.json(
-      { error: "슬라이드 로드에 실패했습니다." },
-      { status: 500 }
-    );
+    return Response.json({ error: "슬라이드 로드에 실패했습니다." }, { status: 500 });
   }
 
   if (!slides || slides.length === 0) {
-    return Response.json(
-      { error: "슬라이드가 없습니다. IR 자료를 다시 생성해주세요." },
-      { status: 400 }
-    );
+    return Response.json({ error: "슬라이드가 없습니다. IR 자료를 다시 생성해주세요." }, { status: 400 });
   }
 
   const companyName = (presentation as { companies?: { user_id?: string; name?: string } }).companies?.name || "회사명";
 
-  // custom_ci 템플릿인 경우 브랜드 색상 로드
+  // custom_ci 브랜드 색상 로드
   let customColors: {
-    primary: string;
-    secondary: string;
-    accent: string;
-    bg?: string;
-    textDark?: string;
-    textLight?: string;
-    chartColors?: string[];
+    primary: string; secondary: string; accent: string;
+    bg?: string; textDark?: string; textLight?: string; chartColors?: string[];
   } | undefined;
   const templateName = (presentation.template as string) || "minimal";
 
@@ -115,10 +173,8 @@ export async function POST(
             primary: parsed.primary || "1A1A2E",
             secondary: parsed.secondary || "023793",
             accent: parsed.accent || "4361EE",
-            bg: parsed.bg,
-            textDark: parsed.textDark,
-            textLight: parsed.textLight,
-            chartColors: parsed.chartColors,
+            bg: parsed.bg, textDark: parsed.textDark,
+            textLight: parsed.textLight, chartColors: parsed.chartColors,
           };
         }
       }
@@ -127,7 +183,6 @@ export async function POST(
     }
   }
 
-  // PDF 내보내기 — pptxgenjs PPTX를 그대로 전달 (PDF 변환은 클라이언트에서)
   if (format === "pdf") {
     return Response.json(
       { error: "PDF는 PPTX 다운로드 후 PowerPoint에서 PDF로 저장해주세요." },
@@ -135,14 +190,12 @@ export async function POST(
     );
   }
 
-  // PPTX 생성 — pptxgenjs 기본 (차트/시각화 포함)
-  // pptx-automizer는 "designer_" 접두사 템플릿 (디자이너 전용)에만 활성화
+  // PPTX 생성
   try {
     let pptxBuffer: Buffer;
     const isDesignerTemplate = templateName.startsWith("designer_") && hasTemplate(templateName);
 
     if (isDesignerTemplate) {
-      // pptx-automizer: 디자이너가 직접 만든 .pptx 템플릿 (텍스트 치환)
       pptxBuffer = await buildFromTemplate({
         templateFile: `${templateName}.pptx`,
         companyName,
@@ -154,7 +207,14 @@ export async function POST(
         })),
       });
     } else {
-      // pptxgenjs: 차트·통계카드·타임라인·인포그래픽 포함 동적 생성 (기본)
+      // HTML 차트 이미지 미리 렌더링 (Playwright 사용 가능 시)
+      const slideDataForRender = slides.map((s) => ({
+        slide_type: s.slide_type,
+        content: (s.content || {}) as Record<string, unknown>,
+      }));
+      const preRenderedImages = await tryRenderChartImages(slideDataForRender, templateName);
+
+      // pptxgenjs 빌드 (HTML 차트 이미지 있으면 사용, 없으면 네이티브 차트)
       pptxBuffer = await buildPptx({
         companyName,
         template: templateName as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
@@ -165,24 +225,21 @@ export async function POST(
           notes: s.notes,
         })),
         customColors,
+        useHtmlCharts: preRenderedImages.size > 0,
+        preRenderedImages,
       });
     }
 
     const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pptx`;
-
     const uint8Array = new Uint8Array(pptxBuffer);
     return new Response(uint8Array, {
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": makeContentDisposition(filename),
       },
     });
   } catch (buildError) {
     console.error("[IR Export] PPTX 빌드 실패:", buildError);
-    return Response.json(
-      { error: "PPTX 생성에 실패했습니다." },
-      { status: 500 }
-    );
+    return Response.json({ error: "PPTX 생성에 실패했습니다." }, { status: 500 });
   }
 }
