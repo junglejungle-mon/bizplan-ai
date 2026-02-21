@@ -135,12 +135,14 @@ export async function POST(
     );
   }
 
-  // PPTX 생성 — 템플릿 파일이 있으면 pptx-automizer, 없으면 pptxgenjs
+  // PPTX 생성 — pptxgenjs 기본 (차트/시각화 포함)
+  // pptx-automizer는 "designer_" 접두사 템플릿 (디자이너 전용)에만 활성화
   try {
     let pptxBuffer: Buffer;
+    const isDesignerTemplate = templateName.startsWith("designer_") && hasTemplate(templateName);
 
-    if (hasTemplate(templateName)) {
-      // pptx-automizer: 디자이너 제작 템플릿 기반 고품질 PPT
+    if (isDesignerTemplate) {
+      // pptx-automizer: 디자이너가 직접 만든 .pptx 템플릿 (텍스트 치환)
       pptxBuffer = await buildFromTemplate({
         templateFile: `${templateName}.pptx`,
         companyName,
@@ -152,7 +154,7 @@ export async function POST(
         })),
       });
     } else {
-      // pptxgenjs: 코드 기반 동적 생성 (기본)
+      // pptxgenjs: 차트·통계카드·타임라인·인포그래픽 포함 동적 생성 (기본)
       pptxBuffer = await buildPptx({
         companyName,
         template: templateName as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",

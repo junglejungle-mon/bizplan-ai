@@ -324,7 +324,7 @@ export async function* generateIRPresentation(
         },
       ],
       temperature: 0.5,
-      maxTokens: 4000,
+      maxTokens: 8000, // chart/stats 포함 시 JSON이 커짐
     });
 
     yield {
