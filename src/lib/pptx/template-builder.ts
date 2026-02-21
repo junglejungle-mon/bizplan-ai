@@ -43,6 +43,20 @@ const SLIDE_TYPE_MAP: Record<string, number> = {
   roadmap: 12,
 };
 
+// 슬라이드 타입별 존재하는 요소 목록 (pptx-automizer는 없는 요소를 수정하면 에러)
+const SLIDE_ELEMENTS: Record<string, Set<string>> = {
+  cover: new Set(["CompanyName", "Title", "Headline", "Subtext"]),
+  thanks: new Set(["CompanyName", "Subtext"]),
+  // content 슬라이드 (2~12)는 모두 동일
+  content: new Set(["Title", "Headline", "Subtext", "Bullets", "CompanyName"]),
+};
+
+/** 해당 슬라이드 타입에 특정 요소가 존재하는지 확인 */
+function hasElement(slideType: string, elementName: string): boolean {
+  const elements = SLIDE_ELEMENTS[slideType] || SLIDE_ELEMENTS.content;
+  return elements.has(elementName);
+}
+
 interface TemplateSlideData {
   slide_type: string;
   title: string;
@@ -102,42 +116,50 @@ export async function buildFromTemplate(
     const templateSlideIndex = SLIDE_TYPE_MAP[slide.slide_type] || 2; // 기본: 2번 슬라이드 (일반)
 
     automizer.addSlide(sourceName, templateSlideIndex, (slideMod) => {
-      // 텍스트 플레이스홀더 치환 (안전하게 — 없는 요소는 무시)
-      safeModify(slideMod, "Title", [
-        ModifyTextHelper.setText(slide.title),
-      ]);
+      const slideType = slide.slide_type;
 
-      if (slide.content.headline) {
-        safeModify(slideMod, "Headline", [
+      // Title 치환 (cover, content 슬라이드에 존재)
+      if (hasElement(slideType, "Title")) {
+        slideMod.modifyElement("Title", [
+          ModifyTextHelper.setText(slide.title),
+        ]);
+      }
+
+      // Headline 치환
+      if (slide.content.headline && hasElement(slideType, "Headline")) {
+        slideMod.modifyElement("Headline", [
           ModifyTextHelper.setText(slide.content.headline),
         ]);
       }
 
-      if (slide.content.subtext) {
-        safeModify(slideMod, "Subtext", [
+      // Subtext 치환
+      if (slide.content.subtext && hasElement(slideType, "Subtext")) {
+        slideMod.modifyElement("Subtext", [
           ModifyTextHelper.setText(slide.content.subtext),
         ]);
       }
 
-      // 불릿 포인트는 줄바꿈으로 연결
-      if (slide.content.bullets && slide.content.bullets.length > 0) {
+      // Bullets 치환 (content 슬라이드에만 존재, cover/thanks에는 없음)
+      if (slide.content.bullets && slide.content.bullets.length > 0 && hasElement(slideType, "Bullets")) {
         const bulletText = slide.content.bullets.map(b => `• ${b}`).join("\n");
-        safeModify(slideMod, "Bullets", [
+        slideMod.modifyElement("Bullets", [
           ModifyTextHelper.setText(bulletText),
         ]);
       }
 
-      // 회사명 치환
-      safeModify(slideMod, "CompanyName", [
-        ModifyTextHelper.setText(opts.companyName),
-      ]);
+      // CompanyName 치환
+      if (hasElement(slideType, "CompanyName")) {
+        slideMod.modifyElement("CompanyName", [
+          ModifyTextHelper.setText(opts.companyName),
+        ]);
+      }
     });
   }
 
-  // 감사 슬라이드 (마지막 슬라이드)
-  const lastSlideIndex = 13; // 감사 슬라이드
+  // 감사 슬라이드 (마지막 슬라이드) — CompanyName, Subtext만 존재
+  const lastSlideIndex = 13;
   automizer.addSlide(sourceName, lastSlideIndex, (slideMod) => {
-    safeModify(slideMod, "CompanyName", [
+    slideMod.modifyElement("CompanyName", [
       ModifyTextHelper.setText(opts.companyName),
     ]);
   });
