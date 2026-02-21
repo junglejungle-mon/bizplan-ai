@@ -12,6 +12,8 @@ import {
 } from "@/lib/ai/prompts/ir";
 import { buildDynamicIRContext } from "@/lib/quality/pattern-loader";
 import { scoreAndSavePpt } from "@/lib/quality/ppt-scorer";
+import { isGoogleSlidesEnabled } from "@/lib/google-slides/client";
+import { buildGoogleSlides } from "@/lib/google-slides/slides-builder";
 
 interface IRGenerateOptions {
   planId: string;
@@ -442,6 +444,44 @@ export async function* generateIRPresentation(
       console.warn("[IR Gen] PPT 자동 채점 실패:", e);
     }
 
+    // 6.5. Google Slides 프레젠테이션 생성 (환경변수 설정 시)
+    let googleSlidesUrl: string | null = null;
+    let googleSlidesId: string | null = null;
+    if (isGoogleSlidesEnabled()) {
+      try {
+        yield {
+          type: "progress",
+          data: { step: "Google Slides 생성", progress: 96 },
+        };
+
+        const gsResult = await buildGoogleSlides({
+          companyName: company.name,
+          template: opts.template || "minimal",
+          slides: slides.map((s) => ({
+            slide_type: s.slide_type,
+            title: s.title || "",
+            content: s.content || {},
+            notes: s.notes || null,
+          })),
+        });
+
+        googleSlidesUrl = gsResult.url;
+        googleSlidesId = gsResult.presentationId;
+
+        // Google Slides URL을 ir_presentations에 저장
+        await supabase
+          .from("ir_presentations")
+          .update({
+            google_slides_url: gsResult.url,
+            google_slides_id: gsResult.presentationId,
+          })
+          .eq("id", presentation.id);
+      } catch (gsErr) {
+        console.warn("[IR Gen] Google Slides 생성 실패 (PPTX 폴백):", gsErr);
+        // Google Slides 실패해도 PPTX는 정상 작동
+      }
+    }
+
     // 7. 완성
     await supabase
       .from("ir_presentations")
@@ -458,6 +498,8 @@ export async function* generateIRPresentation(
         totalSlides: slides.length,
         progress: 100,
         qualityScore: pptScore,
+        googleSlidesUrl,
+        googleSlidesId,
       },
     };
   } catch (error) {

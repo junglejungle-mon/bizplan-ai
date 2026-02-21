@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   Upload,
   Palette,
+  ExternalLink,
+  FileDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -30,6 +32,8 @@ interface IRGeneratorClientProps {
   planTitle: string;
   hasPresentation: boolean;
   slides?: SlideData[];
+  googleSlidesUrl?: string | null;
+  googleSlidesId?: string | null;
 }
 
 const TEMPLATES: { key: string; label: string; desc: string; colors: string[] }[] = [
@@ -60,6 +64,8 @@ export function IRGeneratorClient({
   planTitle,
   hasPresentation,
   slides = [],
+  googleSlidesUrl: initialGoogleSlidesUrl,
+  googleSlidesId: initialGoogleSlidesId,
 }: IRGeneratorClientProps) {
   const [selectedTemplate, setSelectedTemplate] = useState("minimal");
   const [generating, setGenerating] = useState(false);
@@ -68,8 +74,11 @@ export function IRGeneratorClient({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [brandColors, setBrandColors] = useState<{ primary: string; palette: string[] } | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [gSlidesUrl, setGSlidesUrl] = useState<string | null>(initialGoogleSlidesUrl || null);
+  const [gSlidesId, setGSlidesId] = useState<string | null>(initialGoogleSlidesId || null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -161,6 +170,10 @@ export function IRGeneratorClient({
                 setProgress(100);
                 setDone(true);
                 setCurrentStep("완료!");
+                if (event.data?.googleSlidesUrl) {
+                  setGSlidesUrl(event.data.googleSlidesUrl);
+                  setGSlidesId(event.data.googleSlidesId || null);
+                }
                 setTimeout(() => {
                   router.refresh();
                 }, 2000);
@@ -215,6 +228,43 @@ export function IRGeneratorClient({
     setDownloading(false);
   };
 
+  const handleDownloadPdf = async () => {
+    if (!gSlidesId) return;
+    setDownloadingPdf(true);
+    try {
+      const response = await fetch(`/api/plans/${planId}/ir/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "pdf" }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "PDF 다운로드 실패");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition");
+      const utf8Match = disposition?.match(/filename\*=UTF-8''(.+?)(?:;|$)/i);
+      const filenameMatch = disposition?.match(/filename="(.+?)"/);
+      a.download = utf8Match
+        ? decodeURIComponent(utf8Match[1])
+        : filenameMatch
+        ? decodeURIComponent(filenameMatch[1])
+        : "IR_PPT.pdf";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      alert(`PDF 다운로드 오류: ${err}`);
+    }
+    setDownloadingPdf(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
@@ -228,11 +278,25 @@ export function IRGeneratorClient({
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">IR PPT 편집기</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900">IR PPT 생성기</h1>
+              <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50">Beta</Badge>
+            </div>
             <p className="text-sm text-gray-500">{planTitle}</p>
           </div>
         </div>
         <div className="flex gap-2">
+          {gSlidesUrl && (
+            <a
+              href={gSlidesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Google Slides에서 편집
+            </a>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -243,18 +307,24 @@ export function IRGeneratorClient({
             {downloading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Download className="h-4 w-4" />
+              <FileDown className="h-4 w-4" />
             )}
-            PPTX 다운로드
+            PPTX
           </Button>
           <Button
             variant="outline"
             size="sm"
             className="gap-2"
-            disabled
-            title="PDF 내보내기는 곧 지원됩니다"
+            onClick={handleDownloadPdf}
+            disabled={!hasPresentation || !gSlidesId || downloadingPdf}
+            title={gSlidesId ? "PDF 다운로드" : "Google Slides 연동 후 사용 가능"}
           >
-            <Download className="h-4 w-4" /> PDF (준비중)
+            {downloadingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            PDF
           </Button>
         </div>
       </div>
@@ -264,11 +334,31 @@ export function IRGeneratorClient({
         <Card className="bg-green-50 border-green-200">
           <CardContent className="p-6 text-center">
             <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" />
-            <h3 className="font-semibold text-green-900">IR PPT 생성 완료!</h3>
-            <p className="mt-2 text-sm text-green-700">
-              PPTX 다운로드 버튼으로 다운로드하세요.
+            <h3 className="font-semibold text-green-900">IR PPT 초안 생성 완료!</h3>
+            {gSlidesUrl ? (
+              <div className="mt-3 space-y-2">
+                <a
+                  href={gSlidesUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Google Slides에서 편집하기
+                </a>
+                <p className="text-xs text-green-700">
+                  Google Slides에서 디자인을 자유롭게 수정할 수 있습니다.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-green-700">
+                PPTX 다운로드 후 PowerPoint에서 디자인을 다듬어 사용하세요.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-1.5 inline-block">
+              💡 AI가 생성한 초안입니다. 슬라이드 디자인은 편집 프로그램에서 보완을 권장합니다.
             </p>
-            <p className="mt-1 text-xs text-green-600">
+            <p className="mt-3 text-xs text-green-600">
               잠시 후 페이지가 새로고침됩니다...
             </p>
           </CardContent>
@@ -375,11 +465,13 @@ export function IRGeneratorClient({
         <Card>
           <CardContent className="flex flex-col items-center py-12">
             <Presentation className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="font-semibold text-gray-900">IR PPT 자동 생성</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold text-gray-900">IR PPT 초안 생성</h3>
+              <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50">Beta</Badge>
+            </div>
             <p className="mt-2 text-sm text-gray-500 text-center max-w-md">
-              사업계획서를 기반으로 투자유치용 IR PPT를 자동 생성합니다. 표지,
-              문제정의, 솔루션, 시장규모, 비즈니스모델, 팀소개 등 10~15장의
-              슬라이드가 생성됩니다.
+              사업계획서를 기반으로 투자유치용 IR PPT 초안을 자동 생성합니다.
+              AI가 콘텐츠를 구성하며, 다운로드 후 PowerPoint/Google Slides에서 디자인을 보완하여 사용하세요.
             </p>
 
             {/* 템플릿 선택 (카드 형태) */}
