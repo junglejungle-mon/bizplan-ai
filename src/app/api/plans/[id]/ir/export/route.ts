@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPptx } from "@/lib/pptx/pptx-builder";
-import { isGoogleSlidesEnabled } from "@/lib/google-slides/client";
-import { exportGoogleSlidesAsPptx, exportGoogleSlidesAsPdf } from "@/lib/google-slides/slides-builder";
+import { hasTemplate, buildFromTemplate } from "@/lib/pptx/template-builder";
 
 export const maxDuration = 60; // PPTX 생성에 시간 필요
 
@@ -14,7 +13,7 @@ function makeContentDisposition(filename: string): string {
 
 /**
  * POST /api/plans/[id]/ir/export
- * PPTX/PDF 내보내기
+ * PPTX 내보내기 (pptxgenjs 기반)
  */
 export async function POST(
   request: NextRequest,
@@ -128,82 +127,47 @@ export async function POST(
     }
   }
 
-  // Google Slides URL 반환 (format=link)
-  if (format === "link") {
-    const googleSlidesUrl = (presentation as { google_slides_url?: string }).google_slides_url;
-    const googleSlidesId = (presentation as { google_slides_id?: string }).google_slides_id;
-    return Response.json({
-      googleSlidesUrl: googleSlidesUrl || null,
-      googleSlidesId: googleSlidesId || null,
-      hasGoogleSlides: !!googleSlidesUrl,
-    });
-  }
-
-  // PDF 내보내기 (Google Slides에서)
+  // PDF 내보내기 — pptxgenjs PPTX를 그대로 전달 (PDF 변환은 클라이언트에서)
   if (format === "pdf") {
-    const googleSlidesId = (presentation as { google_slides_id?: string }).google_slides_id;
-    if (googleSlidesId && isGoogleSlidesEnabled()) {
-      try {
-        const pdfBuffer = await exportGoogleSlidesAsPdf(googleSlidesId);
-        const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pdf`;
-        const uint8Array = new Uint8Array(pdfBuffer);
-        return new Response(uint8Array, {
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": makeContentDisposition(filename),
-          },
-        });
-      } catch (pdfErr) {
-        console.error("[IR Export] Google Slides PDF 내보내기 실패:", pdfErr);
-        return Response.json(
-          { error: "PDF 내보내기에 실패했습니다." },
-          { status: 500 }
-        );
-      }
-    }
     return Response.json(
-      { error: "PDF 내보내기는 Google Slides 연동 후 사용 가능합니다." },
+      { error: "PDF는 PPTX 다운로드 후 PowerPoint에서 PDF로 저장해주세요." },
       { status: 400 }
     );
   }
 
-  // PPTX 생성 — Google Slides 우선, 폴백: pptxgenjs
+  // PPTX 생성 — 템플릿 파일이 있으면 pptx-automizer, 없으면 pptxgenjs
   try {
-    // Google Slides에서 PPTX 내보내기 시도
-    const googleSlidesId = (presentation as { google_slides_id?: string }).google_slides_id;
-    if (googleSlidesId && isGoogleSlidesEnabled()) {
-      try {
-        const gsPptxBuffer = await exportGoogleSlidesAsPptx(googleSlidesId);
-        const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pptx`;
-        const uint8Array = new Uint8Array(gsPptxBuffer);
-        return new Response(uint8Array, {
-          headers: {
-            "Content-Type":
-              "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "Content-Disposition": makeContentDisposition(filename),
-          },
-        });
-      } catch (gsErr) {
-        console.warn("[IR Export] Google Slides PPTX 실패, pptxgenjs 폴백:", gsErr);
-      }
-    }
+    let pptxBuffer: Buffer;
 
-    // 폴백: pptxgenjs로 직접 생성
-    const pptxBuffer = await buildPptx({
-      companyName,
-      template: templateName as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
-      slides: slides.map((s) => ({
-        slide_type: s.slide_type as "cover" | "problem" | "solution" | "market" | "business_model" | "traction" | "competition" | "team" | "financials" | "ask" | "roadmap" | "tech",
-        title: s.title,
-        content: (s.content || {}) as Record<string, unknown>,
-        notes: s.notes,
-      })),
-      customColors,
-    });
+    if (hasTemplate(templateName)) {
+      // pptx-automizer: 디자이너 제작 템플릿 기반 고품질 PPT
+      pptxBuffer = await buildFromTemplate({
+        templateFile: `${templateName}.pptx`,
+        companyName,
+        slides: slides.map((s) => ({
+          slide_type: s.slide_type,
+          title: s.title,
+          content: (s.content || {}) as { headline?: string; subtext?: string; bullets?: string[]; stats?: Array<{ value: string; label: string }> },
+          notes: s.notes || undefined,
+        })),
+      });
+    } else {
+      // pptxgenjs: 코드 기반 동적 생성 (기본)
+      pptxBuffer = await buildPptx({
+        companyName,
+        template: templateName as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
+        slides: slides.map((s) => ({
+          slide_type: s.slide_type as "cover" | "problem" | "solution" | "market" | "business_model" | "traction" | "competition" | "team" | "financials" | "ask" | "roadmap" | "tech",
+          title: s.title,
+          content: (s.content || {}) as Record<string, unknown>,
+          notes: s.notes,
+        })),
+        customColors,
+      });
+    }
 
     const filename = `${companyName}_IR_${new Date().toISOString().slice(0, 10)}.pptx`;
 
-    // Convert Buffer to Uint8Array for Response compatibility
     const uint8Array = new Uint8Array(pptxBuffer);
     return new Response(uint8Array, {
       headers: {

@@ -23,7 +23,7 @@ export default async function IREditorPage({
   // IR 프레젠테이션이 이미 있는지 확인 (최신 1개)
   const { data: presentations } = await supabase
     .from("ir_presentations")
-    .select("id, status, google_slides_url, google_slides_id")
+    .select("id, status")
     .eq("plan_id", id)
     .order("created_at", { ascending: false })
     .limit(1);
@@ -55,8 +55,6 @@ export default async function IREditorPage({
       planTitle={plan.title}
       hasPresentation={!!presentation}
       slides={slides}
-      googleSlidesUrl={(presentation as { google_slides_url?: string })?.google_slides_url || null}
-      googleSlidesId={(presentation as { google_slides_id?: string })?.google_slides_id || null}
     />
   );
 }
