@@ -86,8 +86,10 @@ export async function GET(request: Request) {
               userId: trial.user_id,
               type: 'deadline',
               variables: {
+                '#{회원이름}': '고객',
                 '#{공고명}': `${planName} 무료 체험`,
                 '#{남은일수}': String(daysLeft),
+                '#{링크}': 'https://bizplanai.co.kr/pricing',
               },
             });
           }

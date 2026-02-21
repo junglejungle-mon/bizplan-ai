@@ -203,12 +203,28 @@ function OnboardingPage() {
     setTermsLoading(false);
   };
 
-  // 회사 생성 완료 → 인터뷰 시작
+  // 회사 생성 완료 → 인터뷰 시작 + 간편 매칭 백그라운드 실행
   const handleCompanyComplete = (newCompanyId: string) => {
     setCompanyId(newCompanyId);
     trackOnboardingStart();
     setStep("interview");
     setMessages([{ role: "assistant", content: INTERVIEW_INITIAL_QUESTION }]);
+
+    // 간편 매칭 백그라운드 실행 (인터뷰 시작과 동시에)
+    fetch("/api/matching/quick", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId: newCompanyId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.matched > 0) {
+          // 간편 매칭 완료 (data.matched건)
+        }
+      })
+      .catch((err) => {
+        console.error("[QuickMatch] 간편 매칭 실패:", err);
+      });
   };
 
   // 다음 질문 자동 요청 (복원 시 교착 상태 해결)

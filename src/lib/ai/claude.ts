@@ -121,12 +121,24 @@ export async function callClaude({
 }): Promise<string> {
   const startTime = Date.now();
 
+  // 로컬 프록시 모드: system prompt를 첫 user 메시지에 병합
+  // (프록시가 별도 system 필드를 긴 요청에서 무시하는 문제 workaround)
+  const mergedMessages = isLocalMode && system
+    ? messages.map((m, i) => ({
+        ...m,
+        content: i === 0 && m.role === "user"
+          ? `[시스템 지시]\n${system}\n[/시스템 지시]\n\n${m.content}`
+          : m.content,
+      }))
+    : messages;
+
   const response = await withRetry(
     () =>
       anthropicClient.messages.create({
         model,
         max_tokens: maxTokens,
-        ...(system && {
+        // API 모드에서만 별도 system 필드 사용 (Prompt Caching 포함)
+        ...(!isLocalMode && system && {
           system: [
             {
               type: "text" as const,
@@ -135,9 +147,18 @@ export async function callClaude({
             },
           ],
         }),
-        messages: messages.map((m) => ({
+        messages: mergedMessages.map((m, i) => ({
           role: m.role,
-          content: m.content,
+          content: [
+            {
+              type: "text" as const,
+              text: m.content,
+              // 마지막 user 메시지에만 cache_control 적용 (Prompt Caching)
+              ...(i === mergedMessages.length - 1 && m.role === "user"
+                ? { cache_control: { type: "ephemeral" as const } }
+                : {}),
+            },
+          ],
         })),
         temperature,
       }),
@@ -177,12 +198,22 @@ export async function* streamClaude({
   const startTime = Date.now();
   let fullResponse = "";
 
+  // 로컬 프록시 모드: system prompt를 첫 user 메시지에 병합
+  const streamMergedMessages = isLocalMode && system
+    ? messages.map((m, i) => ({
+        ...m,
+        content: i === 0 && m.role === "user"
+          ? `[시스템 지시]\n${system}\n[/시스템 지시]\n\n${m.content}`
+          : m.content,
+      }))
+    : messages;
+
   const stream = await withRetry(
     async () =>
       anthropicClient.messages.stream({
         model,
         max_tokens: maxTokens,
-        ...(system && {
+        ...(!isLocalMode && system && {
           system: [
             {
               type: "text" as const,
@@ -191,9 +222,17 @@ export async function* streamClaude({
             },
           ],
         }),
-        messages: messages.map((m) => ({
+        messages: streamMergedMessages.map((m, i) => ({
           role: m.role,
-          content: m.content,
+          content: [
+            {
+              type: "text" as const,
+              text: m.content,
+              ...(i === streamMergedMessages.length - 1 && m.role === "user"
+                ? { cache_control: { type: "ephemeral" as const } }
+                : {}),
+            },
+          ],
         })),
         temperature,
       }),

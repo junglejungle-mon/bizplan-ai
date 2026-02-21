@@ -291,7 +291,7 @@ export async function runMatchingPipeline(companyId: string): Promise<{
   // ========================================
   // Step 2: 배치 적합성 분석 (5개씩 묶어서)
   // ========================================
-  const MATCH_BATCH_SIZE = 3;
+  const MATCH_BATCH_SIZE = 10;
   const deepAnalysisCandidates: Array<{
     companyId: string;
     programId: string;
@@ -412,9 +412,11 @@ export async function runMatchingPipeline(companyId: string): Promise<{
         userId: company.user_id,
         type: "matching",
         variables: {
-          "#{회사명}": company.name,
-          "#{매칭건수}": String(matched),
-          "#{최고점수}": String(topMatch?.match_score ?? 0),
+          "#{회원이름}": company.name,
+          "#{공고명}": `외 ${matched}건 매칭`,
+          "#{매칭점수}": String(topMatch?.match_score ?? 0),
+          "#{마감일}": "상세페이지 확인",
+          "#{링크}": "https://bizplanai.co.kr/programs",
         },
       });
     } catch (e) {

@@ -6,6 +6,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveSubscription, getPlanByName } from "./subscription";
+import { getAvailableCredits, useReferralCredit } from "@/lib/referral";
 import type { Database } from "@/lib/supabase/types";
 
 type UsageRecord = Database["public"]["Tables"]["usage_records"]["Row"];
@@ -139,6 +140,22 @@ export async function incrementUsage(
 
   // -1 = 무제한
   if (limitValue !== -1 && currentValue >= limitValue) {
+    // 한도 초과 시 추천 크레딧 확인 (plan_generations 타입만)
+    if (type === "plan_generations") {
+      try {
+        const referralCredits = await getAvailableCredits(userId);
+        if (referralCredits > 0) {
+          const used = await useReferralCredit(userId);
+          if (used) {
+            // 추천 크레딧으로 대체 → 사용량은 증가시키지 않고 허용
+            return { allowed: true, current: currentValue, limit: limitValue };
+          }
+        }
+      } catch {
+        // 추천 크레딧 체크 실패 시 무시
+      }
+    }
+
     // 유료전환 트리거: 한도 초과 시 카카오 알림톡 발송 (비동기, 실패 무시)
     triggerUpgradeNotification(userId, type, currentValue, limitValue).catch(
       () => {} // 알림 실패해도 메인 플로우 차단하지 않음
@@ -253,8 +270,10 @@ async function triggerUpgradeNotification(
       userId,
       type: "deadline", // deadline 템플릿 재활용 (업그레이드 넛지)
       variables: {
+        "#{회원이름}": "고객",
         "#{공고명}": `${USAGE_TYPE_LABELS[type]} 한도 도달`,
         "#{남은일수}": "0",
+        "#{링크}": "https://bizplanai.co.kr/pricing",
       },
     });
   } catch {

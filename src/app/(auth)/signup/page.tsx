@@ -1,14 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { trackSignUp } from "@/lib/analytics";
+import { getStoredUTM, clearUTM } from "@/lib/utm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Gift, Check, X as XIcon } from "lucide-react";
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
+  const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +33,40 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralValid, setReferralValid] = useState<boolean | null>(null);
+  const [referralChecking, setReferralChecking] = useState(false);
+
+  // URL 파라미터에서 추천 코드 자동 입력
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+      validateReferralCode(ref.toUpperCase());
+    }
+  }, [searchParams]);
+
+  // 추천 코드 검증
+  const validateReferralCode = async (code: string) => {
+    if (!code || code.length < 4) {
+      setReferralValid(null);
+      return;
+    }
+    setReferralChecking(true);
+    try {
+      const res = await fetch("/api/referral/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      setReferralValid(data.valid);
+    } catch {
+      setReferralValid(null);
+    } finally {
+      setReferralChecking(false);
+    }
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,11 +86,20 @@ export default function SignupPage() {
     }
 
     const supabase = createClient();
+    const utmData = getStoredUTM();
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name },
+        data: {
+          full_name: name,
+          ...(utmData && {
+            utm_source: utmData.utm_source,
+            utm_medium: utmData.utm_medium,
+            utm_campaign: utmData.utm_campaign,
+            referrer: utmData.referrer,
+          }),
+        },
         emailRedirectTo: `${window.location.origin}/api/auth/callback`,
       },
     });
@@ -62,9 +121,26 @@ export default function SignupPage() {
           privacy_version: "2026-02-13",
         })
         .eq("id", signUpData.user.id);
+
+      // 추천 코드 처리 (유효한 경우)
+      if (referralCode && referralValid) {
+        try {
+          await fetch("/api/referral/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newUserId: signUpData.user.id,
+              referralCode,
+            }),
+          });
+        } catch {
+          // 추천 처리 실패해도 가입은 완료
+        }
+      }
     }
 
     trackSignUp("email");
+    clearUTM();
     setSuccess(true);
     setLoading(false);
   };
@@ -166,6 +242,56 @@ export default function SignupPage() {
               required
               minLength={6}
             />
+            {/* 추천 코드 (선택) */}
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-1">
+                <Gift className="h-3.5 w-3.5 text-purple-500" />
+                <label htmlFor="referral" className="text-sm font-medium text-gray-700">
+                  추천 코드 <span className="text-gray-400 font-normal">(선택)</span>
+                </label>
+              </div>
+              <div className="relative">
+                <Input
+                  id="referral"
+                  placeholder="추천 코드 입력"
+                  value={referralCode}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    setReferralCode(val);
+                    if (val.length >= 6) validateReferralCode(val);
+                    else setReferralValid(null);
+                  }}
+                  maxLength={6}
+                  className="pr-10 font-mono tracking-widest"
+                />
+                {referralChecking && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  </div>
+                )}
+                {!referralChecking && referralValid === true && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Check className="h-4 w-4 text-green-500" />
+                  </div>
+                )}
+                {!referralChecking && referralValid === false && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <XIcon className="h-4 w-4 text-red-400" />
+                  </div>
+                )}
+              </div>
+              {referralValid === true && (
+                <p className="mt-1 text-xs text-green-600">
+                  ✨ 가입 시 사업계획서 1건 무료 크레딧을 받습니다!
+                </p>
+              )}
+              {referralValid === false && referralCode.length >= 4 && (
+                <p className="mt-1 text-xs text-red-500">
+                  유효하지 않은 추천 코드입니다
+                </p>
+              )}
+            </div>
+
             {/* 약관 동의 */}
             <div className="space-y-2 pt-2">
               <label className="flex items-start gap-2 cursor-pointer">

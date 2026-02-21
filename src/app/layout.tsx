@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import Script from "next/script";
+import { UTMCapture } from "@/components/analytics/utm-capture";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -106,6 +107,7 @@ gtag('config', '${gaId}');`}
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <UTMCapture />
         {children}
         <Toaster position="top-right" richColors closeButton />
       </body>

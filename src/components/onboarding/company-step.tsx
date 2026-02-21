@@ -7,7 +7,59 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { INTERVIEW_INITIAL_QUESTION } from "@/lib/ai/prompts/interview";
-import { Building2, ArrowRight, Loader2 } from "lucide-react";
+import { Building2, ArrowRight, Loader2, MapPin, Users, Briefcase } from "lucide-react";
+
+// 업종 카테고리
+const INDUSTRY_OPTIONS = [
+  { value: "", label: "업종 선택 (선택사항)" },
+  { value: "IT/소프트웨어", label: "IT/소프트웨어" },
+  { value: "제조업", label: "제조업" },
+  { value: "바이오/헬스케어", label: "바이오/헬스케어" },
+  { value: "유통/물류", label: "유통/물류" },
+  { value: "콘텐츠/미디어", label: "콘텐츠/미디어" },
+  { value: "교육/에듀테크", label: "교육/에듀테크" },
+  { value: "금융/핀테크", label: "금융/핀테크" },
+  { value: "식품/외식", label: "식품/외식" },
+  { value: "농업/수산업", label: "농업/수산업" },
+  { value: "에너지/환경", label: "에너지/환경" },
+  { value: "건설/부동산", label: "건설/부동산" },
+  { value: "관광/여행", label: "관광/여행" },
+  { value: "사회적기업", label: "사회적기업" },
+  { value: "기타", label: "기타" },
+];
+
+// 지역 옵션
+const REGION_OPTIONS = [
+  { value: "", label: "지역 선택 (선택사항)" },
+  { value: "서울", label: "서울" },
+  { value: "경기", label: "경기" },
+  { value: "인천", label: "인천" },
+  { value: "부산", label: "부산" },
+  { value: "대구", label: "대구" },
+  { value: "광주", label: "광주" },
+  { value: "대전", label: "대전" },
+  { value: "울산", label: "울산" },
+  { value: "세종", label: "세종" },
+  { value: "강원", label: "강원" },
+  { value: "충북", label: "충북" },
+  { value: "충남", label: "충남" },
+  { value: "전북", label: "전북" },
+  { value: "전남", label: "전남" },
+  { value: "경북", label: "경북" },
+  { value: "경남", label: "경남" },
+  { value: "제주", label: "제주" },
+];
+
+// 직원수 옵션
+const EMPLOYEE_OPTIONS = [
+  { value: "", label: "직원수 선택 (선택사항)" },
+  { value: "1인(대표만)", label: "1인 (대표만)" },
+  { value: "2~5명", label: "2~5명" },
+  { value: "6~10명", label: "6~10명" },
+  { value: "11~50명", label: "11~50명" },
+  { value: "51~100명", label: "51~100명" },
+  { value: "100명 이상", label: "100명 이상" },
+];
 
 interface CompanyStepProps {
   onComplete: (companyId: string) => void;
@@ -15,6 +67,9 @@ interface CompanyStepProps {
 
 export function CompanyStep({ onComplete }: CompanyStepProps) {
   const [companyName, setCompanyName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [region, setRegion] = useState("");
+  const [employeeCount, setEmployeeCount] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -42,11 +97,17 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
     let companyId: string;
 
     if (existingCompanies && existingCompanies.length > 0) {
-      // 기존 회사가 있으면 이름만 업데이트하고 재사용
+      // 기존 회사가 있으면 이름 + 업종/지역/직원수 업데이트하고 재사용
       companyId = existingCompanies[0].id;
       await supabase
         .from("companies")
-        .update({ name: companyName, updated_at: new Date().toISOString() })
+        .update({
+          name: companyName,
+          ...(industry && { industry }),
+          ...(region && { region }),
+          ...(employeeCount && { employee_count: employeeCount }),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", companyId);
     } else {
       // 회사가 없을 때만 새로 생성
@@ -57,6 +118,9 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
           name: companyName,
           business_content: "",
           profile_score: 0,
+          ...(industry && { industry }),
+          ...(region && { region }),
+          ...(employeeCount && { employee_count: employeeCount }),
         })
         .select()
         .single();
@@ -112,6 +176,60 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
             onChange={(e) => setCompanyName(e.target.value)}
             required
           />
+
+          {/* 간편 프로필: 업종/지역/직원수 */}
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label htmlFor="industry" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
+                <Briefcase className="h-3.5 w-3.5 text-blue-500" />
+                업종
+              </label>
+              <select
+                id="industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                {INDUSTRY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="region" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
+                  <MapPin className="h-3.5 w-3.5 text-green-500" />
+                  지역
+                </label>
+                <select
+                  id="region"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                >
+                  {REGION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="employees" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
+                  <Users className="h-3.5 w-3.5 text-purple-500" />
+                  직원수
+                </label>
+                <select
+                  id="employees"
+                  value={employeeCount}
+                  onChange={(e) => setEmployeeCount(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-700 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                >
+                  {EMPLOYEE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
           {/* Quick Win 가치 전달 */}
           <div className="grid grid-cols-3 gap-3 text-center">

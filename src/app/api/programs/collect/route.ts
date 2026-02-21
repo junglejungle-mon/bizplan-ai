@@ -125,8 +125,10 @@ async function sendDeadlineNotifications() {
     }
 
     userVariables.set(company.user_id, {
+      "#{회원이름}": "고객",
       "#{공고명}": program.title.slice(0, 30),
       "#{남은일수}": String(daysLeft),
+      "#{링크}": "https://bizplanai.co.kr/programs",
     });
   }
 

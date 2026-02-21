@@ -82,7 +82,9 @@ export async function GET(request: Request) {
             const userVariables = new Map<string, Record<string, string>>();
             for (const user of targets) {
               userVariables.set(user.id, {
-                '#{이름}': nameMap.get(user.id) || '고객',
+                '#{회원이름}': nameMap.get(user.id) || '고객',
+                '#{신규공고수}': '10',
+                '#{링크}': 'https://bizplanai.co.kr/programs',
               });
             }
 
@@ -137,7 +139,10 @@ export async function GET(request: Request) {
           for (const company of noPlanCompanies) {
             if (sentSet.has(company.user_id)) continue;
             userVariables.set(company.user_id, {
-              '#{이름}': company.company_name || '고객',
+              '#{회원이름}': company.company_name || '고객',
+              '#{매칭수}': '0',
+              '#{가까운마감일}': '확인 필요',
+              '#{링크}': 'https://bizplanai.co.kr/plans',
             });
           }
 
@@ -201,9 +206,9 @@ export async function GET(request: Request) {
               if (sentSet.has(company.user_id)) continue;
               const maxRound = companyMaxRound.get(company.id) || 0;
               userVariables.set(company.user_id, {
-                '#{이름}': company.company_name || '고객',
-                '#{완료라운드}': String(maxRound),
-                '#{남은라운드}': String(5 - maxRound),
+                '#{회원이름}': company.company_name || '고객',
+                '#{프로필완성도}': `${Math.round((maxRound / 5) * 100)}%`,
+                '#{링크}': 'https://bizplanai.co.kr/onboarding',
               });
             }
 

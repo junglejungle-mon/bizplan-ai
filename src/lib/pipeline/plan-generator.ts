@@ -976,7 +976,10 @@ export async function* generateBusinessPlan(
         userId: company.user_id,
         type: "plan_complete",
         variables: {
+          "#{회원이름}": company.name || "고객",
           "#{계획서명}": plan?.title || "사업계획서",
+          "#{품질점수}": "완성",
+          "#{링크}": `https://bizplanai.co.kr/plans/${opts.planId}`,
         },
       });
     } catch (e) {
