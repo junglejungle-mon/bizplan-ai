@@ -69,6 +69,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        {/* Search Engine Verification - 직접 추가 (metadata.verification이 렌더되지 않는 이슈 해결) */}
+        <meta name="google-site-verification" content="Tk_P-9n298nZG9EVERt9lMGDwpTnOBKPdUXG09psUXk" />
+        <meta name="naver-site-verification" content="4868b9dde52d56026369b6fed9f3b48fb7941c89" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
