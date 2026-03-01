@@ -64,9 +64,11 @@ function validateRequiredEnvVars() {
       missingCritical.map((k) => `   - ${k}`).join("\n") +
       "\n"
     );
-    // 프로덕션에서만 프로세스 종료 (개발 중에는 경고만)
+    // 프로덕션에서만 에러 throw (개발 중에는 경고만)
     if (process.env.NODE_ENV === "production") {
-      process.exit(1);
+      throw new Error(
+        `CRITICAL 환경변수 누락: ${missingCritical.join(", ")}`
+      );
     }
   }
 

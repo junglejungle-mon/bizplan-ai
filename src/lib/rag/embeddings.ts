@@ -5,9 +5,16 @@
 
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
+  }
+  return _openai;
+}
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const BATCH_SIZE = 100;
@@ -16,7 +23,7 @@ const BATCH_SIZE = 100;
  * 단일 텍스트 임베딩 (검색 시 사용)
  */
 export async function embedText(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
+  const response = await getOpenAI().embeddings.create({
     model: EMBEDDING_MODEL,
     input: text.replace(/\n/g, " ").trim(),
   });
@@ -34,7 +41,7 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
       t.replace(/\n/g, " ").trim()
     );
 
-    const response = await openai.embeddings.create({
+    const response = await getOpenAI().embeddings.create({
       model: EMBEDDING_MODEL,
       input: batch,
     });
