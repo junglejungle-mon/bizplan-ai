@@ -22,13 +22,20 @@ const QUICK_ACTIONS: Record<string, Array<{ label: string; prompt: string }>> = 
   "/programs": [
     { label: "오늘 추천", prompt: "오늘 추천 지원사업을 알려주세요" },
     { label: "마감 임박", prompt: "마감이 임박한 지원사업이 있나요?" },
+    { label: "📎 서류 가이드", prompt: "지원사업 서류 준비는 어떻게 하면 되나요?" },
   ],
   "/plans": [
     { label: "섹션 개선", prompt: "이 사업계획서에서 개선할 부분이 있나요?" },
     { label: "전체 검토", prompt: "사업계획서 전체를 검토해주세요" },
+    { label: "📎 품질 올리기", prompt: "사업계획서 품질을 더 높이려면 어떤 서류를 준비해야 하나요?" },
+  ],
+  "/documents": [
+    { label: "📎 추천 서류", prompt: "지금 어떤 서류를 올리면 가장 효과적인가요?" },
+    { label: "서류 구하기", prompt: "필요한 서류는 어디서 발급받을 수 있나요?" },
   ],
   default: [
     { label: "전략 상담", prompt: "올해 우리 회사에 맞는 지원사업 전략을 짜주세요" },
+    { label: "📎 퀄리티 UP", prompt: "사업계획서 품질을 높이는 가장 좋은 방법이 뭔가요?" },
     { label: "사용법", prompt: "BizPlan AI 사용법을 알려주세요" },
   ],
 };

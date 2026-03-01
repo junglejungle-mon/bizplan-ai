@@ -118,6 +118,47 @@ const themes: Record<string, ChartTheme> = {
   },
 };
 
-export function getThemeForTemplate(templateType?: string): ChartTheme {
+/**
+ * 사용자 정의 CI 색상으로 테마 생성
+ */
+export function createCustomCITheme(brandColors: {
+  primary?: string;
+  secondary?: string;
+  accent?: string;
+  chartColors?: string[];
+}): ChartTheme {
+  const primary = brandColors.primary ? `#${brandColors.primary}` : "#1E40AF";
+  const accent = brandColors.accent ? `#${brandColors.accent}` : "#F59E0B";
+
+  // chartColors가 없으면 primary에서 자동 생성
+  const defaultChartColors = brandColors.chartColors?.map(c => `#${c}`) ||
+    [primary, accent, "#10B981", "#EC4899", "#0EA5E9"];
+
+  return {
+    name: "Custom CI",
+    primary,
+    accent,
+    background: "#F8FAFC",
+    textDark: "#1E293B",
+    textLight: "#64748B",
+    positive: "#22C55E",
+    negative: "#EF4444",
+    chartColors: defaultChartColors,
+    headerBg: primary,
+    headerText: "#FFFFFF",
+    gridColor: "#E2E8F0",
+  };
+}
+
+export function getThemeForTemplate(templateType?: string, brandColors?: {
+  primary?: string;
+  secondary?: string;
+  accent?: string;
+  chartColors?: string[];
+}): ChartTheme {
+  // custom_ci면 브랜드 색상으로 동적 테마 생성
+  if (templateType === "custom_ci" && brandColors) {
+    return createCustomCITheme(brandColors);
+  }
   return themes[templateType || "custom"] || themes.custom;
 }

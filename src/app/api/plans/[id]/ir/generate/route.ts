@@ -49,6 +49,30 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => ({}));
+  let selectedTemplate = body.template || "minimal";
+
+  // 브랜드 색상이 있으면 자동으로 custom_ci 적용 (사용자가 명시적으로 다른 템플릿 선택하지 않은 경우)
+  if (!body.template || body.template === "minimal") {
+    try {
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("business_content")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+
+      if (companies && companies.length > 0) {
+        const content = (companies[0] as { business_content?: string })?.business_content || "";
+        const hasBrandColors = content.includes("[BRAND_COLORS]");
+        if (hasBrandColors) {
+          selectedTemplate = "custom_ci";
+          console.log("[IRGenerate] 브랜드 색상 감지 → custom_ci 템플릿 자동 적용");
+        }
+      }
+    } catch {
+      // 실패해도 무시 — 기본 템플릿 사용
+    }
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -57,7 +81,7 @@ export async function POST(
         for await (const event of generateIRPresentation({
           planId,
           companyId: plan.company_id,
-          template: body.template || "minimal",
+          template: selectedTemplate as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
         })) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(event)}\n\n`)

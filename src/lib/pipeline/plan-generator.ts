@@ -1017,6 +1017,17 @@ export async function* generateBusinessPlan(
       console.warn("[PlanGen] 전체 품질 점수 계산 실패:", e);
     }
 
+    // 공고 ↔ 사업계획서 매칭 점수 계산
+    if (opts.programId) {
+      try {
+        const { calculateProgramMatchScore } = await import("@/lib/quality/program-match-scorer");
+        const matchResult = await calculateProgramMatchScore(opts.planId, opts.programId);
+        console.log(`[PlanGen] 매칭 점수: ${matchResult.overall_score}점 (${matchResult.grade}등급)`);
+      } catch (e) {
+        console.warn("[PlanGen] 공고 매칭 점수 계산 실패:", e);
+      }
+    }
+
     // 사업계획서 완료 카카오 알림톡 발송
     try {
       const { data: plan } = await supabase

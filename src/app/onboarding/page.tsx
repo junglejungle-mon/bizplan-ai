@@ -46,6 +46,7 @@ function OnboardingPage() {
   const [termsLoading, setTermsLoading] = useState(false);
   const searchParams = useSearchParams();
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [existingCompanyName, setExistingCompanyName] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -173,6 +174,7 @@ function OnboardingPage() {
       setStep("interview");
     } else {
       // 회사만 있고 인터뷰 없음 → company step 표시하되 이름 프리필
+      setExistingCompanyName(existingCompany.name || "");
       setStep("company");
     }
   };
@@ -310,6 +312,10 @@ function OnboardingPage() {
     setLoading(true);
     setStreamingText("");
 
+    // 90초 타임아웃 (로컬 프록시 + 라운드 요약 시간 고려)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+
     try {
       const response = await fetch("/api/company/interview", {
         method: "POST",
@@ -320,6 +326,7 @@ function OnboardingPage() {
           currentRound,
           questionOrder,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) throw new Error("Interview API error");
@@ -331,10 +338,17 @@ function OnboardingPage() {
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let lastChunkTime = Date.now();
 
         while (reader) {
-          const { done, value } = await reader.read();
+          // 개별 청크 30초 타임아웃 (스트림 중간에 멈추는 경우 대비)
+          const readPromise = reader.read();
+          const chunkTimeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Stream chunk timeout")), 30_000)
+          );
+          const { done, value } = await Promise.race([readPromise, chunkTimeout]);
           if (done) break;
+          lastChunkTime = Date.now();
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
@@ -342,45 +356,49 @@ function OnboardingPage() {
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
-            const data = JSON.parse(line.slice(6));
+            try {
+              const data = JSON.parse(line.slice(6));
 
-            if (data.type === "chunk") {
-              setStreamingText((prev) => prev + data.text);
-            } else if (data.type === "round_complete") {
-              trackOnboardingRound(data.round, 5);
-              setRoundTransitionData(data.summary);
-              setShowRoundTransition(true);
-              setProfileScore(data.interimScore || 0);
-              setCollectedDataCount((prev) => prev + (data.summary?.collected_data?.length || 0));
+              if (data.type === "chunk") {
+                setStreamingText((prev) => prev + data.text);
+              } else if (data.type === "round_complete") {
+                trackOnboardingRound(data.round, 5);
+                setRoundTransitionData(data.summary);
+                setShowRoundTransition(true);
+                setProfileScore(data.interimScore || 0);
+                setCollectedDataCount((prev) => prev + (data.summary?.collected_data?.length || 0));
 
-              const roundLabels = ["", "사업 핵심", "기술/제품", "팀/실적", "성장 전략", "지원 최적화"];
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "system",
-                  content: `✅ Round ${data.round} (${roundLabels[data.round]}) 완료! 프로필 ${data.interimScore}%\n\n📊 확보 데이터: ${data.summary?.collected_data?.slice(0, 3).join(", ") || ""}\n\n➡️ Round ${data.nextRound} (${roundLabels[data.nextRound]}) 시작합니다.`,
-                },
-              ]);
+                const roundLabels = ["", "사업 핵심", "기술/제품", "팀/실적", "성장 전략", "지원 최적화"];
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "system",
+                    content: `✅ Round ${data.round} (${roundLabels[data.round]}) 완료! 프로필 ${data.interimScore}%\n\n📊 확보 데이터: ${data.summary?.collected_data?.slice(0, 3).join(", ") || ""}\n\n➡️ Round ${data.nextRound} (${roundLabels[data.nextRound]}) 시작합니다.`,
+                  },
+                ]);
 
-              setTimeout(() => setShowRoundTransition(false), 3000);
-            } else if (data.type === "done") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: data.question },
-              ]);
-              setStreamingText("");
-              setQuestionOrder(data.questionOrder);
-              setCurrentRound(data.round);
-            } else if (data.type === "error") {
-              console.error("Stream error:", data.message);
-              setMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: `AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요. (${data.message || "알 수 없는 오류"})`,
-                },
-              ]);
-              setStreamingText("");
+                setTimeout(() => setShowRoundTransition(false), 3000);
+              } else if (data.type === "done") {
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: data.question },
+                ]);
+                setStreamingText("");
+                setQuestionOrder(data.questionOrder);
+                setCurrentRound(data.round);
+              } else if (data.type === "error") {
+                console.error("Stream error:", data.message);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: `AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요. (${data.message || "알 수 없는 오류"})`,
+                  },
+                ]);
+                setStreamingText("");
+              }
+            } catch (parseErr) {
+              console.warn("SSE parse error:", parseErr, line);
             }
           }
         }
@@ -396,14 +414,21 @@ function OnboardingPage() {
         }
       }
     } catch (error) {
-      console.error("Interview error:", error);
+      const isTimeout = error instanceof DOMException && error.name === "AbortError"
+        || (error instanceof Error && error.message.includes("timeout"));
+      console.error("Interview error:", isTimeout ? "TIMEOUT" : error);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "죄송합니다, 오류가 발생했습니다. 다시 시도해 주세요.",
+          content: isTimeout
+            ? "AI 응답이 너무 오래 걸리고 있어요. 다시 답변을 보내주시면 이어서 진행됩니다!"
+            : "죄송합니다, 오류가 발생했습니다. 다시 시도해 주세요.",
         },
       ]);
+      setStreamingText("");
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     setLoading(false);
@@ -521,7 +546,7 @@ function OnboardingPage() {
 
   // Step 1: 회사 생성
   if (step === "company") {
-    return <CompanyStep onComplete={handleCompanyComplete} />;
+    return <CompanyStep onComplete={handleCompanyComplete} defaultCompanyName={existingCompanyName} />;
   }
 
   // Step 2.5: 분석 중

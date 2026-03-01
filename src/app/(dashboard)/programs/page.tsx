@@ -37,12 +37,12 @@ export default async function ProgramsPage({
     .eq("company_id", company.id)
     .order("match_score", { ascending: false });
 
-  // 전체 프로그램 (300건까지)
+  // 전체 프로그램 (1000건까지)
   const { data: programs } = await supabase
     .from("programs")
     .select("*")
     .order("collected_at", { ascending: false })
-    .limit(300);
+    .limit(1000);
 
   const matchedPrograms = matchings?.map((m: MatchingJoinRow) => ({
     ...m.programs,

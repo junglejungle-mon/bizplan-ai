@@ -121,7 +121,11 @@ export default async function DashboardPage() {
 
   // 최근 매칭 사업 Top 5 (점수 높은 순)
   const topMatchings = (urgentMatchings || [])
-    .filter((m: MatchingRow) => m.programs?.apply_end)
+    .filter((m: MatchingRow) => {
+      if (!m.programs?.apply_end) return false;
+      const endDate = new Date(m.programs.apply_end);
+      return endDate >= today; // 만료되지 않은 것만
+    })
     .map((m: MatchingRow) => {
       const endDate = new Date(m.programs.apply_end);
       const dDay = Math.ceil(

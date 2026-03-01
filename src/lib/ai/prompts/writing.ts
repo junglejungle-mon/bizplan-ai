@@ -850,6 +850,139 @@ ${content}
 위 사업계획서 섹션에서 차트/인포그래픽으로 시각화할 데이터를 추출하세요.`;
 }
 
+// ===== 사용자 프롬프트 기반 차트 커스터마이징 =====
+
+export const CHART_CUSTOMIZER_SYSTEM = `사용자의 요청에 따라 기존 차트 데이터를 수정하거나 새로운 차트를 생성하세요.
+
+# 역할
+- 사용자가 특정 차트를 수정하고 싶을 때: 데이터 변경, 스타일 변경, 차트 타입 변경 등
+- 사용자가 새 차트를 추가하고 싶을 때: 섹션 내용 기반으로 새 인포그래픽 생성
+- 사용자가 차트를 더 임팩트 있게 만들고 싶을 때: 핵심 수치 강조, 레이아웃 최적화
+
+# 지원 차트 타입 (14개)
+1. bar: 막대차트 (매출 추이, 비교 데이터)
+2. pie: 파이차트 (구성 비율)
+3. line: 선그래프 (성장 추이)
+4. tam_sam_som: 동심원차트 (시장 규모)
+5. comparison_table: 비교테이블
+6. timeline: 타임라인
+7. highlight_cards: 핵심 KPI 수치 카드
+8. pain_points: 문제점 다이어그램
+9. tco_comparison: 비용 비교 (기존 vs 도입 후)
+10. revenue_model: 수익 모델 구조도
+11. org_chart: 조직도
+12. ecosystem_map: 협력 생태계 맵
+13. esg_cards: ESG 성과 카드
+14. step_roadmap: 단계별 로드맵
+
+# 커스터마이징 유형별 대응
+- "차트 타입 바꿔줘" → 같은 데이터로 다른 chart_type 생성
+- "수치 강조해줘" → highlight_cards로 핵심 수치 추출
+- "비교 차트로" → comparison_table 또는 tco_comparison으로 변환
+- "더 임팩트 있게" → 핵심 수치만 추출 + highlight_cards 조합
+- "막대그래프로" → bar 차트로 변환
+- "파이차트로" → pie 차트로 변환
+- "시각적으로 강화" → 기존 차트에 더 다양한 데이터 추가 또는 정리
+- "새로 만들어줘" → 섹션 내용 재분석하여 새 차트 생성
+
+# 규칙
+- 항상 데이터의 정확성 유지 (원본 섹션 내용의 수치 그대로 활용)
+- 차트 제목은 임팩트 있게 (수치를 포함한 제목 권장: "매출 275% 성장 추이" 등)
+- 섹션 내용에 없는 데이터를 지어내지 말 것
+- JSON만 출력하세요.`;
+
+export function buildChartCustomizerPrompt(opts: {
+  userPrompt: string;
+  sectionName: string;
+  sectionContent: string;
+  existingCharts?: Array<Record<string, unknown>>;
+  targetChartIndex?: number;
+}) {
+  let prompt = `## 사용자 요청\n${opts.userPrompt}\n\n`;
+  prompt += `## 대상 섹션\n섹션명: ${opts.sectionName}\n\n`;
+  prompt += `## 섹션 내용\n${opts.sectionContent}\n\n`;
+
+  if (opts.existingCharts && opts.existingCharts.length > 0) {
+    prompt += `## 기존 차트 데이터\n`;
+    if (opts.targetChartIndex !== undefined && opts.existingCharts[opts.targetChartIndex]) {
+      prompt += `수정 대상 차트:\n\`\`\`json\n${JSON.stringify(opts.existingCharts[opts.targetChartIndex], null, 2)}\n\`\`\`\n\n`;
+      prompt += `기타 차트 (${opts.existingCharts.length - 1}개):\n`;
+      opts.existingCharts.forEach((c, i) => {
+        if (i !== opts.targetChartIndex) {
+          prompt += `- ${(c as { chart_type?: string }).chart_type}: ${(c as { title?: string }).title}\n`;
+        }
+      });
+    } else {
+      prompt += `\`\`\`json\n${JSON.stringify(opts.existingCharts, null, 2)}\n\`\`\`\n`;
+    }
+    prompt += `\n`;
+  }
+
+  prompt += `사용자 요청에 맞게 차트를 수정하거나 새로 생성하세요. 결과는 기존과 동일한 JSON 형식으로 출력하세요.\n`;
+  prompt += `\`\`\`json\n{ "charts": [...] }\n\`\`\``;
+
+  return prompt;
+}
+
+// ===== 차트 추천 프리셋 (UI에서 사용) =====
+export const CHART_PRESETS: Array<{
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  suggestedTypes: string[];
+  promptTemplate: string;
+}> = [
+  {
+    id: "market_impact",
+    label: "시장 임팩트 강화",
+    description: "TAM/SAM/SOM + 시장 성장률 수치 강조",
+    icon: "📊",
+    suggestedTypes: ["tam_sam_som", "highlight_cards", "bar"],
+    promptTemplate: "시장 규모와 성장성을 강조하는 임팩트 있는 인포그래픽을 만들어줘. TAM/SAM/SOM과 핵심 수치를 부각시켜줘.",
+  },
+  {
+    id: "competitive_edge",
+    label: "경쟁 우위 시각화",
+    description: "경쟁사 비교표 + 차별점 하이라이트",
+    icon: "🏆",
+    suggestedTypes: ["comparison_table", "highlight_cards", "pain_points"],
+    promptTemplate: "경쟁사 대비 우리 기업의 차별점을 명확히 보여주는 비교 인포그래픽을 만들어줘.",
+  },
+  {
+    id: "financial_growth",
+    label: "재무 성장 스토리",
+    description: "매출 추이 + 수익 모델 + 핵심 재무 KPI",
+    icon: "💰",
+    suggestedTypes: ["bar", "line", "revenue_model", "highlight_cards"],
+    promptTemplate: "매출 성장과 수익 모델을 시각적으로 보여주는 차트를 만들어줘. 핵심 재무 수치를 강조해줘.",
+  },
+  {
+    id: "tech_roadmap",
+    label: "기술 개발 로드맵",
+    description: "단계별 기술 발전 + 마일스톤 타임라인",
+    icon: "🚀",
+    suggestedTypes: ["step_roadmap", "timeline", "highlight_cards"],
+    promptTemplate: "기술 개발 로드맵과 단계별 마일스톤을 시각적으로 보여주는 인포그래픽을 만들어줘.",
+  },
+  {
+    id: "cost_saving",
+    label: "비용 절감 효과",
+    description: "기존 vs 도입 후 TCO 비교 + 절감율",
+    icon: "⚡",
+    suggestedTypes: ["tco_comparison", "highlight_cards", "bar"],
+    promptTemplate: "기존 방식 대비 비용 절감 효과를 임팩트 있는 비교 인포그래픽으로 만들어줘. 구체적인 절감 수치를 강조해줘.",
+  },
+  {
+    id: "team_ecosystem",
+    label: "팀 & 생태계",
+    description: "조직도 + 협력 생태계 + 팀 역량 수치",
+    icon: "👥",
+    suggestedTypes: ["org_chart", "ecosystem_map", "highlight_cards"],
+    promptTemplate: "팀 구성과 협력 생태계를 보여주는 인포그래픽을 만들어줘. 핵심 인력의 역량을 강조해줘.",
+  },
+];
+
 // 8. 전체 사업계획서에서 핵심 KPI 추출 (완성 후 한 번)
 export const KPI_EXTRACTOR_SYSTEM = `완성된 사업계획서 전체에서 핵심 성과 지표(KPI)를 추출하세요.
 

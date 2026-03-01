@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -50,32 +50,81 @@ const REGION_OPTIONS = [
   { value: "제주", label: "제주" },
 ];
 
-// 직원수 옵션
+// 직원수 옵션 (value는 DB integer 컬럼에 맞게 대표 숫자)
 const EMPLOYEE_OPTIONS = [
   { value: "", label: "직원수 선택 (선택사항)" },
-  { value: "1인(대표만)", label: "1인 (대표만)" },
-  { value: "2~5명", label: "2~5명" },
-  { value: "6~10명", label: "6~10명" },
-  { value: "11~50명", label: "11~50명" },
-  { value: "51~100명", label: "51~100명" },
-  { value: "100명 이상", label: "100명 이상" },
+  { value: "1", label: "1인 (대표만)" },
+  { value: "3", label: "2~5명" },
+  { value: "8", label: "6~10명" },
+  { value: "30", label: "11~50명" },
+  { value: "75", label: "51~100명" },
+  { value: "150", label: "100명 이상" },
 ];
 
 interface CompanyStepProps {
   onComplete: (companyId: string) => void;
+  defaultCompanyName?: string;
 }
 
-export function CompanyStep({ onComplete }: CompanyStepProps) {
-  const [companyName, setCompanyName] = useState("");
+export function CompanyStep({ onComplete, defaultCompanyName = "" }: CompanyStepProps) {
+  const [companyName, setCompanyName] = useState(defaultCompanyName);
   const [industry, setIndustry] = useState("");
   const [region, setRegion] = useState("");
   const [employeeCount, setEmployeeCount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [showError, setShowError] = useState(false);
   const router = useRouter();
+
+  // 기존 회사 데이터 로드 (프리필)
+  useEffect(() => {
+    const loadExistingCompany = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setInitialLoading(false);
+          return;
+        }
+
+        const { data: companies } = await supabase
+          .from("companies")
+          .select("name, industry, region, employee_count")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+
+        if (companies && companies.length > 0) {
+          const company = companies[0];
+          if (company.name) setCompanyName(company.name);
+          if (company.industry) setIndustry(company.industry);
+          if (company.region) setRegion(company.region);
+          if (company.employee_count) setEmployeeCount(String(company.employee_count));
+        }
+      } catch (err) {
+        console.error("[CompanyStep] 기존 회사 로드 오류:", err);
+      }
+      setInitialLoading(false);
+    };
+
+    loadExistingCompany();
+  }, []);
+
+  // defaultCompanyName이 비동기로 변경될 때 반영
+  useEffect(() => {
+    if (defaultCompanyName && !companyName) {
+      setCompanyName(defaultCompanyName);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCompanyName]);
 
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim()) return;
+    if (!companyName.trim()) {
+      setShowError(true);
+      return;
+    }
+    setShowError(false);
 
     setLoading(true);
     const supabase = createClient();
@@ -105,7 +154,7 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
           name: companyName,
           ...(industry && { industry }),
           ...(region && { region }),
-          ...(employeeCount && { employee_count: employeeCount }),
+          ...(employeeCount && { employee_count: parseInt(employeeCount, 10) }),
           updated_at: new Date().toISOString(),
         })
         .eq("id", companyId);
@@ -120,7 +169,7 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
           profile_score: 0,
           ...(industry && { industry }),
           ...(region && { region }),
-          ...(employeeCount && { employee_count: employeeCount }),
+          ...(employeeCount && { employee_count: parseInt(employeeCount, 10) }),
         })
         .select()
         .single();
@@ -154,6 +203,17 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
     onComplete(companyId);
   };
 
+  if (initialLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <p className="mt-3 text-sm text-gray-500">회사 정보 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4">
       <Card className="w-full max-w-lg p-8">
@@ -168,14 +228,24 @@ export function CompanyStep({ onComplete }: CompanyStepProps) {
         </div>
 
         <form onSubmit={handleCreateCompany} className="space-y-6">
-          <Input
-            id="companyName"
-            label="회사명 (사업자명)"
-            placeholder="주식회사 정글몬스터"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            required
-          />
+          <div>
+            <Input
+              id="companyName"
+              label="회사명 (사업자명)"
+              placeholder="예: 주식회사 정글몬스터"
+              value={companyName}
+              onChange={(e) => {
+                setCompanyName(e.target.value);
+                if (e.target.value.trim()) setShowError(false);
+              }}
+              required
+              autoFocus
+              className={showError ? "border-red-500 ring-1 ring-red-500" : ""}
+            />
+            {showError && (
+              <p className="mt-1.5 text-xs text-red-500">회사명을 입력해주세요</p>
+            )}
+          </div>
 
           {/* 간편 프로필: 업종/지역/직원수 */}
           <div className="grid grid-cols-1 gap-3">

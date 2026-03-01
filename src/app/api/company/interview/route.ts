@@ -117,16 +117,22 @@ export async function POST(request: NextRequest) {
         answer: qa.answer ?? "",
       }));
 
-      const summaryJson = await callClaude({
-        model: "claude-haiku-4-5-20251001",
-        system: "주어진 인터뷰 대화를 분석하여 JSON을 출력합니다.",
-        messages: [{
-          role: "user",
-          content: buildRoundSummaryPrompt(currentRound, qaForSummary),
-        }],
-        temperature: 0.2,
-        maxTokens: 1000,
-      });
+      // 20초 타임아웃으로 라운드 요약 (hang 방지)
+      const summaryJson = await Promise.race([
+        callClaude({
+          model: "claude-haiku-4-5-20251001",
+          system: "주어진 인터뷰 대화를 분석하여 JSON을 출력합니다.",
+          messages: [{
+            role: "user",
+            content: buildRoundSummaryPrompt(currentRound, qaForSummary),
+          }],
+          temperature: 0.2,
+          maxTokens: 1000,
+        }),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error("Round summary timeout (20s)")), 20_000)
+        ),
+      ]);
 
       try {
         const jsonMatch = summaryJson.match(/\{[\s\S]*\}/);
@@ -165,6 +171,7 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let streamClosed = false;
       try {
         // 라운드 전환 이벤트
         if (roundComplete && roundSummary) {
@@ -197,6 +204,20 @@ export async function POST(request: NextRequest) {
 
         let fullQuestion = "";
 
+        // 스트리밍 전체 45초 타임아웃
+        const streamTimeout = setTimeout(() => {
+          if (!fullQuestion && !streamClosed) {
+            console.error("[Interview] Stream timeout - no response in 45s");
+            streamClosed = true;
+            try {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "error", message: "AI 응답 시간이 초과되었습니다. 다시 시도해주세요." })}\n\n`)
+              );
+              controller.close();
+            } catch { /* already closed */ }
+          }
+        }, 45_000);
+
         for await (const chunk of streamClaude({
           model: "claude-haiku-4-5-20251001",
           system: INTERVIEW_SYSTEM_PROMPT,
@@ -204,11 +225,14 @@ export async function POST(request: NextRequest) {
           temperature: 0.7,
           maxTokens: 400,
         })) {
+          if (streamClosed) break;
           fullQuestion += chunk;
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "chunk", text: chunk })}\n\n`)
           );
         }
+        clearTimeout(streamTimeout);
+        if (streamClosed) return;
 
         // 질문을 DB에 저장
         const newOrder = (questionOrder || 0) + 1;
@@ -241,10 +265,15 @@ export async function POST(request: NextRequest) {
         controller.close();
       } catch (error) {
         console.error("[Interview] Stream error:", error);
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", message: safeErrorMessage(error, "AI 인터뷰 처리 중 오류가 발생했습니다") })}\n\n`)
-        );
-        controller.close();
+        if (!streamClosed) {
+          streamClosed = true;
+          try {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "error", message: safeErrorMessage(error, "AI 인터뷰 처리 중 오류가 발생했습니다") })}\n\n`)
+            );
+            controller.close();
+          } catch { /* already closed */ }
+        }
       }
     },
   });

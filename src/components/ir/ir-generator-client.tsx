@@ -74,13 +74,15 @@ export function IRGeneratorClient({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  // 저장된 브랜드 색상 로드
+  // 저장된 브랜드 색상 로드 + 자동 CI 선택
   useEffect(() => {
     fetch("/api/company/brand-colors")
       .then((r) => r.json())
       .then((data) => {
         if (data.brandColors) {
           setBrandColors(data.brandColors);
+          // 브랜드 색상이 있으면 자동으로 custom_ci 선택
+          setSelectedTemplate("custom_ci");
         }
       })
       .catch(() => {});

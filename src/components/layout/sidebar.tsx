@@ -19,6 +19,7 @@ import {
   Sparkles,
   CalendarDays,
   Gift,
+  Users,
 } from "lucide-react";
 
 const sidebarItems = [
@@ -29,6 +30,7 @@ const sidebarItems = [
   { href: "/plans", label: "사업계획서", icon: FileText },
   { href: "/ir", label: "IR PPT", icon: Presentation },
   { href: "/documents", label: "서류관리", icon: FolderOpen },
+  { href: "/clients", label: "고객사 관리", icon: Users },
   { href: "/company", label: "회사 정보", icon: Building2 },
   { href: "/dashboard/referral", label: "친구 추천", icon: Gift },
   { href: "/pricing", label: "요금제", icon: CreditCard },

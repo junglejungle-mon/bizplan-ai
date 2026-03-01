@@ -1162,6 +1162,119 @@ function _addSectionDivider(
   });
 }
 
+// ===== 슬라이드 레이아웃 패턴 (다양성 확보) =====
+type LayoutPattern = "standard" | "left_accent" | "split_two_col" | "full_visual" | "quote_highlight";
+
+/**
+ * 슬라이드 타입 + 인덱스 기반으로 레이아웃 패턴 결정
+ * 같은 타입이라도 위치에 따라 다른 패턴을 적용하여 단조로움 방지
+ */
+function getLayoutPattern(slideType: string, slideIdx: number): LayoutPattern {
+  // 특정 슬라이드 타입은 고정 레이아웃
+  if (slideType === "cover") return "standard";
+
+  // 패턴 로테이션 (슬라이드 인덱스 기반)
+  const patterns: LayoutPattern[] = ["standard", "left_accent", "split_two_col", "standard", "left_accent"];
+  const patternIdx = slideIdx % patterns.length;
+
+  // 특정 타입에 적합한 패턴 우선 적용
+  switch (slideType) {
+    case "problem":
+    case "pain_points":
+      return slideIdx % 2 === 0 ? "left_accent" : "standard";
+    case "solution":
+    case "tech":
+      return slideIdx % 2 === 0 ? "split_two_col" : "left_accent";
+    case "market":
+    case "financials":
+      return "standard"; // 차트가 핵심이므로 standard
+    case "team":
+    case "competition":
+      return slideIdx % 2 === 0 ? "split_two_col" : "standard";
+    case "traction":
+      return "left_accent"; // 성과 강조
+    case "ask":
+      return "quote_highlight"; // 투자 요청 강조
+    default:
+      return patterns[patternIdx];
+  }
+}
+
+/**
+ * 레이아웃 패턴에 따른 슬라이드 장식 요소 추가
+ */
+function applyLayoutDecoration(
+  slide: PptxGenJS.Slide,
+  pattern: LayoutPattern,
+  colors: TemplateColors,
+) {
+  switch (pattern) {
+    case "left_accent":
+      // 좌측에 굵은 액센트 바
+      slide.addShape("rect", {
+        x: 0, y: 0, w: 0.12, h: 5.63,
+        fill: { color: colors.accent },
+      });
+      // 우측 상단 작은 장식 원
+      slide.addShape("ellipse", {
+        x: 9.0, y: -0.3, w: 1.5, h: 1.5,
+        fill: { color: colors.accent, transparency: 93 },
+      });
+      break;
+
+    case "split_two_col":
+      // 우측에 연한 색상 패널 (2컬럼 느낌)
+      slide.addShape("rect", {
+        x: 5.2, y: 0, w: 4.8, h: 5.63,
+        fill: { color: colors.primary, transparency: 96 },
+      });
+      // 중앙 세로 구분선
+      slide.addShape("rect", {
+        x: 5.15, y: 0.5, w: 0.02, h: 4.5,
+        fill: { color: colors.accent, transparency: 60 },
+      });
+      break;
+
+    case "quote_highlight":
+      // 상단 + 하단에 강조 바
+      slide.addShape("rect", {
+        x: 0, y: 0, w: 10, h: 0.08,
+        fill: { color: colors.accent },
+      });
+      // 좌하단 큰 따옴표 장식
+      slide.addShape("ellipse", {
+        x: -0.5, y: 3.5, w: 2, h: 2,
+        fill: { color: colors.accent, transparency: 94 },
+      });
+      break;
+
+    case "full_visual":
+      // 배경에 그라데이션 느낌 (2개 반투명 사각형 겹침)
+      slide.addShape("rect", {
+        x: 0, y: 0, w: 10, h: 2.0,
+        fill: { color: colors.primary, transparency: 97 },
+      });
+      break;
+
+    case "standard":
+    default:
+      // 기본 — 최소 장식
+      break;
+  }
+}
+
+/**
+ * 표지 슬라이드 패턴 변형 (동일하지 않도록)
+ */
+type CoverPattern = "classic_center" | "left_align" | "diagonal";
+
+function getCoverPattern(companyName: string): CoverPattern {
+  // 회사명 해시값 기반으로 패턴 결정 (같은 회사는 일관된 패턴)
+  const hash = companyName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const patterns: CoverPattern[] = ["classic_center", "left_align", "diagonal"];
+  return patterns[hash % patterns.length];
+}
+
 export async function buildPptx(options: PptxOptions): Promise<Buffer> {
   const { companyName, template = "minimal", slides, customColors, preRenderedImages } = options;
 
@@ -1183,6 +1296,7 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
     colors = TEMPLATES[template as keyof typeof TEMPLATES] || TEMPLATES.minimal;
   }
   const totalPages = slides.length + 1; // +1 for closing slide
+  const coverPattern = getCoverPattern(companyName);
 
   const pptx = new PptxGenJS();
   pptx.author = "BizPlan AI";
@@ -1208,35 +1322,63 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
     }
 
     if (slideData.slide_type === "cover") {
-      // ===== 표지 슬라이드 (고급 디자인) =====
+      // ===== 표지 슬라이드 (패턴별 디자인) =====
       slide.background = { color: colors.primary };
 
-      // 좌측 장식 도형 (반원 원 효과)
-      slide.addShape("ellipse", {
-        x: -1.5, y: -1.0, w: 4, h: 4,
-        fill: { color: colors.secondary || colors.primary, transparency: 85 },
-      });
-      slide.addShape("ellipse", {
-        x: -0.5, y: 3.0, w: 2.5, h: 2.5,
-        fill: { color: colors.accent, transparency: 90 },
-      });
-
-      // 우상단 작은 장식
-      slide.addShape("ellipse", {
-        x: 8.5, y: -0.5, w: 2.0, h: 2.0,
-        fill: { color: colors.accent, transparency: 92 },
-      });
+      if (coverPattern === "diagonal") {
+        // 대각선 패턴 — 모던 스타트업 느낌
+        slide.addShape("rect", {
+          x: -2, y: -2, w: 8, h: 10,
+          fill: { color: colors.secondary || colors.primary, transparency: 80 },
+          rotate: 15,
+        });
+        slide.addShape("rect", {
+          x: 6, y: -1, w: 6, h: 8,
+          fill: { color: colors.accent, transparency: 92 },
+          rotate: -10,
+        });
+      } else if (coverPattern === "left_align") {
+        // 좌측 정렬 패턴 — 좌측에 큰 장식 + 우측 텍스트
+        slide.addShape("rect", {
+          x: 0, y: 0, w: 0.15, h: 5.63,
+          fill: { color: colors.accent },
+        });
+        slide.addShape("ellipse", {
+          x: -2.0, y: 1.0, w: 5, h: 5,
+          fill: { color: colors.accent, transparency: 88 },
+        });
+        slide.addShape("ellipse", {
+          x: 8.0, y: -1.0, w: 3, h: 3,
+          fill: { color: colors.secondary || colors.primary, transparency: 90 },
+        });
+      } else {
+        // classic_center — 기본 패턴 (기존 디자인)
+        slide.addShape("ellipse", {
+          x: -1.5, y: -1.0, w: 4, h: 4,
+          fill: { color: colors.secondary || colors.primary, transparency: 85 },
+        });
+        slide.addShape("ellipse", {
+          x: -0.5, y: 3.0, w: 2.5, h: 2.5,
+          fill: { color: colors.accent, transparency: 90 },
+        });
+        slide.addShape("ellipse", {
+          x: 8.5, y: -0.5, w: 2.0, h: 2.0,
+          fill: { color: colors.accent, transparency: 92 },
+        });
+      }
 
       // 회사명 (대형)
+      const coverAlign = coverPattern === "left_align" ? "left" : undefined;
       slide.addText(companyName, {
         x: 0.8, y: 1.2, w: 8.5, h: 1.0,
         fontSize: 40, bold: true, color: "FFFFFF",
         fontFace: FONT_TITLE, lineSpacingMultiple: 1.1,
+        align: coverAlign,
       });
 
       // 액센트 바
       slide.addShape("rect", {
-        x: 0.8, y: 2.3, w: 1.5, h: 0.06,
+        x: coverPattern === "left_align" ? 0.8 : 0.8, y: 2.3, w: 1.5, h: 0.06,
         fill: { color: colors.accent },
       });
 
@@ -1246,6 +1388,7 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
           x: 0.8, y: 2.6, w: 8.5, h: 0.8,
           fontSize: 22, color: "E0E7FF",
           fontFace: FONT_TITLE, lineSpacingMultiple: LINE_SP,
+          align: coverAlign,
         });
       }
 
@@ -1255,6 +1398,7 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
           x: 0.8, y: 3.6, w: 8.5, h: 0.5,
           fontSize: 14, color: "C7D2FE",
           fontFace: FONT_BODY, lineSpacingMultiple: LINE_SP,
+          align: coverAlign,
         });
       }
 
@@ -1273,8 +1417,12 @@ export async function buildPptx(options: PptxOptions): Promise<Buffer> {
       addSlideChrome(slide, colors, pageNum, totalPages, companyName, "", true);
 
     } else {
-      // ===== 일반 슬라이드 (개선된 레이아웃) =====
+      // ===== 일반 슬라이드 (레이아웃 패턴 기반) =====
       slide.background = { color: colors.bg };
+
+      // 레이아웃 패턴 결정 + 장식 적용
+      const layoutPattern = getLayoutPattern(slideData.slide_type, slideIdx);
+      applyLayoutDecoration(slide, layoutPattern, colors);
 
       // 상단 제목 영역 (좌측 패딩 확대 — 액센트 바 공간)
       const titleText = slideData.title || SLIDE_LABELS[slideData.slide_type];

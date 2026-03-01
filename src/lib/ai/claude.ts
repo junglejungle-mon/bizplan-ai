@@ -2,31 +2,18 @@ import Anthropic from "@anthropic-ai/sdk";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-// ─── 모드 전환 ───────────────────────────────────────────
-// AI_MODE=local → 로컬 프록시 (Claude Max 구독, 무료)
-// AI_MODE=api   → Anthropic API 직접 호출 (유료, 기본값)
-const isLocalMode = process.env.AI_MODE === "local";
+// ─── Anthropic API 직접 호출 (프록시 제거) ───────────────
+// 항상 Anthropic API를 직접 호출합니다 (Haiku = 저렴, 안정적)
+const isLocalMode = false; // 프록시 모드 완전 제거
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
 
-// 로컬 프록시용 클라이언트 (Claude Max)
-const localClient = isLocalMode
-  ? new Anthropic({
-      apiKey: "local-proxy-no-key-needed",
-      baseURL: process.env.CLAUDE_PROXY_URL || "http://localhost:3457",
-    })
-  : null;
-
-// API용 클라이언트 (유료)
-// 로컬 모드에서도 초기화되므로, 빈 키일 때 더미 키 사용 (실제 API 호출 시 에러 발생)
 const apiClient = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "sk-ant-placeholder-not-set",
 });
 
-// 텍스트 요청용 클라이언트 (모드에 따라 전환)
-const anthropicClient = isLocalMode ? localClient! : apiClient;
-
-// Vision/OCR: 로컬 모드에서도 프록시 사용 (이미지는 텍스트로 변환됨, CLI가 분석)
-const anthropicVision = isLocalMode ? localClient! : apiClient;
+// 모든 클라이언트를 API 직접 호출로 통일
+const anthropicClient = apiClient;
+const anthropicVision = apiClient;
 
 // ─── 타입 정의 ───────────────────────────────────────────
 export type ClaudeModel =
@@ -342,4 +329,4 @@ export async function callClaudeVision({
 export { apiClient as anthropic };
 
 // 현재 모드 확인용
-export const aiMode = isLocalMode ? "local" : "api";
+export const aiMode = "api";

@@ -61,16 +61,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const supabase = createAdminClient();
     const { data: programs } = await supabase
-      .from("government_programs")
-      .select("id, updated_at")
-      .eq("status", "active")
-      .order("updated_at", { ascending: false })
+      .from("programs")
+      .select("id, collected_at")
+      .order("collected_at", { ascending: false })
       .limit(500);
 
     if (programs) {
       programPages = programs.map((p) => ({
         url: `${baseUrl}/programs/${p.id}`,
-        lastModified: new Date(p.updated_at),
+        lastModified: new Date(p.collected_at),
         changeFrequency: "weekly" as const,
         priority: 0.7,
       }));
