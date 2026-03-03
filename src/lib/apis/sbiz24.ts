@@ -131,6 +131,27 @@ function stripHtml(html: string | null | undefined): string {
     .trim();
 }
 
+/** YYYY-MM-DD 형식의 날짜만 추출, 그 외는 null */
+function parseDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // 정확한 YYYY-MM-DD 형식
+  const exact = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (exact) return exact[1];
+  // "YYYY-MM-DD ~ YYYY-MM-DD" 형식에서 종료일 추출
+  const range = value.match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
+  if (range) return range[2]; // 종료일 반환
+  // 그 외 ("예산 소진시까지", "지역별 상이" 등)는 null
+  return null;
+}
+
+/** "YYYY-MM-DD ~ YYYY-MM-DD" 에서 시작일 추출 */
+function parseStartDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const range = value.match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
+  if (range) return range[1];
+  return null;
+}
+
 function mapExltdPbanc(item: ExltdPbancItem) {
   // 해시태그 파싱
   const hashtags: string[] = ["소상공인"];
@@ -147,8 +168,8 @@ function mapExltdPbanc(item: ExltdPbancItem) {
     summary: stripHtml(item.bizOutlCn)?.slice(0, 500) || null,
     target: item.sprtTrgtNm || "소상공인",
     hashtags,
-    apply_start: null as string | null,
-    apply_end: item.aplyPdEndKornNm || null,
+    apply_start: parseStartDate(item.aplyPdEndKornNm),
+    apply_end: parseDate(item.aplyPdEndKornNm),
     institution: item.linkFlfmtInstNm || item.jrsdInstNm || "소상공인시장진흥공단",
     detail_url: item.pbancUrlAddr || `https://www.sbiz24.kr/extldPbanc/${item.pbancId}`,
     attachment_urls: {},
