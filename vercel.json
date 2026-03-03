@@ -2,12 +2,28 @@
   "regions": ["icn1"],
   "crons": [
     {
-      "path": "/api/programs/collect",
+      "path": "/api/programs/collect?source=bizinfo",
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/programs/collect",
+      "path": "/api/programs/collect?source=mss",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/programs/collect?source=kstartup",
+      "schedule": "10 0 * * *"
+    },
+    {
+      "path": "/api/programs/collect?source=bizinfo",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/programs/collect?source=mss",
+      "schedule": "5 6 * * *"
+    },
+    {
+      "path": "/api/programs/collect?source=kstartup",
+      "schedule": "10 6 * * *"
     },
     {
       "path": "/api/cron/agent-meeting",

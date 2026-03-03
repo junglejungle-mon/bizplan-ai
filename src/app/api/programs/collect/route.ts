@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
-import { collectAllPrograms } from "@/lib/pipeline/collector";
+import { collectAllPrograms, type CollectSource } from "@/lib/pipeline/collector";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBulkKakaoNotification } from "@/lib/notification/notification-service";
+
+const VALID_SOURCES: CollectSource[] = ["bizinfo", "mss", "kstartup"];
 
 // Vercel Serverless Function 타임아웃 확대 (Hobby: 최대 60초, Pro: 최대 300초)
 export const maxDuration = 300;
@@ -23,18 +25,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await collectAllPrograms();
+    // ?source=bizinfo|mss|kstartup 파라미터로 소스별 분리 수집
+    const sourceParam = request.nextUrl.searchParams.get("source") as CollectSource | null;
+    const source = sourceParam && VALID_SOURCES.includes(sourceParam) ? sourceParam : undefined;
 
-    // 마감 임박 알림 발송 (D-3, D-1)
+    console.log(`[Collect] 수집 시작 — source: ${source || "all"}`);
+    const result = await collectAllPrograms(source);
+
+    // 마감 임박 알림은 전체 수집 또는 마지막 소스(kstartup)에서만
     let deadlineNotifications = { total: 0, sent: 0, skipped: 0 };
-    try {
-      deadlineNotifications = await sendDeadlineNotifications();
-    } catch (e) {
-      console.error("[Collect] 마감 임박 알림 실패:", e);
+    if (!source || source === "kstartup") {
+      try {
+        deadlineNotifications = await sendDeadlineNotifications();
+      } catch (e) {
+        console.error("[Collect] 마감 임박 알림 실패:", e);
+      }
     }
 
     return Response.json({
       success: true,
+      source: source || "all",
       ...result,
       deadlineNotifications,
       timestamp: new Date().toISOString(),

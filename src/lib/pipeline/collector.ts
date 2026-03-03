@@ -57,7 +57,9 @@ interface CollectedProgram {
   raw_data: Record<string, any>;
 }
 
-export async function collectAllPrograms(): Promise<{
+export type CollectSource = "bizinfo" | "mss" | "kstartup";
+
+export async function collectAllPrograms(source?: CollectSource): Promise<{
   total: number;
   inserted: number;
   deduped: number;
@@ -69,46 +71,57 @@ export async function collectAllPrograms(): Promise<{
   const results: CollectedProgram[] = [];
   const errors: string[] = [];
 
-  // 3개 소스 병렬 수집 (Vercel 300초 타임아웃 대비)
-  const [bizinfoResult, mssResult, kstartupResult] = await Promise.allSettled([
-    fetchAllBizinfoPrograms(),
-    fetchAllMssBizPrograms(),
-    fetchAllKStartupPrograms(),
-  ]);
+  // 소스별 분리 수집 (Vercel 300초 타임아웃 대비)
+  const shouldCollect = (s: CollectSource) => !source || source === s;
 
-  // 1. 기업마당 (최대 3,000건)
-  if (bizinfoResult.status === "fulfilled") {
-    for (const item of bizinfoResult.value) {
-      const dates = parseDateRange(item.apply_period || "");
-      results.push({
-        ...item,
-        apply_start: dates.start,
-        apply_end: dates.end,
-      });
-    }
-    console.log(`[Collector] 기업마당: ${bizinfoResult.value.length}건`);
-  } else {
-    errors.push(`기업마당 수집 실패: ${bizinfoResult.reason}`);
-    console.error("[Collector] 기업마당 오류:", bizinfoResult.reason);
+  const fetchers: Promise<void>[] = [];
+
+  if (shouldCollect("bizinfo")) {
+    fetchers.push(
+      fetchAllBizinfoPrograms()
+        .then((items) => {
+          for (const item of items) {
+            const dates = parseDateRange(item.apply_period || "");
+            results.push({ ...item, apply_start: dates.start, apply_end: dates.end });
+          }
+          console.log(`[Collector] 기업마당: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`기업마당 수집 실패: ${reason}`);
+          console.error("[Collector] 기업마당 오류:", reason);
+        })
+    );
   }
 
-  // 2. 중소벤처기업부 (최대 5,000건)
-  if (mssResult.status === "fulfilled") {
-    results.push(...mssResult.value);
-    console.log(`[Collector] 중소벤처기업부: ${mssResult.value.length}건`);
-  } else {
-    errors.push(`중소벤처기업부 수집 실패: ${mssResult.reason}`);
-    console.error("[Collector] 중소벤처기업부 오류:", mssResult.reason);
+  if (shouldCollect("mss")) {
+    fetchers.push(
+      fetchAllMssBizPrograms()
+        .then((items) => {
+          results.push(...items);
+          console.log(`[Collector] 중소벤처기업부: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`중소벤처기업부 수집 실패: ${reason}`);
+          console.error("[Collector] 중소벤처기업부 오류:", reason);
+        })
+    );
   }
 
-  // 3. K-Startup (최대 5,000건)
-  if (kstartupResult.status === "fulfilled") {
-    results.push(...kstartupResult.value);
-    console.log(`[Collector] K-Startup: ${kstartupResult.value.length}건`);
-  } else {
-    errors.push(`K-Startup 수집 실패: ${kstartupResult.reason}`);
-    console.error("[Collector] K-Startup 오류:", kstartupResult.reason);
+  if (shouldCollect("kstartup")) {
+    fetchers.push(
+      fetchAllKStartupPrograms()
+        .then((items) => {
+          results.push(...items);
+          console.log(`[Collector] K-Startup: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`K-Startup 수집 실패: ${reason}`);
+          console.error("[Collector] K-Startup 오류:", reason);
+        })
+    );
   }
+
+  await Promise.allSettled(fetchers);
 
   // 소스 간 중복 제거 (제목+기관 기준, 먼저 수집된 소스 우선)
   const seen = new Map<string, number>();
