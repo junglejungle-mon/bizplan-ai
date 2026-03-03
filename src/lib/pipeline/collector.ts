@@ -14,7 +14,8 @@ import { fetchAllBizinfoPrograms } from "@/lib/apis/bizinfo";
 import { fetchAllMssBizPrograms } from "@/lib/apis/mss-biz";
 import { fetchAllKStartupPrograms } from "@/lib/apis/kstartup";
 import { parseDateRange } from "@/lib/ai/prompts/matching";
-import { runMatchingPipeline } from "@/lib/pipeline/matcher";
+// 자동 매칭은 별도 cron (/api/cron/auto-match)에서 처리 — 수집 시 API 크레딧 소모 방지
+// import { runMatchingPipeline } from "@/lib/pipeline/matcher";
 import { downloadAndCacheTemplate, extractFormUrls } from "@/lib/hwpx/template-manager";
 import { buildFormSkill, hasExistingSkill } from "@/lib/pipeline/form-skill-builder";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
@@ -227,39 +228,9 @@ export async function collectAllPrograms(source?: CollectSource): Promise<{
     console.warn("[Collector] 양식 캐싱/스킬화 단계 오류:", e);
   }
 
-  // === 자동 매칭 파이프라인 트리거 ===
+  // 자동 매칭은 별도 cron (/api/cron/auto-match)에서 처리
+  // 수집 파이프라인에서는 API 크레딧 소모 방지를 위해 매칭 호출하지 않음
   const matchingResults: { companyId: string; matched: number; skipped: number }[] = [];
-
-  try {
-    // 활성 회사 중 프로필 점수 20+ 인 회사만 매칭
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name, profile_score")
-      .eq("is_active", true)
-      .gte("profile_score", 20);
-
-    if (companies && companies.length > 0) {
-      for (const company of companies) {
-        try {
-          const result = await runMatchingPipeline(company.id);
-          matchingResults.push({
-            companyId: company.id,
-            matched: result.matched,
-            skipped: result.skipped,
-          });
-          if (result.errors.length > 0) {
-            errors.push(...result.errors.map((e) => `[${company.name}] ${e}`));
-          }
-        } catch (e) {
-          errors.push(`매칭 실패 [${company.name}]: ${e}`);
-          console.error(`[Collector] 매칭 오류 [${company.name}]:`, e);
-        }
-      }
-    }
-  } catch (e) {
-    errors.push(`자동 매칭 트리거 실패: ${e}`);
-    console.error("[Collector] 자동 매칭 오류:", e);
-  }
 
   return { total: results.length, inserted, deduped: deduped.length, formsCached, formsSkilled, matching: matchingResults, errors };
 }
