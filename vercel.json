@@ -38,14 +38,6 @@
       "schedule": "0 21 * * *"
     },
     {
-      "path": "/api/cron/auto-match",
-      "schedule": "10 0 * * *"
-    },
-    {
-      "path": "/api/cron/auto-match",
-      "schedule": "10 6 * * *"
-    },
-    {
       "path": "/api/cron/retarget",
       "schedule": "0 22 * * *"
     }

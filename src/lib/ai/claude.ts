@@ -2,18 +2,66 @@ import Anthropic from "@anthropic-ai/sdk";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-// ─── Anthropic API 직접 호출 (프록시 제거) ───────────────
-// 항상 Anthropic API를 직접 호출합니다 (Haiku = 저렴, 안정적)
-const isLocalMode = false; // 프록시 모드 완전 제거
+// ─── AI Provider 설정 ───────────────────────────────────
+// AI_PROVIDER=ollama → Ollama 로컬 모델 사용 (무료)
+// AI_PROVIDER=anthropic (기본) → Anthropic API 사용 (유료)
+const AI_PROVIDER = process.env.AI_PROVIDER || "ollama";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:14b";
+
+const useOllama = AI_PROVIDER === "ollama";
+const isLocalMode = useOllama;
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
 
 const apiClient = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "sk-ant-placeholder-not-set",
 });
 
-// 모든 클라이언트를 API 직접 호출로 통일
+// Anthropic 클라이언트 (Ollama 미사용 시 또는 Vision 전용)
 const anthropicClient = apiClient;
 const anthropicVision = apiClient;
+
+// ─── Ollama 호출 (OpenAI 호환 API) ─────────────────────
+async function callOllama({
+  system,
+  messages,
+  maxTokens = 4096,
+  temperature = 0.7,
+}: {
+  system?: string;
+  messages: { role: string; content: string }[];
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<string> {
+  const ollamaMessages: { role: string; content: string }[] = [];
+
+  if (system) {
+    ollamaMessages.push({ role: "system", content: system });
+  }
+  for (const m of messages) {
+    ollamaMessages.push({ role: m.role, content: m.content });
+  }
+
+  const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages: ollamaMessages,
+      max_tokens: maxTokens,
+      temperature,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Ollama API error: ${response.status} — ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
 
 // ─── 타입 정의 ───────────────────────────────────────────
 export type ClaudeModel =
@@ -108,24 +156,32 @@ export async function callClaude({
 }): Promise<string> {
   const startTime = Date.now();
 
-  // 로컬 프록시 모드: system prompt를 첫 user 메시지에 병합
-  // (프록시가 별도 system 필드를 긴 요청에서 무시하는 문제 workaround)
-  const mergedMessages = isLocalMode && system
-    ? messages.map((m, i) => ({
-        ...m,
-        content: i === 0 && m.role === "user"
-          ? `[시스템 지시]\n${system}\n[/시스템 지시]\n\n${m.content}`
-          : m.content,
-      }))
-    : messages;
+  // ─── Ollama 모드: 로컬 모델로 처리 (무료) ───
+  if (useOllama) {
+    const result = await withRetry(
+      () => callOllama({ system, messages, maxTokens, temperature }),
+      { caller: "callClaude:ollama" }
+    );
 
+    logAICall({
+      caller: "callClaude:ollama",
+      model: OLLAMA_MODEL,
+      system,
+      messages,
+      response: result,
+      durationMs: Date.now() - startTime,
+    });
+
+    return result;
+  }
+
+  // ─── Anthropic API 모드 (유료) ───
   const response = await withRetry(
     () =>
       anthropicClient.messages.create({
         model,
         max_tokens: maxTokens,
-        // API 모드에서만 별도 system 필드 사용 (Prompt Caching 포함)
-        ...(!isLocalMode && system && {
+        ...(system && {
           system: [
             {
               type: "text" as const,
@@ -134,14 +190,13 @@ export async function callClaude({
             },
           ],
         }),
-        messages: mergedMessages.map((m, i) => ({
+        messages: messages.map((m, i) => ({
           role: m.role,
           content: [
             {
               type: "text" as const,
               text: m.content,
-              // 마지막 user 메시지에만 cache_control 적용 (Prompt Caching)
-              ...(i === mergedMessages.length - 1 && m.role === "user"
+              ...(i === messages.length - 1 && m.role === "user"
                 ? { cache_control: { type: "ephemeral" as const } }
                 : {}),
             },
@@ -155,7 +210,6 @@ export async function callClaude({
   const textBlock = response.content.find((block) => block.type === "text");
   const result = textBlock?.text ?? "";
 
-  // 비동기 로깅
   logAICall({
     caller: "callClaude",
     model,
@@ -185,22 +239,72 @@ export async function* streamClaude({
   const startTime = Date.now();
   let fullResponse = "";
 
-  // 로컬 프록시 모드: system prompt를 첫 user 메시지에 병합
-  const streamMergedMessages = isLocalMode && system
-    ? messages.map((m, i) => ({
-        ...m,
-        content: i === 0 && m.role === "user"
-          ? `[시스템 지시]\n${system}\n[/시스템 지시]\n\n${m.content}`
-          : m.content,
-      }))
-    : messages;
+  // ─── Ollama 모드: 스트리밍 지원 ───
+  if (useOllama) {
+    const ollamaMessages: { role: string; content: string }[] = [];
+    if (system) ollamaMessages.push({ role: "system", content: system });
+    for (const m of messages) ollamaMessages.push({ role: m.role, content: m.content });
 
+    const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: ollamaMessages,
+        max_tokens: maxTokens,
+        temperature,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Ollama stream error: ${response.status} — ${errText.slice(0, 200)}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+        try {
+          const chunk = JSON.parse(line.slice(6));
+          const text = chunk.choices?.[0]?.delta?.content;
+          if (text) {
+            fullResponse += text;
+            yield text;
+          }
+        } catch { /* skip malformed chunks */ }
+      }
+    }
+
+    logAICall({
+      caller: "streamClaude:ollama",
+      model: OLLAMA_MODEL,
+      system,
+      messages,
+      response: fullResponse,
+      durationMs: Date.now() - startTime,
+    });
+    return;
+  }
+
+  // ─── Anthropic API 모드 ───
   const stream = await withRetry(
     async () =>
       anthropicClient.messages.stream({
         model,
         max_tokens: maxTokens,
-        ...(!isLocalMode && system && {
+        ...(system && {
           system: [
             {
               type: "text" as const,
@@ -209,13 +313,13 @@ export async function* streamClaude({
             },
           ],
         }),
-        messages: streamMergedMessages.map((m, i) => ({
+        messages: messages.map((m, i) => ({
           role: m.role,
           content: [
             {
               type: "text" as const,
               text: m.content,
-              ...(i === streamMergedMessages.length - 1 && m.role === "user"
+              ...(i === messages.length - 1 && m.role === "user"
                 ? { cache_control: { type: "ephemeral" as const } }
                 : {}),
             },
@@ -236,7 +340,6 @@ export async function* streamClaude({
     }
   }
 
-  // 비동기 로깅
   logAICall({
     caller: "streamClaude",
     model,
@@ -329,4 +432,5 @@ export async function callClaudeVision({
 export { apiClient as anthropic };
 
 // 현재 모드 확인용
-export const aiMode = "api";
+export const aiMode = useOllama ? "ollama" : "api";
+export const aiModelName = useOllama ? OLLAMA_MODEL : "anthropic";
