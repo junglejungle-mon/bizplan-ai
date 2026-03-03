@@ -3,7 +3,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callClaude } from "@/lib/ai/claude";
+import { callClaudeAPI as callClaude } from "@/lib/ai/claude";
 import {
   IR_GENERATOR_SYSTEM,
   buildIRGeneratorPrompt,

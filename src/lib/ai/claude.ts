@@ -8,8 +8,8 @@ import { join } from "node:path";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:14b";
 
-const useOllama = false; // callClaude/streamClaude는 항상 Anthropic
-const isLocalMode = false;
+const useOllama = true; // 기본: Ollama (무료). 사업계획서만 forceAPI=true로 Claude 사용
+const isLocalMode = true;
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
 
 const apiClient = new Anthropic({
@@ -146,16 +146,37 @@ export async function callClaude({
   messages,
   maxTokens = 4096,
   temperature = 0.7,
+  forceAPI = false,
 }: {
   model?: ClaudeModel;
   system?: string;
   messages: ClaudeMessage[];
   maxTokens?: number;
   temperature?: number;
+  forceAPI?: boolean;
 }): Promise<string> {
   const startTime = Date.now();
 
-  // ─── Anthropic API (사용자 대면 기능 — 품질 우선) ───
+  // ─── Ollama 모드 (기본 — 무료) ───
+  if (useOllama && !forceAPI) {
+    const result = await withRetry(
+      () => callOllama({ system, messages, maxTokens, temperature }),
+      { caller: "callClaude:ollama" }
+    );
+
+    logAICall({
+      caller: "callClaude:ollama",
+      model: OLLAMA_MODEL,
+      system,
+      messages,
+      response: result,
+      durationMs: Date.now() - startTime,
+    });
+
+    return result;
+  }
+
+  // ─── Anthropic API (사업계획서 등 forceAPI=true) ───
   const response = await withRetry(
     () =>
       anthropicClient.messages.create({
@@ -209,17 +230,78 @@ export async function* streamClaude({
   messages,
   maxTokens = 4096,
   temperature = 0.7,
+  forceAPI = false,
 }: {
   model?: ClaudeModel;
   system?: string;
   messages: ClaudeMessage[];
   maxTokens?: number;
   temperature?: number;
+  forceAPI?: boolean;
 }): AsyncGenerator<string> {
   const startTime = Date.now();
   let fullResponse = "";
 
-  // ─── Anthropic API (스트리밍) ───
+  // ─── Ollama 스트리밍 (기본 — 무료) ───
+  if (useOllama && !forceAPI) {
+    const ollamaMessages: { role: string; content: string }[] = [];
+    if (system) ollamaMessages.push({ role: "system", content: system });
+    for (const m of messages) ollamaMessages.push({ role: m.role, content: m.content });
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: ollamaMessages,
+        max_tokens: maxTokens,
+        temperature,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Ollama stream error: ${response.status} — ${errText.slice(0, 200)}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+        try {
+          const chunk = JSON.parse(line.slice(6));
+          const text = chunk.choices?.[0]?.delta?.content;
+          if (text) {
+            fullResponse += text;
+            yield text;
+          }
+        } catch { /* skip malformed chunks */ }
+      }
+    }
+
+    logAICall({
+      caller: "streamClaude:ollama",
+      model: OLLAMA_MODEL,
+      system,
+      messages,
+      response: fullResponse,
+      durationMs: Date.now() - startTime,
+    });
+    return;
+  }
+
+  // ─── Anthropic API 스트리밍 (forceAPI=true) ───
   const stream = await withRetry(
     async () =>
       anthropicClient.messages.stream({
@@ -353,5 +435,13 @@ export async function callClaudeVision({
 export { apiClient as anthropic };
 
 // 현재 모드 확인용
-export const aiMode = "api";
-export const ollamaConfig = { baseUrl: OLLAMA_BASE_URL, model: OLLAMA_MODEL };
+export const aiMode = useOllama ? "ollama" : "api";
+
+// ─── 사업계획서 전용 Wrapper (항상 Anthropic API) ────────
+export async function callClaudeAPI(opts: Parameters<typeof callClaude>[0]) {
+  return callClaude({ ...opts, forceAPI: true });
+}
+
+export async function* streamClaudeAPI(opts: Parameters<typeof streamClaude>[0]) {
+  yield* streamClaude({ ...opts, forceAPI: true });
+}

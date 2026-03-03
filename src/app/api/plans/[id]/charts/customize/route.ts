@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callClaude } from "@/lib/ai/claude";
+import { callClaudeAPI as callClaude } from "@/lib/ai/claude";
 import {
   CHART_CUSTOMIZER_SYSTEM,
   buildChartCustomizerPrompt,

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { streamClaude } from "@/lib/ai/claude";
+import { streamClaudeAPI as streamClaude } from "@/lib/ai/claude";
 import {
   SECTION_WRITER_SYSTEM,
   buildSectionWriterPrompt,

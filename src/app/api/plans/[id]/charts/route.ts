@@ -123,7 +123,7 @@ export async function POST(
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
-  const { callClaude } = await import("@/lib/ai/claude");
+  const { callClaudeAPI: callClaude } = await import("@/lib/ai/claude");
   const {
     CHART_DATA_EXTRACTOR_SYSTEM,
     buildChartDataExtractorPrompt,

@@ -13,7 +13,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callClaude, streamClaude } from "@/lib/ai/claude";
+import { callClaudeAPI as callClaude, streamClaudeAPI as streamClaude } from "@/lib/ai/claude";
 import { sendKakaoNotification } from "@/lib/notification/notification-service";
 import {
   extractPdfUrlFromProgram,

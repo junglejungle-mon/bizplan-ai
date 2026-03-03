@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd ~/projects/bizplan-ai && vercel --prod --yes 2>&1\",\"timeout\":300000,\"description\":\"Deploy to Vercel production\"}",
+  "error": "Exit code 1\nVercel CLI 50.22.1\nRetrieving project…\nError: An unexpected error occurred in deploy: FetchError: request to https://vercel.com/.well-known/openid-configuration failed, reason: unable to get local issuer certificate\n\nVercel CLI 50.22.1\nRetrieving project…\nError: An unexpected error occurred in deploy: FetchError: request to https://vercel.com/.well-known/openid-configuration failed, reason: unable to get local issuer certificate",
+  "timestamp": "2026-03-01T00:55:08.676Z",
+  "retry_count": 1
+}
