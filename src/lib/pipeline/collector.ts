@@ -15,6 +15,7 @@ import { fetchAllMssBizPrograms } from "@/lib/apis/mss-biz";
 import { fetchAllKStartupPrograms } from "@/lib/apis/kstartup";
 import { fetchAllKStartupBizPrograms } from "@/lib/apis/kstartup-biz";
 import { fetchAllKotraPrograms } from "@/lib/apis/kotra";
+import { fetchAllSbiz24Programs } from "@/lib/apis/sbiz24";
 import { parseDateRange } from "@/lib/ai/prompts/matching";
 // 자동 매칭은 별도 cron (/api/cron/auto-match)에서 처리 — 수집 시 API 크레딧 소모 방지
 // import { runMatchingPipeline } from "@/lib/pipeline/matcher";
@@ -43,7 +44,7 @@ function decodeHtmlEntities(text: string | null | undefined): string {
 const IS_VERCEL = !!process.env.VERCEL;
 
 interface CollectedProgram {
-  source: "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra";
+  source: "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra" | "sbiz24";
   source_id: string;
   title: string;
   summary: string | null;
@@ -60,7 +61,7 @@ interface CollectedProgram {
   raw_data: Record<string, any>;
 }
 
-export type CollectSource = "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra";
+export type CollectSource = "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra" | "sbiz24";
 
 export async function collectAllPrograms(source?: CollectSource): Promise<{
   total: number;
@@ -148,6 +149,20 @@ export async function collectAllPrograms(source?: CollectSource): Promise<{
         .catch((reason) => {
           errors.push(`KOTRA 수출지원 수집 실패: ${reason}`);
           console.error("[Collector] KOTRA 오류:", reason);
+        })
+    );
+  }
+
+  if (shouldCollect("sbiz24")) {
+    fetchers.push(
+      fetchAllSbiz24Programs()
+        .then((items) => {
+          results.push(...items);
+          console.log(`[Collector] 소상공인24: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`소상공인24 수집 실패: ${reason}`);
+          console.error("[Collector] 소상공인24 오류:", reason);
         })
     );
   }
