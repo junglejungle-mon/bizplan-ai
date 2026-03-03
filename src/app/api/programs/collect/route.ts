@@ -3,7 +3,7 @@ import { collectAllPrograms, type CollectSource } from "@/lib/pipeline/collector
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBulkKakaoNotification } from "@/lib/notification/notification-service";
 
-const VALID_SOURCES: CollectSource[] = ["bizinfo", "mss", "kstartup"];
+const VALID_SOURCES: CollectSource[] = ["bizinfo", "mss", "kstartup", "kstartup-biz", "kotra"];
 
 // Vercel Serverless Function 타임아웃 확대 (Hobby: 최대 60초, Pro: 최대 300초)
 export const maxDuration = 300;
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // 마감 임박 알림은 전체 수집 또는 마지막 소스(kstartup)에서만
     let deadlineNotifications = { total: 0, sent: 0, skipped: 0 };
-    if (!source || source === "kstartup") {
+    if (!source || source === "kotra") {
       try {
         deadlineNotifications = await sendDeadlineNotifications();
       } catch (e) {

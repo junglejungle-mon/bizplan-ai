@@ -13,6 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllBizinfoPrograms } from "@/lib/apis/bizinfo";
 import { fetchAllMssBizPrograms } from "@/lib/apis/mss-biz";
 import { fetchAllKStartupPrograms } from "@/lib/apis/kstartup";
+import { fetchAllKStartupBizPrograms } from "@/lib/apis/kstartup-biz";
+import { fetchAllKotraPrograms } from "@/lib/apis/kotra";
 import { parseDateRange } from "@/lib/ai/prompts/matching";
 // 자동 매칭은 별도 cron (/api/cron/auto-match)에서 처리 — 수집 시 API 크레딧 소모 방지
 // import { runMatchingPipeline } from "@/lib/pipeline/matcher";
@@ -41,7 +43,7 @@ function decodeHtmlEntities(text: string | null | undefined): string {
 const IS_VERCEL = !!process.env.VERCEL;
 
 interface CollectedProgram {
-  source: "bizinfo" | "mss" | "kstartup";
+  source: "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra";
   source_id: string;
   title: string;
   summary: string | null;
@@ -58,7 +60,7 @@ interface CollectedProgram {
   raw_data: Record<string, any>;
 }
 
-export type CollectSource = "bizinfo" | "mss" | "kstartup";
+export type CollectSource = "bizinfo" | "mss" | "kstartup" | "kstartup-biz" | "kotra";
 
 export async function collectAllPrograms(source?: CollectSource): Promise<{
   total: number;
@@ -118,6 +120,34 @@ export async function collectAllPrograms(source?: CollectSource): Promise<{
         .catch((reason) => {
           errors.push(`K-Startup 수집 실패: ${reason}`);
           console.error("[Collector] K-Startup 오류:", reason);
+        })
+    );
+  }
+
+  if (shouldCollect("kstartup-biz")) {
+    fetchers.push(
+      fetchAllKStartupBizPrograms()
+        .then((items) => {
+          results.push(...items);
+          console.log(`[Collector] K-Startup 사업정보: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`K-Startup 사업정보 수집 실패: ${reason}`);
+          console.error("[Collector] K-Startup 사업정보 오류:", reason);
+        })
+    );
+  }
+
+  if (shouldCollect("kotra")) {
+    fetchers.push(
+      fetchAllKotraPrograms()
+        .then((items) => {
+          results.push(...items);
+          console.log(`[Collector] KOTRA 수출지원: ${items.length}건`);
+        })
+        .catch((reason) => {
+          errors.push(`KOTRA 수출지원 수집 실패: ${reason}`);
+          console.error("[Collector] KOTRA 오류:", reason);
         })
     );
   }
