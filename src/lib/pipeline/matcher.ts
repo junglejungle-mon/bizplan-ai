@@ -4,7 +4,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callClaude } from "@/lib/ai/claude";
+import { callOllama } from "@/lib/ai/claude";
 import {
   DEEP_ANALYSIS_SYSTEM,
   buildDeepAnalysisPrompt,
@@ -25,8 +25,7 @@ async function batchRegionMatch(
     `[${i}] ${p.title} | ${(p.hashtags || []).join(",")} | ${(p.summary || "").slice(0, 80)}`
   ).join("\n");
 
-  const result = await callClaude({
-    model: "claude-haiku-4-5-20251001",
+  const result = await callOllama({
     system: `당신은 지역 매칭 판단 전문가입니다.
 
 회사 소재지와 각 지원사업의 지역 제한을 비교합니다.
@@ -93,8 +92,7 @@ async function batchCompanyMatch(
     return parts.join("\n");
   }).join("\n\n");
 
-  const result = await callClaude({
-    model: "claude-haiku-4-5-20251001",
+  const result = await callOllama({
     system: `정부지원사업 매칭 전문가. 회사와 공고 적합도를 0~100점으로 평가.
 
 핵심: 업종/분야 불일치→60점 이하. 일반 중소기업 대상→최대 50점.
@@ -153,8 +151,7 @@ JSON 배열만 출력 (설명 없이):
     for (const p of programs) {
       if (results.has(p.id)) continue; // 이미 파싱된 건 스킵
       try {
-        const singleResult = await callClaude({
-          model: "claude-haiku-4-5-20251001",
+        const singleResult = await callOllama({
           system: `정부지원사업 매칭 전문가. 회사와 공고의 적합도를 0~100점으로 평가.
 업종/분야가 직접 관련 없으면 60점 이하. 일반 중소기업 대상 사업은 최대 50점.
 JSON만 출력: {"score":N,"reason":"사유","keywords":["k1"],"fit":"레벨"}
@@ -360,8 +357,7 @@ export async function runMatchingPipeline(companyId: string): Promise<{
   const deepTargets = deepAnalysisCandidates.slice(0, 10);
   for (const target of deepTargets) {
     try {
-      const deepReport = await callClaude({
-        model: "claude-sonnet-4-20250514",
+      const deepReport = await callOllama({
         system: DEEP_ANALYSIS_SYSTEM,
         messages: [
           {

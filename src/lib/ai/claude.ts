@@ -3,14 +3,13 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 // ─── AI Provider 설정 ───────────────────────────────────
-// AI_PROVIDER=ollama → Ollama 로컬 모델 사용 (무료)
-// AI_PROVIDER=anthropic (기본) → Anthropic API 사용 (유료)
-const AI_PROVIDER = process.env.AI_PROVIDER || "ollama";
+// 사용자 대면 (인터뷰, 사업계획서): 항상 Anthropic API (품질 우선)
+// 백그라운드 배치 (매칭): Ollama 로컬 모델 (무료)
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:14b";
 
-const useOllama = AI_PROVIDER === "ollama";
-const isLocalMode = useOllama;
+const useOllama = false; // callClaude/streamClaude는 항상 Anthropic
+const isLocalMode = false;
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
 
 const apiClient = new Anthropic({
@@ -21,8 +20,8 @@ const apiClient = new Anthropic({
 const anthropicClient = apiClient;
 const anthropicVision = apiClient;
 
-// ─── Ollama 호출 (OpenAI 호환 API) ─────────────────────
-async function callOllama({
+// ─── Ollama 호출 (배치 매칭 전용, 무료) ─────────────────
+export async function callOllama({
   system,
   messages,
   maxTokens = 4096,
@@ -156,26 +155,7 @@ export async function callClaude({
 }): Promise<string> {
   const startTime = Date.now();
 
-  // ─── Ollama 모드: 로컬 모델로 처리 (무료) ───
-  if (useOllama) {
-    const result = await withRetry(
-      () => callOllama({ system, messages, maxTokens, temperature }),
-      { caller: "callClaude:ollama" }
-    );
-
-    logAICall({
-      caller: "callClaude:ollama",
-      model: OLLAMA_MODEL,
-      system,
-      messages,
-      response: result,
-      durationMs: Date.now() - startTime,
-    });
-
-    return result;
-  }
-
-  // ─── Anthropic API 모드 (유료) ───
+  // ─── Anthropic API (사용자 대면 기능 — 품질 우선) ───
   const response = await withRetry(
     () =>
       anthropicClient.messages.create({
@@ -239,66 +219,7 @@ export async function* streamClaude({
   const startTime = Date.now();
   let fullResponse = "";
 
-  // ─── Ollama 모드: 스트리밍 지원 ───
-  if (useOllama) {
-    const ollamaMessages: { role: string; content: string }[] = [];
-    if (system) ollamaMessages.push({ role: "system", content: system });
-    for (const m of messages) ollamaMessages.push({ role: m.role, content: m.content });
-
-    const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        messages: ollamaMessages,
-        max_tokens: maxTokens,
-        temperature,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(`Ollama stream error: ${response.status} — ${errText.slice(0, 200)}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
-        try {
-          const chunk = JSON.parse(line.slice(6));
-          const text = chunk.choices?.[0]?.delta?.content;
-          if (text) {
-            fullResponse += text;
-            yield text;
-          }
-        } catch { /* skip malformed chunks */ }
-      }
-    }
-
-    logAICall({
-      caller: "streamClaude:ollama",
-      model: OLLAMA_MODEL,
-      system,
-      messages,
-      response: fullResponse,
-      durationMs: Date.now() - startTime,
-    });
-    return;
-  }
-
-  // ─── Anthropic API 모드 ───
+  // ─── Anthropic API (스트리밍) ───
   const stream = await withRetry(
     async () =>
       anthropicClient.messages.stream({
@@ -432,5 +353,5 @@ export async function callClaudeVision({
 export { apiClient as anthropic };
 
 // 현재 모드 확인용
-export const aiMode = useOllama ? "ollama" : "api";
-export const aiModelName = useOllama ? OLLAMA_MODEL : "anthropic";
+export const aiMode = "api";
+export const ollamaConfig = { baseUrl: OLLAMA_BASE_URL, model: OLLAMA_MODEL };
