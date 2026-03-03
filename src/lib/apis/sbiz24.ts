@@ -1,10 +1,26 @@
 /**
  * 소상공인24 (sbiz24.kr) 크롤러
  * 내부 API 2개 활용:
- *   1. POST /api/exltdPbanc — 외부 연계 지원사업 공고 (347건+)
- *   2. POST /api/loanProduct — 소상공인 융자상품 (401건+)
+ *   1. POST /api/exltdPbanc — 외부 연계 지원사업 공고
+ *   2. POST /api/loanProduct — 소상공인 융자상품
  * 인증 불필요 (공개 내부 API, Origin-Method: GET 헤더 필요)
+ * 주의: sbiz24.kr은 한국 정부 인증서 체인 이슈로 TLS 검증 실패 가능
  */
+/**
+ * sbiz24.kr 전용 TLS Agent (정부 사이트 인증서 체인 이슈 대응)
+ * Next.js/Vercel 런타임에서는 정상 동작하나, 로컬 환경에서 인증서 체인 문제 발생 가능
+ * 런타임에 undici를 동적 로딩하여 TLS 우회 Agent 생성
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let tlsAgent: any = undefined;
+try {
+  // Node.js 내장 undici (Next.js 런타임에서 사용 가능)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Agent } = require("undici");
+  tlsAgent = new Agent({ connect: { rejectUnauthorized: false } });
+} catch {
+  // undici 없으면 기본 fetch 사용 (Vercel 환경에서는 TLS 이슈 없음)
+}
 
 // ===== 외부 연계 공고 (exltdPbanc) =====
 
@@ -26,11 +42,21 @@ interface ExltdPbancItem {
   linkInqCnt: number | null; // 조회수
 }
 
-interface ExltdPbancResponse {
-  resultCode: string;
-  resultMessage: string;
-  totalCount: number;
-  list: ExltdPbancItem[];
+/** 공통 API 응답 래퍼: { result, data: { default: { list, total, page } } } */
+interface Sbiz24ApiResponse<T> {
+  result: boolean;
+  message: string | null;
+  data: {
+    default: {
+      list: T[];
+      total: number;
+      page: {
+        totalElements: number;
+        totalPages: number;
+        numberOfElements: number;
+      };
+    };
+  };
 }
 
 // ===== 융자상품 (loanProduct) =====
@@ -52,12 +78,7 @@ interface LoanProductItem {
   rltnSiteAddr: string | null; // 관련 사이트
 }
 
-interface LoanProductResponse {
-  resultCode: string;
-  resultMessage: string;
-  totalCount: number;
-  list: LoanProductItem[];
-}
+// LoanProductResponse는 Sbiz24ApiResponse<LoanProductItem> 사용
 
 const SBIZ24_HEADERS = {
   "Content-Type": "application/json",
@@ -180,7 +201,8 @@ async function fetchExltdPbanc(page = 1, pageSize = 50) {
       search: { pageIndex: page, pageSize },
     }),
     cache: "no-store" as RequestCache,
-  });
+    ...(tlsAgent ? { dispatcher: tlsAgent } : {}),
+  } as RequestInit);
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
@@ -189,8 +211,8 @@ async function fetchExltdPbanc(page = 1, pageSize = 50) {
     );
   }
 
-  const data: ExltdPbancResponse = await response.json();
-  const items = data.list ?? [];
+  const data: Sbiz24ApiResponse<ExltdPbancItem> = await response.json();
+  const items = data.data?.default?.list ?? [];
 
   return items
     .filter((item) => item.linkPbancNm)
@@ -205,7 +227,8 @@ async function fetchLoanProducts(page = 1, pageSize = 50) {
       search: { pageIndex: page, pageSize },
     }),
     cache: "no-store" as RequestCache,
-  });
+    ...(tlsAgent ? { dispatcher: tlsAgent } : {}),
+  } as RequestInit);
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
@@ -214,8 +237,8 @@ async function fetchLoanProducts(page = 1, pageSize = 50) {
     );
   }
 
-  const data: LoanProductResponse = await response.json();
-  const items = data.list ?? [];
+  const data: Sbiz24ApiResponse<LoanProductItem> = await response.json();
+  const items = data.data?.default?.list ?? [];
 
   return items
     .filter((item) => item.fncGdsNm)
