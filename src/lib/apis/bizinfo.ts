@@ -25,7 +25,7 @@ interface BizinfoResponse {
  * 전체 페이지 수집 (페이지네이션 자동 순회)
  * maxPages: 최대 순회 페이지 수 (기본 10 = 최대 1,000건)
  */
-export async function fetchAllBizinfoPrograms(maxPages = 10) {
+export async function fetchAllBizinfoPrograms(maxPages = 30) {
   const allItems: ReturnType<typeof mapBizinfoItem>[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchBizinfoPrograms(page, 100);

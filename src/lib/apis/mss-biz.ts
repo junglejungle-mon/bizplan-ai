@@ -9,7 +9,7 @@ type MssItem = Awaited<ReturnType<typeof fetchMssBizPrograms>>[number];
  * 전체 페이지 수집 (페이지네이션 자동 순회)
  * maxPages: 최대 순회 페이지 수 (기본 20 = 최대 2,000건)
  */
-export async function fetchAllMssBizPrograms(maxPages = 20) {
+export async function fetchAllMssBizPrograms(maxPages = 50) {
   const allItems: MssItem[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchMssBizPrograms(page, 100);

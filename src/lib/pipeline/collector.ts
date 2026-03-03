@@ -69,10 +69,16 @@ export async function collectAllPrograms(): Promise<{
   const results: CollectedProgram[] = [];
   const errors: string[] = [];
 
-  // 1. 기업마당 (전체 페이지 수집, 최대 1,000건)
-  try {
-    const bizinfoItems = await fetchAllBizinfoPrograms(10);
-    for (const item of bizinfoItems) {
+  // 3개 소스 병렬 수집 (Vercel 300초 타임아웃 대비)
+  const [bizinfoResult, mssResult, kstartupResult] = await Promise.allSettled([
+    fetchAllBizinfoPrograms(),
+    fetchAllMssBizPrograms(),
+    fetchAllKStartupPrograms(),
+  ]);
+
+  // 1. 기업마당 (최대 3,000건)
+  if (bizinfoResult.status === "fulfilled") {
+    for (const item of bizinfoResult.value) {
       const dates = parseDateRange(item.apply_period || "");
       results.push({
         ...item,
@@ -80,27 +86,28 @@ export async function collectAllPrograms(): Promise<{
         apply_end: dates.end,
       });
     }
-  } catch (e) {
-    errors.push(`기업마당 수집 실패: ${e}`);
-    console.error("[Collector] 기업마당 오류:", e);
+    console.log(`[Collector] 기업마당: ${bizinfoResult.value.length}건`);
+  } else {
+    errors.push(`기업마당 수집 실패: ${bizinfoResult.reason}`);
+    console.error("[Collector] 기업마당 오류:", bizinfoResult.reason);
   }
 
-  // 2. 중소벤처기업부 (전체 페이지 수집, 최대 2,000건)
-  try {
-    const mssItems = await fetchAllMssBizPrograms(20);
-    results.push(...mssItems);
-  } catch (e) {
-    errors.push(`중소벤처기업부 수집 실패: ${e}`);
-    console.error("[Collector] 중소벤처기업부 오류:", e);
+  // 2. 중소벤처기업부 (최대 5,000건)
+  if (mssResult.status === "fulfilled") {
+    results.push(...mssResult.value);
+    console.log(`[Collector] 중소벤처기업부: ${mssResult.value.length}건`);
+  } else {
+    errors.push(`중소벤처기업부 수집 실패: ${mssResult.reason}`);
+    console.error("[Collector] 중소벤처기업부 오류:", mssResult.reason);
   }
 
-  // 3. K-Startup (전체 페이지 수집, perPage=500, 최대 2,500건)
-  try {
-    const kstartupItems = await fetchAllKStartupPrograms(5);
-    results.push(...kstartupItems);
-  } catch (e) {
-    errors.push(`K-Startup 수집 실패: ${e}`);
-    console.error("[Collector] K-Startup 오류:", e);
+  // 3. K-Startup (최대 5,000건)
+  if (kstartupResult.status === "fulfilled") {
+    results.push(...kstartupResult.value);
+    console.log(`[Collector] K-Startup: ${kstartupResult.value.length}건`);
+  } else {
+    errors.push(`K-Startup 수집 실패: ${kstartupResult.reason}`);
+    console.error("[Collector] K-Startup 오류:", kstartupResult.reason);
   }
 
   // 소스 간 중복 제거 (제목+기관 기준, 먼저 수집된 소스 우선)

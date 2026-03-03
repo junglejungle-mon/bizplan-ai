@@ -34,7 +34,7 @@ type KStartupResultItem = Awaited<ReturnType<typeof fetchKStartupPrograms>>[numb
  * K-Startup은 데이터가 많으므로 perPage=500으로 큰 단위 수집
  * maxPages: 최대 순회 페이지 수 (기본 5 = 최대 2,500건)
  */
-export async function fetchAllKStartupPrograms(maxPages = 5) {
+export async function fetchAllKStartupPrograms(maxPages = 10) {
   const allItems: KStartupResultItem[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const items = await fetchKStartupPrograms(page, 500);
