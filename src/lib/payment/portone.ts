@@ -222,6 +222,7 @@ export interface CheckoutParams {
   currency: string;
   channelKey?: string;
   payMethod?: string;
+  noticeUrls?: string[];
   customer?: {
     customerId?: string;
     fullName?: string;
@@ -256,12 +257,13 @@ export function buildCheckoutParams(params: {
     totalAmount: params.amount,
     currency: "KRW",
     channelKey,
+    noticeUrls: [`${appUrl.trim()}/api/payments/webhook`],
     customer: {
       customerId: params.userId,
       fullName: params.userName,
       email: params.userEmail,
       phoneNumber: params.userPhone,
     },
-    redirectUrl: `${appUrl}/settings?payment=complete`,
+    redirectUrl: `${appUrl.trim()}/settings?payment=complete`,
   };
 }
