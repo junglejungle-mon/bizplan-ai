@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { trackPaymentStart, trackPaymentComplete, trackPaymentFail } from "@/lib/analytics";
 
+type PayMethod = "CARD" | "EASY_PAY" | "VIRTUAL_ACCOUNT" | "TRANSFER";
+
+const PAY_METHODS: { value: PayMethod | "ALL"; label: string }[] = [
+  { value: "ALL", label: "전체 (결제창에서 선택)" },
+  { value: "CARD", label: "신용/체크카드" },
+  { value: "EASY_PAY", label: "간편결제 (카카오페이·네이버페이)" },
+  { value: "VIRTUAL_ACCOUNT", label: "가상계좌" },
+  { value: "TRANSFER", label: "무통장입금 (계좌이체)" },
+];
+
 interface CheckoutButtonProps {
   planId: string;
   planName: string;
@@ -17,6 +27,7 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
   const [error, setError] = useState<string | null>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeRefund, setAgreeRefund] = useState(false);
+  const [payMethod, setPayMethod] = useState<PayMethod | "ALL">("ALL");
 
   const handleCheckout = useCallback(async () => {
     if (!agreeTerms || !agreeRefund) {
@@ -53,7 +64,7 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
         totalAmount: checkoutParams.totalAmount,
         currency: checkoutParams.currency as "CURRENCY_KRW",
         channelKey: checkoutParams.channelKey,
-        payMethod: checkoutParams.payMethod || "CARD",
+        payMethod: payMethod !== "ALL" ? payMethod : "CARD",
         customer: checkoutParams.customer
           ? {
               customerId: checkoutParams.customer.customerId,
@@ -101,10 +112,24 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
     } finally {
       setLoading(false);
     }
-  }, [planId, planName, price, agreeTerms, agreeRefund]);
+  }, [planId, planName, price, agreeTerms, agreeRefund, payMethod]);
 
   return (
     <div className={className}>
+      {/* 결제수단 선택 */}
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-gray-700 mb-1.5">결제수단</label>
+        <select
+          value={payMethod}
+          onChange={(e) => setPayMethod(e.target.value as PayMethod | "ALL")}
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        >
+          {PAY_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+      </div>
+
       {/* 결제 전 동의 체크박스 */}
       <div className="space-y-2 mb-3">
         <label className="flex items-start gap-2 cursor-pointer">
