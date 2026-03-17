@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/dashboard/", "/plans/", "/programs/", "/documents/", "/company/", "/settings/", "/onboarding/"],
+      disallow: ["/api/", "/dashboard/", "/plans/", "/documents/", "/company/", "/settings/", "/onboarding/"],
     },
     sitemap: `${(process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr").trim()}/sitemap.xml`,
   };
