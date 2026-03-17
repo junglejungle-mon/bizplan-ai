@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       .eq("id", documentId);
 
     return Response.json(
-      { error: `데이터 추출 실패: ${String(error)}` },
+      { error: "처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

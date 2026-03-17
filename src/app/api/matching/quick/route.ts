@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[QuickMatch] 간편 매칭 실패:", error);
     return Response.json(
-      { success: false, error: String(error) },
+      { success: false, error: "처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

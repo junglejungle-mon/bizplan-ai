@@ -300,7 +300,7 @@ ${analysisPrompt}
   } catch (error) {
     console.error("[AnalyzeFile] Error:", error);
     return Response.json(
-      { error: `파일 분석 중 오류가 발생했습니다: ${String(error)}` },
+      { error: "처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

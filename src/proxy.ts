@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
     const host = request.headers.get("host") || "";
 
     // PortOne webhook은 외부 서버에서 옴
-    const isWebhook = pathname.includes("/webhook");
+    const isWebhook = pathname === "/api/payments/webhook";
 
     if (!isWebhook) {
       const allowedOrigins = [

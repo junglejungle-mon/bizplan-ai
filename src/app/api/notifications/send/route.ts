@@ -39,8 +39,9 @@ export async function POST(request: NextRequest) {
       reason: result.reason,
     });
   } catch (error) {
+    console.error("[Notifications] Send error:", error);
     return Response.json(
-      { error: String(error) },
+      { error: "처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

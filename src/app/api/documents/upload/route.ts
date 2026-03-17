@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[Documents] Upload error:", error);
     return Response.json(
-      { error: `업로드 처리 중 오류: ${String(error)}` },
+      { error: "처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

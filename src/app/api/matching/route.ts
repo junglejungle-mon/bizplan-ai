@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return Response.json(
       {
         success: false,
-        error: String(error),
+        error: "처리 중 오류가 발생했습니다.",
       },
       { status: 500 }
     );
