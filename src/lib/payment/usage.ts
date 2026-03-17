@@ -6,7 +6,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveSubscription, getPlanByName } from "./subscription";
-import { getAvailableCredits, useReferralCredit } from "@/lib/referral";
+import { getAvailableCredits, consumeReferralCredit } from "@/lib/referral";
 import type { Database } from "@/lib/supabase/types";
 
 type UsageRecord = Database["public"]["Tables"]["usage_records"]["Row"];
@@ -145,7 +145,7 @@ export async function incrementUsage(
       try {
         const referralCredits = await getAvailableCredits(userId);
         if (referralCredits > 0) {
-          const used = await useReferralCredit(userId);
+          const used = await consumeReferralCredit(userId);
           if (used) {
             // 추천 크레딧으로 대체 → 사용량은 증가시키지 않고 허용
             return { allowed: true, current: currentValue, limit: limitValue };

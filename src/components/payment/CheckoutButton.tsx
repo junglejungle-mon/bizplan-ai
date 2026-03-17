@@ -101,7 +101,7 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
     } finally {
       setLoading(false);
     }
-  }, [planId, agreeTerms, agreeRefund]);
+  }, [planId, planName, price, agreeTerms, agreeRefund]);
 
   return (
     <div className={className}>

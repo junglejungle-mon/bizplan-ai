@@ -7,8 +7,10 @@ export async function register() {
     await import("../sentry.edge.config");
   }
 
-  // 필수 환경변수 검증 (서버 부팅 시 1회)
-  validateRequiredEnvVars();
+  // 필수 환경변수 검증 (서버 부팅 시 1회, Node.js 런타임에서만 실행)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    validateRequiredEnvVars();
+  }
 }
 
 /**
@@ -27,6 +29,7 @@ function validateRequiredEnvVars() {
   // IMPORTANT: 핵심 기능에 필요하지만 앱 전체가 죽진 않음
   const important = [
     "CRON_SECRET",
+    "ADMIN_JWT_SECRET",
   ];
 
   // OPTIONAL: 특정 기능에만 필요 (없으면 해당 기능 비활성)
@@ -64,9 +67,11 @@ function validateRequiredEnvVars() {
       missingCritical.map((k) => `   - ${k}`).join("\n") +
       "\n"
     );
-    // 프로덕션에서만 프로세스 종료 (개발 중에는 경고만)
+    // 프로덕션에서만 서버 시작 중단 (개발 중에는 경고만)
     if (process.env.NODE_ENV === "production") {
-      process.exit(1);
+      throw new Error(
+        `[ENV] CRITICAL 환경변수 누락으로 서버를 시작할 수 없습니다: ${missingCritical.join(", ")}`
+      );
     }
   }
 

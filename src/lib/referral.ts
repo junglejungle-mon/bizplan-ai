@@ -264,7 +264,7 @@ export async function getAvailableCredits(userId: string): Promise<number> {
 /**
  * 추천 크레딧 1건 사용 (FIFO: 가장 오래된 것부터)
  */
-export async function useReferralCredit(userId: string): Promise<boolean> {
+export async function consumeReferralCredit(userId: string): Promise<boolean> {
   const supabase = createAdminClient();
 
   // 사용 가능한 보상 중 가장 오래된 것

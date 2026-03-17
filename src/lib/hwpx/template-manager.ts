@@ -16,7 +16,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormTemplate } from "./types";
 import { existsSync, readFileSync, readdirSync } from "fs";
-import { join } from "path";
 import {
   convertHwpToHwpx,
   isHwpConverterAvailable,
@@ -351,6 +350,9 @@ async function loadFromLocal(
   supabase: SupabaseClient,
   programId: string
 ): Promise<Buffer | null> {
+  // Vercel 환경에서는 로컬 파일시스템 접근 불가 → 스킵
+  if (process.env.VERCEL) return null;
+
   try {
     // programs 테이블에서 source, source_id 조회
     const { data: program } = await supabase
@@ -361,10 +363,12 @@ async function loadFromLocal(
 
     if (!program) return null;
 
+    // dynamic import로 분리 → Turbopack 정적 파일 패턴 스캔 방지
+    const { join, sep } = await import("path");
+    const programsDir = ["data", "pro" + "grams"].join(sep);
     const programDir = join(
       process.cwd(),
-      "data",
-      "programs",
+      programsDir,
       program.source,
       program.source_id
     );
@@ -414,7 +418,8 @@ async function tryConvertHwp(
 ): Promise<Buffer | null> {
   const { tmpdir } = await import("os");
   const { writeFileSync: writeTmp, unlinkSync } = await import("fs");
-  const tmpPath = join(tmpdir(), `hwp-input-${Date.now()}.hwp`);
+  const { join: pathJoin } = await import("path");
+  const tmpPath = pathJoin(tmpdir(), `hwp-input-${Date.now()}.hwp`);
 
   try {
     // 임시 파일로 저장

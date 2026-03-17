@@ -1,6 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
 
 // ─── AI Provider 설정 ───────────────────────────────────
 // 사용자 대면 (인터뷰, 사업계획서): 항상 Anthropic API (품질 우선)
@@ -8,12 +6,16 @@ import { join } from "node:path";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:14b";
 
-const useOllama = true; // 기본: Ollama (무료). 사업계획서만 forceAPI=true로 Claude 사용
-const isLocalMode = true;
+const useOllama = process.env.USE_OLLAMA === "true" || process.env.AI_MODE === "local";
+const isLocalMode = process.env.AI_MODE === "local";
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
 
+if (!process.env.ANTHROPIC_API_KEY && !useOllama) {
+  console.warn("[AI] ANTHROPIC_API_KEY 미설정. AI 기능이 제한됩니다.");
+}
+
 const apiClient = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "sk-ant-placeholder-not-set",
+  apiKey: process.env.ANTHROPIC_API_KEY || "",
 });
 
 // Anthropic 클라이언트 (Ollama 미사용 시 또는 Vision 전용)
@@ -119,17 +121,22 @@ async function logAICall(data: {
   response: string;
   durationMs: number;
 }) {
-  if (!LOG_AI_CALLS) return;
+  // Vercel 환경에서는 파일시스템 쓰기 불가 → 스킵
+  if (!LOG_AI_CALLS || process.env.VERCEL) return;
 
   try {
+    // dynamic import로 분리 → Turbopack 정적 파일 패턴 스캔 방지
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const { join, sep } = await import("node:path");
+    const dataDir = ["data", "ai" + "-logs"].join(sep);
     const today = new Date().toISOString().split("T")[0];
-    const logDir = join(process.cwd(), "data", "ai-logs", today);
+    const logDir = join(process.cwd(), dataDir, today);
     await mkdir(logDir, { recursive: true });
 
     const filename = `${data.caller}-${Date.now()}.json`;
     const logEntry = {
       timestamp: new Date().toISOString(),
-      mode: isLocalMode ? "local" : "api",
+      mode: useOllama ? "ollama" : "api",
       ...data,
     };
 
@@ -177,6 +184,10 @@ export async function callClaude({
   }
 
   // ─── Anthropic API (사업계획서 등 forceAPI=true) ───
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("[callClaude] ANTHROPIC_API_KEY 필수 — Anthropic API 호출에는 API 키가 필요합니다.");
+  }
+
   const response = await withRetry(
     () =>
       anthropicClient.messages.create({
@@ -302,6 +313,10 @@ export async function* streamClaude({
   }
 
   // ─── Anthropic API 스트리밍 (forceAPI=true) ───
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("[streamClaude] ANTHROPIC_API_KEY 필수 — Anthropic API 호출에는 API 키가 필요합니다.");
+  }
+
   const stream = await withRetry(
     async () =>
       anthropicClient.messages.stream({
@@ -369,6 +384,10 @@ export async function callClaudeVision({
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("[callClaudeVision] ANTHROPIC_API_KEY 필수 — Vision은 항상 Anthropic API를 사용합니다.");
+  }
+
   const startTime = Date.now();
 
   // 로컬 모드에서는 이미지를 텍스트로 변환하여 프록시에 전달

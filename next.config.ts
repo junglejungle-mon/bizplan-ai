@@ -44,9 +44,23 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["sharp"],
+  serverExternalPackages: ["sharp", "undici"],
   outputFileTracingIncludes: {
     "/api/**": ["./src/lib/fonts/**/*"],
+  },
+  outputFileTracingExcludes: {
+    // data/ 디렉토리는 런타임에만 접근 (빌드 번들링 제외 → Turbopack 광범위 패턴 경고 해소)
+    "/**": ["./data/**/*"],
+  },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.bizplanai.co.kr" }],
+        destination: "https://bizplanai.co.kr/:path*",
+        permanent: true,
+      },
+    ];
   },
   async headers() {
     return [

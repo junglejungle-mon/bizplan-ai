@@ -10,9 +10,9 @@ export const COOKIE_NAME = "admin_session";
 const TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24시간
 
 function getSecret(): string {
-  const secret = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_PASSWORD;
   if (!secret) {
-    throw new Error("ADMIN_PASSWORD 환경변수가 설정되지 않았습니다.");
+    throw new Error("ADMIN_JWT_SECRET 또는 ADMIN_PASSWORD 환경변수가 설정되지 않았습니다.");
   }
   return secret;
 }

@@ -13,13 +13,18 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let tlsAgent: any = undefined;
-try {
-  // Node.js 내장 undici (Next.js 런타임에서 사용 가능)
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Agent } = require("undici");
-  tlsAgent = new Agent({ connect: { rejectUnauthorized: false } });
-} catch {
-  // undici 없으면 기본 fetch 사용 (Vercel 환경에서는 TLS 이슈 없음)
+
+async function getTlsAgent() {
+  if (tlsAgent !== undefined) return tlsAgent;
+  try {
+    // Node.js 내장 undici (Next.js 런타임에서 사용 가능)
+    const { Agent } = await import("undici");
+    tlsAgent = new Agent({ connect: { rejectUnauthorized: false } });
+  } catch {
+    // undici 없으면 기본 fetch 사용 (Vercel 환경에서는 TLS 이슈 없음)
+    tlsAgent = null;
+  }
+  return tlsAgent;
 }
 
 // ===== 외부 연계 공고 (exltdPbanc) =====
@@ -215,6 +220,7 @@ function mapLoanProduct(item: LoanProductItem) {
 // ===== API 호출 =====
 
 async function fetchExltdPbanc(page = 1, pageSize = 50) {
+  const agent = await getTlsAgent();
   const response = await fetch("https://www.sbiz24.kr/api/exltdPbanc", {
     method: "POST",
     headers: SBIZ24_HEADERS,
@@ -222,7 +228,7 @@ async function fetchExltdPbanc(page = 1, pageSize = 50) {
       search: { pageIndex: page, pageSize },
     }),
     cache: "no-store" as RequestCache,
-    ...(tlsAgent ? { dispatcher: tlsAgent } : {}),
+    ...(agent ? { dispatcher: agent } : {}),
   } as RequestInit);
 
   if (!response.ok) {
@@ -241,6 +247,7 @@ async function fetchExltdPbanc(page = 1, pageSize = 50) {
 }
 
 async function fetchLoanProducts(page = 1, pageSize = 50) {
+  const agent = await getTlsAgent();
   const response = await fetch("https://www.sbiz24.kr/api/loanProduct", {
     method: "POST",
     headers: SBIZ24_HEADERS,
@@ -248,7 +255,7 @@ async function fetchLoanProducts(page = 1, pageSize = 50) {
       search: { pageIndex: page, pageSize },
     }),
     cache: "no-store" as RequestCache,
-    ...(tlsAgent ? { dispatcher: tlsAgent } : {}),
+    ...(agent ? { dispatcher: agent } : {}),
   } as RequestInit);
 
   if (!response.ok) {
