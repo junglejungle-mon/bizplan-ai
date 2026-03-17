@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/api/", "/dashboard/", "/plans/", "/programs/", "/documents/", "/company/", "/settings/", "/onboarding/"],
     },
-    sitemap: `${process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr"}/sitemap.xml`,
+    sitemap: `${(process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr").trim()}/sitemap.xml`,
   };
 }

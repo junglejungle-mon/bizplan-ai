@@ -133,12 +133,18 @@ export function rateLimit(key: string, config: RateLimitConfig): RateLimitResult
   return memRateLimit(key, config);
 }
 
-/** IP 추출 헬퍼 */
+/** IP 추출 헬퍼
+ * x-real-ip 우선 사용 (프록시가 설정한 신뢰할 수 있는 실제 IP).
+ * x-forwarded-for는 클라이언트가 위조 가능한 앞쪽 값 대신 마지막 값(프록시가 추가한 값) 사용.
+ */
 export function getClientIP(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
   const real = request.headers.get("x-real-ip");
-  if (real) return real;
+  if (real) return real.trim();
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const parts = forwarded.split(",");
+    return parts[parts.length - 1].trim();
+  }
   return "unknown";
 }
 

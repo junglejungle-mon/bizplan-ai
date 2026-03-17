@@ -60,6 +60,16 @@ const nextConfig: NextConfig = {
         destination: "https://bizplanai.co.kr/:path*",
         permanent: true,
       },
+      {
+        source: "/business-plan",
+        destination: "/plans",
+        permanent: true,
+      },
+      {
+        source: "/business-plan/:path*",
+        destination: "/plans/:path*",
+        permanent: true,
+      },
     ];
   },
   async headers() {

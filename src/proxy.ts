@@ -36,16 +36,10 @@ export async function proxy(request: NextRequest) {
 
       // Origin도 Referer도 없거나 둘 다 유효하지 않으면 차단
       if (!origin && !referer) {
-        // 서버사이드 호출(fetch from server component)은 허용
-        // User-Agent가 없거나 Next.js 내부 호출이면 통과
-        const ua = request.headers.get("user-agent") || "";
-        const isServerCall = !ua || ua.includes("node");
-        if (!isServerCall) {
-          return NextResponse.json(
-            { error: "CSRF validation failed" },
-            { status: 403 }
-          );
-        }
+        return NextResponse.json(
+          { error: "CSRF validation failed" },
+          { status: 403 }
+        );
       } else if (!originValid && !refererValid) {
         return NextResponse.json(
           { error: "CSRF validation failed" },

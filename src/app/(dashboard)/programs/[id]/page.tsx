@@ -167,16 +167,9 @@ export default async function ProgramDetailPage({
             </CardHeader>
             <CardContent>
               {program.summary ? (
-                <div
-                  className="text-sm text-gray-700 whitespace-pre-wrap prose prose-sm max-w-none
-                    [&>p]:mb-2 [&>br]:hidden [&_*]:text-gray-700"
-                  dangerouslySetInnerHTML={{
-                    __html: program.summary
-                      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-                      .replace(/on\w+="[^"]*"/gi, "")
-                      .replace(/style="[^"]*"/gi, "")
-                  }}
-                />
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {program.summary}
+                </p>
               ) : (
                 <p className="text-sm text-gray-400 italic">요약 정보 없음</p>
               )}

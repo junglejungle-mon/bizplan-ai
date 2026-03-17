@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  // Vercel Cron에서 호출 시 CRON_SECRET 체크, 없으면 허용 (개발 환경)
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // CRON_SECRET 미설정 시 항상 거부 (개발 환경에서도 보안 유지)
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 

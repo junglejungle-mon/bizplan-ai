@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr";
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr").trim();
 
   // 정적 페이지
   const staticPages: MetadataRoute.Sitemap = [
