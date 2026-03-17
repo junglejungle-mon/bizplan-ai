@@ -87,11 +87,11 @@ describe("RATE_LIMITS 프리셋", () => {
 });
 
 describe("getClientIP", () => {
-  it("x-forwarded-for 헤더에서 IP를 추출해야 한다", () => {
+  it("x-forwarded-for 헤더에서 마지막 IP를 추출해야 한다 (프록시 추가 값, 스푸핑 방지)", () => {
     const req = new Request("http://localhost", {
       headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
     });
-    expect(getClientIP(req)).toBe("1.2.3.4");
+    expect(getClientIP(req)).toBe("5.6.7.8");
   });
 
   it("x-real-ip 헤더에서 IP를 추출해야 한다", () => {
@@ -106,13 +106,13 @@ describe("getClientIP", () => {
     expect(getClientIP(req)).toBe("unknown");
   });
 
-  it("x-forwarded-for가 x-real-ip보다 우선해야 한다", () => {
+  it("x-real-ip가 x-forwarded-for보다 우선해야 한다 (Vercel 신뢰 헤더)", () => {
     const req = new Request("http://localhost", {
       headers: {
         "x-forwarded-for": "1.1.1.1",
         "x-real-ip": "2.2.2.2",
       },
     });
-    expect(getClientIP(req)).toBe("1.1.1.1");
+    expect(getClientIP(req)).toBe("2.2.2.2");
   });
 });
