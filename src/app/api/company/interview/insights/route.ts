@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
         console.error("[Insights] Extraction error:", error);
         send({
           type: "error",
-          message: String(error),
+          message: "인사이트 추출 중 오류가 발생했습니다",
         });
         controller.close();
       }

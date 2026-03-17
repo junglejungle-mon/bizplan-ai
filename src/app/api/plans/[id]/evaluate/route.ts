@@ -228,7 +228,7 @@ export async function POST(
     console.error("[PlanEval] 평가 오류:", error);
     return NextResponse.json({
       error: "평가 중 오류가 발생했습니다",
-      detail: String(error),
+      detail: "처리 중 오류가 발생했습니다",
     }, { status: 500 });
   }
 }

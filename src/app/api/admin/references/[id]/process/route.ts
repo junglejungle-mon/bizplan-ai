@@ -29,7 +29,7 @@ export async function POST(
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({
-              step: `오류: ${String(error)}`,
+              step: "처리 중 오류가 발생했습니다",
               progress: -1,
             })}\n\n`
           )

@@ -181,7 +181,7 @@ export async function POST(
       } catch (error) {
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "error", data: { message: String(error) } })}\n\n`
+            `data: ${JSON.stringify({ type: "error", data: { message: "재생성 중 오류가 발생했습니다" } })}\n\n`
           )
         );
       }

@@ -198,7 +198,7 @@ export async function POST(
     console.error("[GuidelineExtract] 오류:", error);
     return NextResponse.json({
       error: "지침서 추출 중 오류",
-      detail: String(error),
+      detail: "처리 중 오류가 발생했습니다",
     }, { status: 500 });
   }
 }

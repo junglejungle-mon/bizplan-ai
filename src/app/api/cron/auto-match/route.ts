@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     return Response.json(
       {
         success: false,
-        error: String(error),
+        error: "자동매칭 처리 중 오류가 발생했습니다",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }
