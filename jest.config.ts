@@ -7,6 +7,7 @@ const config: Config = {
   testMatch: ["**/__tests__/**/*.test.ts", "**/__tests__/**/*.test.tsx"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    "^isomorphic-dompurify$": "<rootDir>/__mocks__/isomorphic-dompurify.ts",
   },
   transform: {
     "^.+\\.tsx?$": [
