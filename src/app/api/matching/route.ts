@@ -1,12 +1,18 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runMatchingPipeline } from "@/lib/pipeline/matcher";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/matching
  * 매칭 파이프라인 실행
  */
 export async function POST(request: NextRequest) {
+  // AI 매칭 비용 보호: 분당 5회 제한
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`matching:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

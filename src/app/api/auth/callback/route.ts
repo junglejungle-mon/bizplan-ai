@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createTrialSubscription, getPlanByName } from "@/lib/payment/subscription";
 
 // 허용된 내부 리다이렉트 경로 (오픈 리다이렉트 방지)
 const ALLOWED_PATHS = ["/dashboard", "/onboarding", "/settings", "/pricing", "/plans"];
@@ -66,6 +67,27 @@ export async function GET(request: Request) {
         // 약관 미동의 → 온보딩에서 약관 동의 필수
         if (needsTerms) {
           return NextResponse.redirect(`${origin}/onboarding?require_terms=true`);
+        }
+
+        // 신규 가입자 자동 14일 Pro 체험 생성
+        try {
+          const { data: existingSub } = await admin
+            .from("subscriptions")
+            .select("id")
+            .eq("user_id", user.id)
+            .limit(1);
+
+          if (!existingSub || existingSub.length === 0) {
+            const proPlan = await getPlanByName("pro");
+            if (proPlan) {
+              await createTrialSubscription({
+                userId: user.id,
+                planId: proPlan.id,
+              });
+            }
+          }
+        } catch {
+          // trial 생성 실패해도 가입 플로우는 계속 진행
         }
 
         // 회사 정보가 있으면 대시보드, 없으면 온보딩

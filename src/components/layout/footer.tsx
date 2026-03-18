@@ -45,7 +45,8 @@ export function Footer() {
               <li className="text-xs text-gray-500">주식회사 정글몬스터</li>
               <li className="text-xs text-gray-500">대표: 정광우</li>
               <li className="text-xs text-gray-500">사업자등록번호: 188-86-01211</li>
-              <li className="text-xs text-gray-500">주소: 서울특별시</li>
+              <li className="text-xs text-gray-500">통신판매업신고: 제 2021-서울관악-2000호</li>
+              <li className="text-xs text-gray-500">주소: 서울특별시 관악구 승방1길 5 (소프트하우스) 3층</li>
               <li className="text-xs text-gray-500">이메일: support@bizplan-ai.kr</li>
             </ul>
           </div>

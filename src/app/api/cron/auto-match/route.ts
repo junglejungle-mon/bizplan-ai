@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
           matched: 0,
           skipped: 0,
           deepAnalyzed: 0,
-          errors: [String(e)],
+          errors: ["매칭 처리 실패"],
         });
       }
     }

@@ -7,12 +7,18 @@ import {
 } from "@/lib/ai/prompts/assistant";
 import { hybridSearchReferences, extractKeywords, formatReferenceExamples } from "@/lib/rag/search";
 import { safeErrorMessage } from "@/lib/api/error";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/assistant/chat
  * AI 비서 채팅 (SSE 스트리밍)
  */
 export async function POST(request: NextRequest) {
+  // AI 호출 비용 보호: 분당 5회 제한
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`assistant:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

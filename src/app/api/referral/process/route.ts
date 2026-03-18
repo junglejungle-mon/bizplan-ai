@@ -4,22 +4,34 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { processReferralSignup } from "@/lib/referral";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { newUserId, referralCode } = body;
-
-    if (!newUserId || !referralCode) {
+    // 인증 필수 — 로그인한 사용자만 추천 처리 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "필수 파라미터가 누락되었습니다" },
+        { success: false, error: "인증이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { referralCode } = body;
+
+    if (!referralCode) {
+      return NextResponse.json(
+        { success: false, error: "추천 코드가 필요합니다" },
         { status: 400 }
       );
     }
 
+    // newUserId는 인증된 사용자 ID 사용 (클라이언트 전달 금지)
     const result = await processReferralSignup({
-      newUserId,
+      newUserId: user.id,
       referralCode,
     });
 

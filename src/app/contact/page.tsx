@@ -226,10 +226,10 @@ export default function ContactPage() {
           <p className="text-sm text-gray-500">
             이메일:{" "}
             <a
-              href="mailto:dktkghdeh@jmnc.co.kr"
+              href="mailto:support@bizplan-ai.kr"
               className="text-blue-600 hover:underline"
             >
-              dktkghdeh@jmnc.co.kr
+              support@bizplan-ai.kr
             </a>
           </p>
         </div>

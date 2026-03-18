@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     // 기본 Trial 플랜 조회 (Pro 플랜 기준)
-    const plan = await getPlanByName("Pro");
+    const plan = await getPlanByName("pro");
     if (!plan) {
       return NextResponse.json(
         { error: "Trial 플랜을 찾을 수 없습니다" },
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message.includes("이미 무료 체험")) {
       return NextResponse.json(
-        { error: error.message },
+        { error: "이미 무료 체험을 사용하셨습니다" },
         { status: 409 }
       );
     }

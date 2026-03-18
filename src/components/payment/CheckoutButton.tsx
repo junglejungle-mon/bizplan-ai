@@ -5,15 +5,22 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { trackPaymentStart, trackPaymentComplete, trackPaymentFail } from "@/lib/analytics";
 
-type PayMethod = "CARD" | "EASY_PAY" | "VIRTUAL_ACCOUNT" | "TRANSFER";
+type PayMethod = "CARD" | "EASY_PAY" | "VIRTUAL_ACCOUNT" | "TRANSFER" | "BANK_TRANSFER";
 
 const PAY_METHODS: { value: PayMethod | "ALL"; label: string }[] = [
   { value: "ALL", label: "전체 (결제창에서 선택)" },
   { value: "CARD", label: "신용/체크카드" },
   { value: "EASY_PAY", label: "간편결제 (카카오페이·네이버페이)" },
   { value: "VIRTUAL_ACCOUNT", label: "가상계좌" },
-  { value: "TRANSFER", label: "무통장입금 (계좌이체)" },
+  { value: "TRANSFER", label: "실시간 계좌이체" },
+  { value: "BANK_TRANSFER", label: "무통장입금 (직접 이체)" },
 ];
+
+const BANK_INFO = {
+  bank: "IBK 기업은행",
+  account: "072-145703-04-027",
+  holder: "(주)정글몬스터",
+};
 
 interface CheckoutButtonProps {
   planId: string;
@@ -28,6 +35,8 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeRefund, setAgreeRefund] = useState(false);
   const [payMethod, setPayMethod] = useState<PayMethod | "ALL">("ALL");
+  const [showBankInfo, setShowBankInfo] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCheckout = useCallback(async () => {
     if (!agreeTerms || !agreeRefund) {
@@ -35,6 +44,15 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
       return;
     }
 
+    // 무통장입금 선택 시 계좌 안내 표시
+    if (payMethod === "BANK_TRANSFER") {
+      setShowBankInfo(true);
+      setError(null);
+      trackPaymentStart(planName, price);
+      return;
+    }
+
+    setShowBankInfo(false);
     setLoading(true);
     setError(null);
 
@@ -64,7 +82,7 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
         totalAmount: checkoutParams.totalAmount,
         currency: checkoutParams.currency as "CURRENCY_KRW",
         channelKey: checkoutParams.channelKey,
-        payMethod: payMethod !== "ALL" ? payMethod : "CARD",
+        payMethod: (payMethod === "CARD" || payMethod === "EASY_PAY" || payMethod === "VIRTUAL_ACCOUNT" || payMethod === "TRANSFER") ? payMethod : "CARD",
         customer: checkoutParams.customer
           ? {
               customerId: checkoutParams.customer.customerId,
@@ -157,6 +175,33 @@ export function CheckoutButton({ planId, planName, price, className }: CheckoutB
           </span>
         </label>
       </div>
+
+      {/* 무통장입금 계좌 안내 */}
+      {showBankInfo && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <h4 className="text-sm font-semibold text-blue-900 mb-2">무통장입금 안내</h4>
+          <div className="space-y-1.5 text-sm text-blue-800">
+            <p><span className="font-medium">은행:</span> {BANK_INFO.bank}</p>
+            <p><span className="font-medium">계좌번호:</span> {BANK_INFO.account}</p>
+            <p><span className="font-medium">예금주:</span> {BANK_INFO.holder}</p>
+            <p><span className="font-medium">입금액:</span> {price.toLocaleString()}원</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(BANK_INFO.account);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            {copied ? "복사됨!" : "계좌번호 복사"}
+          </button>
+          <p className="mt-2 text-xs text-blue-600">
+            입금 후 1영업일 이내에 구독이 활성화됩니다. 입금자명을 회원명과 동일하게 해주세요.
+          </p>
+        </div>
+      )}
 
       <Button
         onClick={handleCheckout}

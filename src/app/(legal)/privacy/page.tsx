@@ -186,8 +186,12 @@ export default function PrivacyPage() {
             <table className="w-full border-collapse border border-gray-200 text-xs">
               <tbody>
                 <tr>
-                  <td className="border border-gray-200 p-2 bg-gray-50 font-medium w-32">직위</td>
-                  <td className="border border-gray-200 p-2">개인정보 보호책임자</td>
+                  <td className="border border-gray-200 p-2 bg-gray-50 font-medium w-32">성명</td>
+                  <td className="border border-gray-200 p-2">정광우</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-200 p-2 bg-gray-50 font-medium">직위</td>
+                  <td className="border border-gray-200 p-2">대표이사 (개인정보 보호책임자)</td>
                 </tr>
                 <tr>
                   <td className="border border-gray-200 p-2 bg-gray-50 font-medium">연락처</td>

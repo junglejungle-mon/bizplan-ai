@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendKakaoNotification } from "@/lib/notification/notification-service";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/matching/quick
@@ -9,6 +10,11 @@ import { sendKakaoNotification } from "@/lib/notification/notification-service";
  * 인터뷰 전이라도 즉시 추천 결과를 제공하여 "가입 즉시 가치 제공"
  */
 export async function POST(request: NextRequest) {
+  // 매칭 남용 방지: 분당 5회 제한
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`matching-quick:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
