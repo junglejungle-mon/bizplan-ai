@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { scorePlan } from '@/lib/quality/scorer';
 import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
+import { validateBody, adminScorePlanSchema } from "@/lib/api/validation";
 
 export async function GET(request: Request) {
   try {
@@ -41,11 +42,9 @@ export async function POST(request: Request) {
     const denied = await requireAdmin(request);
     if (denied) return denied;
 
-    const { planId } = await request.json();
-
-    if (!planId) {
-      return Response.json({ error: 'planId is required' }, { status: 400 });
-    }
+    const [scoreBody, scoreErr] = await validateBody(request, adminScorePlanSchema);
+    if (scoreErr) return scoreErr;
+    const { planId } = scoreBody;
 
     const results = await scorePlan(planId);
 

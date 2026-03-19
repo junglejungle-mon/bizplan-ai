@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
+import { validateBody, updatePatternSchema } from "@/lib/api/validation";
 
 export async function GET(request: Request) {
   try {
@@ -30,12 +31,9 @@ export async function PUT(request: Request) {
     if (denied) return denied;
 
     const supabase = createAdminClient();
-    const body = await request.json();
-    const { id, ...updates } = body;
-
-    if (!id) {
-      return Response.json({ error: 'Pattern id is required' }, { status: 400 });
-    }
+    const [patternBody, patternErr] = await validateBody(request, updatePatternSchema);
+    if (patternErr) return patternErr;
+    const { id, ...updates } = patternBody as { id: string; [key: string]: unknown };
 
     const { data: pattern, error } = await supabase
       .from('winning_patterns')

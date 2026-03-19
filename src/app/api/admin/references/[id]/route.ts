@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
+import { validateBody, updateReferenceSchema } from "@/lib/api/validation";
 
 /**
  * GET /api/admin/references/[id] — 레퍼런스 상세
@@ -48,18 +49,16 @@ export async function PATCH(
 
   const { id } = await params;
   const supabase = createAdminClient();
-  const body = await request.json();
+  const [refBody, refErr] = await validateBody(request, updateReferenceSchema);
+  if (refErr) return refErr;
 
-  const allowedFields = ["title", "reference_type", "template_type"];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };
 
-  for (const field of allowedFields) {
-    if (body[field] !== undefined) {
-      updateData[field] = body[field];
-    }
+  for (const [field, value] of Object.entries(refBody)) {
+    if (value !== undefined) updateData[field] = value;
   }
 
   const { data, error } = await supabase

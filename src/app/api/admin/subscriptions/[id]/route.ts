@@ -6,6 +6,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
+import { validateBody, adminUpdateSubscriptionSchema } from "@/lib/api/validation";
 
 export async function GET(
   request: Request,
@@ -63,15 +64,13 @@ export async function PATCH(
 
     const supabase = createAdminClient();
     const { id } = await params;
-    const body = await request.json();
+    const [subBody, subErr] = await validateBody(request, adminUpdateSubscriptionSchema);
+    if (subErr) return subErr;
 
-    // 허용 필드: status, plan_id, current_period_end, cancel_at_period_end
-    const allowedFields = ["status", "plan_id", "current_period_end", "cancel_at_period_end"];
+    // 허용 필드만 추출
     const updates: Record<string, unknown> = {};
-    for (const key of allowedFields) {
-      if (key in body) {
-        updates[key] = body[key];
-      }
+    for (const [key, value] of Object.entries(subBody)) {
+      if (value !== undefined) updates[key] = value;
     }
 
     if (Object.keys(updates).length === 0) {

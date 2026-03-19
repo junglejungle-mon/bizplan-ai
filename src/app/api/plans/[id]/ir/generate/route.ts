@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateIRPresentation } from "@/lib/pipeline/ir-generator";
 import { incrementUsage } from "@/lib/payment/usage";
 import { safeErrorMessage } from "@/lib/api/error";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 // Vercel serverless function 타임아웃 확장 (SSE 스트리밍 — 최대 300초)
 export const maxDuration = 300;
@@ -15,6 +16,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting (AI IR 생성 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`ir-generate:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const { id: planId } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

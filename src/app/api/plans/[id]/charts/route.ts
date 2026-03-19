@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderChartToSvg, getChartSize } from "@/lib/charts/svg-renderer";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, extractChartsSchema } from "@/lib/api/validation";
 
 /**
  * GET /api/plans/[id]/charts
@@ -95,6 +97,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting (AI 차트 추출 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`charts:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const { id: planId } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -103,14 +110,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const sectionName = body.sectionName;
-  const sectionContent = body.sectionContent;
-  const sectionOrder = body.sectionOrder;
-
-  if (!sectionContent || !sectionName) {
-    return NextResponse.json({ error: "섹션 내용이 필요합니다" }, { status: 400 });
-  }
+  const [chartsBody, chartsErr] = await validateBody(request, extractChartsSchema);
+  if (chartsErr) return chartsErr;
+  const { sectionName, sectionContent, sectionOrder } = chartsBody;
 
   // 소유권 확인
   const { data: plan } = await supabase

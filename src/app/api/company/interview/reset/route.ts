@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateBody, interviewResetSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/company/interview/reset
@@ -17,11 +18,9 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { companyId } = await request.json();
-
-  if (!companyId) {
-    return Response.json({ error: "companyId 필요" }, { status: 400 });
-  }
+  const [resetBody, resetErr] = await validateBody(request, interviewResetSchema);
+  if (resetErr) return resetErr;
+  const { companyId } = resetBody;
 
   // 본인 회사인지 확인
   const { data: company } = await supabase

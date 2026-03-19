@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { apiError } from "@/lib/api/error";
+import { validateBody, updateSectionContentSchema } from "@/lib/api/validation";
 
 /**
  * PATCH /api/plans/[id]/sections/[sId]
@@ -31,11 +32,9 @@ export async function PATCH(
     return new Response("Not Found", { status: 404 });
   }
 
-  const { content } = await request.json();
-
-  if (typeof content !== "string") {
-    return Response.json({ error: "content required" }, { status: 400 });
-  }
+  const [sectionBody, sectionErr] = await validateBody(request, updateSectionContentSchema);
+  if (sectionErr) return sectionErr;
+  const { content } = sectionBody;
 
   const { data: section, error } = await supabase
     .from("plan_sections")

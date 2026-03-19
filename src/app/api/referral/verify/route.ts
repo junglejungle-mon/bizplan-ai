@@ -5,18 +5,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateBody, referralVerifySchema } from "@/lib/api/validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { code } = body;
-
-    if (!code || typeof code !== "string") {
-      return NextResponse.json(
-        { valid: false, error: "추천 코드를 입력해주세요" },
-        { status: 400 }
-      );
-    }
+    const [verifyBody, verifyErr] = await validateBody(request, referralVerifySchema);
+    if (verifyErr) return verifyErr;
+    const { code } = verifyBody;
 
     const supabase = createAdminClient();
 

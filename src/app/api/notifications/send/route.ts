@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendKakaoNotification } from "@/lib/notification/notification-service";
+import { validateBody, sendNotificationSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/notifications/send
@@ -18,15 +19,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { type, variables } = body;
-
-    if (!type || !["matching", "deadline", "plan_complete"].includes(type)) {
-      return Response.json(
-        { error: "유효한 type이 필요합니다 (matching, deadline, plan_complete)" },
-        { status: 400 }
-      );
-    }
+    const [notifBody, notifErr] = await validateBody(request, sendNotificationSchema);
+    if (notifErr) return notifErr;
+    const { type, variables } = notifBody;
 
     const result = await sendKakaoNotification({
       userId: user.id,

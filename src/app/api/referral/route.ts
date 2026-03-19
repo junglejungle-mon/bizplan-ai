@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getReferralDashboard, logShareEvent } from "@/lib/referral";
+import { validateBody, referralShareSchema } from "@/lib/api/validation";
 
 export async function GET() {
   try {
@@ -37,15 +38,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { shareType } = body;
-
-    if (!shareType || !["share_kakao", "share_link", "share_copy"].includes(shareType)) {
-      return NextResponse.json(
-        { error: "유효하지 않은 공유 타입입니다" },
-        { status: 400 }
-      );
-    }
+    const [shareBody, shareErr] = await validateBody(request, referralShareSchema);
+    if (shareErr) return shareErr;
+    const { shareType } = shareBody;
 
     await logShareEvent(user.id, shareType);
     return NextResponse.json({ success: true });

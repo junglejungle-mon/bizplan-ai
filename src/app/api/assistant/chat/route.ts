@@ -8,6 +8,7 @@ import {
 import { hybridSearchReferences, extractKeywords, formatReferenceExamples } from "@/lib/rag/search";
 import { safeErrorMessage } from "@/lib/api/error";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, chatMessageSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/assistant/chat
@@ -26,11 +27,9 @@ export async function POST(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { message, contextType, contextId } = await request.json();
-
-  if (!message) {
-    return Response.json({ error: "message required" }, { status: 400 });
-  }
+  const [chatBody, chatErr] = await validateBody(request, chatMessageSchema);
+  if (chatErr) return chatErr;
+  const { message, contextType, contextId } = chatBody;
 
   // 회사 프로필 로드
   const { data: companies } = await supabase

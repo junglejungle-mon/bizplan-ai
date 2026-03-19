@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { callClaudeVision } from "@/lib/ai/claude";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, extractDocumentSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/documents/extract
@@ -8,6 +10,11 @@ import { callClaudeVision } from "@/lib/ai/claude";
  * - PDF/이미지 → Base64 → Claude Vision으로 OCR + 데이터 추출
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting (AI 문서 추출 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`extract:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,15 +24,9 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { documentId } = body;
-
-  if (!documentId) {
-    return Response.json(
-      { error: "documentId가 필요합니다" },
-      { status: 400 }
-    );
-  }
+  const [extractBody, extractErr] = await validateBody(request, extractDocumentSchema);
+  if (extractErr) return extractErr;
+  const { documentId } = extractBody;
 
   // 문서 조회
   const { data: doc, error: docError } = await supabase

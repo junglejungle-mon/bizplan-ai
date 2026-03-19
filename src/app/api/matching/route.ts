@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runMatchingPipeline } from "@/lib/pipeline/matcher";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, runMatchingSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/matching
@@ -20,11 +21,9 @@ export async function POST(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { companyId } = await request.json();
-
-  if (!companyId) {
-    return Response.json({ error: "companyId required" }, { status: 400 });
-  }
+  const [body, bodyErr] = await validateBody(request, runMatchingSchema);
+  if (bodyErr) return bodyErr;
+  const { companyId } = body;
 
   // 회사 소유자 확인
   const { data: company } = await supabase

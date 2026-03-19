@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendKakaoNotification } from "@/lib/notification/notification-service";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, runMatchingSchema } from "@/lib/api/validation";
 
 /**
  * POST /api/matching/quick
@@ -22,11 +23,9 @@ export async function POST(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { companyId } = await request.json();
-
-  if (!companyId) {
-    return Response.json({ error: "companyId required" }, { status: 400 });
-  }
+  const [body, bodyErr] = await validateBody(request, runMatchingSchema);
+  if (bodyErr) return bodyErr;
+  const { companyId } = body;
 
   // 회사 소유자 확인 + 프로필 정보 조회
   const adminSupabase = createAdminClient();

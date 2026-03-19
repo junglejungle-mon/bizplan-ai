@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest } from 'next/server';
 import { requireAdmin } from "@/lib/admin/auth";
+import { validateBody, missionApprovalSchema } from "@/lib/api/validation";
 
 /** POST: 미션 승인/반려/보류 */
 export async function POST(
@@ -12,15 +13,9 @@ export async function POST(
     if (denied) return denied;
 
     const { id } = await params;
-    const body = await request.json();
-    const { action, reason } = body;
-
-    if (!['approve', 'reject', 'defer'].includes(action)) {
-      return Response.json(
-        { error: 'Invalid action. Use: approve, reject, defer' },
-        { status: 400 }
-      );
-    }
+    const [approveBody, approveErr] = await validateBody(request, missionApprovalSchema);
+    if (approveErr) return approveErr;
+    const { action, reason } = approveBody;
 
     const supabase = createAdminClient();
 

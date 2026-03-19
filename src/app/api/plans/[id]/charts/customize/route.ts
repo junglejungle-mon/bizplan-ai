@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaudeAPI as callClaude } from "@/lib/ai/claude";
+import { validateBody, customizeChartsSchema } from "@/lib/api/validation";
 import {
   CHART_CUSTOMIZER_SYSTEM,
   buildChartCustomizerPrompt,
@@ -47,24 +48,15 @@ export async function POST(
     );
   }
 
-  const body = await request.json().catch(() => ({}));
+  const [customBody, customErr] = await validateBody(request, customizeChartsSchema);
+  if (customErr) return customErr;
   const {
     userPrompt,
     sectionOrder,
     sectionName,
     targetChartIndex,
     presetId,
-  } = body as {
-    userPrompt?: string;
-    sectionOrder?: number;
-    sectionName?: string;
-    targetChartIndex?: number;
-    presetId?: string;
-  };
-
-  if (!sectionName) {
-    return NextResponse.json({ error: "섹션명이 필요합니다" }, { status: 400 });
-  }
+  } = customBody;
 
   // 프리셋 ID로 프롬프트 자동 생성
   let finalPrompt = userPrompt || "";

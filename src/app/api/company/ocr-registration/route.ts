@@ -3,8 +3,10 @@
  * POST: 이미지/PDF 업로드 → Claude Vision OCR → 기업정보 자동 추출
  */
 
+import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { callClaudeVision } from "@/lib/ai/claude";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 const OCR_SYSTEM = `당신은 대한민국 사업자등록증 OCR 전문가입니다.
 이미지에서 사업자등록증 정보를 정확히 추출하세요.
@@ -42,7 +44,12 @@ interface OcrResult {
   confidence: number;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Rate limiting (AI OCR 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`ocr:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },

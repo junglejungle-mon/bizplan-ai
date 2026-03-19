@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { streamClaude, callClaude } from "@/lib/ai/claude";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 import {
   INTERVIEW_SYSTEM_PROMPT,
   buildNextQuestionPrompt,
@@ -8,6 +9,7 @@ import {
 } from "@/lib/ai/prompts/interview";
 import { calculateProfileScore } from "@/lib/utils/profile-score";
 import { safeErrorMessage } from "@/lib/api/error";
+import { validateBody, interviewAnswerSchema } from "@/lib/api/validation";
 
 // Vercel 타임아웃 확장
 export const maxDuration = 60;
@@ -17,6 +19,11 @@ export const maxDuration = 60;
  * AI 인터뷰 — v2: 5라운드 시스템, 로우데이터 확보 + 전략적 방향 유도
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting (AI 인터뷰 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`interview:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -24,7 +31,9 @@ export async function POST(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { companyId, answer, currentRound, questionOrder } = await request.json();
+  const [interviewBody, interviewErr] = await validateBody(request, interviewAnswerSchema);
+  if (interviewErr) return interviewErr;
+  const { companyId, answer, currentRound, questionOrder } = interviewBody;
 
   // 회사 정보 가져오기 (전략 유도 + 점수 계산에 활용)
   const { data: company } = await supabase

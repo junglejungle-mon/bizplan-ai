@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { apiError } from "@/lib/api/error";
+import { validateBody, updateCompanySchema } from "@/lib/api/validation";
 
 export async function GET() {
   const supabase = await createClient();
@@ -31,7 +32,8 @@ export async function PUT(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const updates = await request.json();
+  const [updates, updatesErr] = await validateBody(request, updateCompanySchema);
+  if (updatesErr) return updatesErr;
 
   const { data: company, error } = await supabase
     .from("companies")

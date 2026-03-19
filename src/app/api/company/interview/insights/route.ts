@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaude } from "@/lib/ai/claude";
+import { validateBody, interviewInsightsSchema } from "@/lib/api/validation";
 import {
   INSIGHT_EXTRACTION_PROMPT,
   BUSINESS_CONTENT_BUILDER_PROMPT,
@@ -27,14 +28,12 @@ export async function POST(request: NextRequest) {
     userId = user?.id || null;
   } catch {}
 
-  const { companyId } = await request.json();
+  const [insightsBody, insightsErr] = await validateBody(request, interviewInsightsSchema);
+  if (insightsErr) return insightsErr;
+  const { companyId } = insightsBody;
 
   if (!userId && !companyId) {
     return new Response("Unauthorized", { status: 401 });
-  }
-
-  if (!companyId) {
-    return Response.json({ error: "companyId is required" }, { status: 400 });
   }
 
   // Admin client 사용 (세션 만료 문제 방지)

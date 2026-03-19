@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiError } from "@/lib/api/error";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, refundSchema } from "@/lib/api/validation";
 
 export async function POST(request: Request) {
   try {
@@ -25,16 +26,9 @@ export async function POST(request: Request) {
       return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { paymentId, reason } = body;
-
-    if (!paymentId) {
-      return Response.json({ error: "결제 ID가 필요합니다." }, { status: 400 });
-    }
-
-    if (!reason || reason.trim().length < 2) {
-      return Response.json({ error: "환불 사유를 입력해주세요." }, { status: 400 });
-    }
+    const [refBody, refErr] = await validateBody(request, refundSchema);
+    if (refErr) return refErr;
+    const { paymentId, reason } = refBody;
 
     const adminSupabase = createAdminClient();
 

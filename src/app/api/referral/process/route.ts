@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { processReferralSignup } from "@/lib/referral";
+import { validateBody, referralProcessSchema } from "@/lib/api/validation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,15 +20,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { referralCode } = body;
-
-    if (!referralCode) {
-      return NextResponse.json(
-        { success: false, error: "추천 코드가 필요합니다" },
-        { status: 400 }
-      );
-    }
+    const [processBody, processErr] = await validateBody(request, referralProcessSchema);
+    if (processErr) return processErr;
+    const { referralCode } = processBody;
 
     // newUserId는 인증된 사용자 ID 사용 (클라이언트 전달 금지)
     const result = await processReferralSignup({

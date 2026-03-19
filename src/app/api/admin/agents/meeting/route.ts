@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from "@/lib/admin/auth";
+import { validateBody, meetingTriggerSchema } from "@/lib/api/validation";
 
 /** POST: 회의 트리거 (weekly/monthly) */
 export async function POST(request: Request) {
@@ -7,12 +8,9 @@ export async function POST(request: Request) {
     const denied = await requireAdmin(request);
     if (denied) return denied;
 
-    const body = await request.json();
-    const meetingType = body.type || 'weekly';
-
-    if (!['weekly', 'monthly'].includes(meetingType)) {
-      return Response.json({ error: 'Invalid meeting type' }, { status: 400 });
-    }
+    const [meetingBody, meetingErr] = await validateBody(request, meetingTriggerSchema);
+    if (meetingErr) return meetingErr;
+    const meetingType = meetingBody.type;
 
     const supabase = createAdminClient();
     const today = new Date();

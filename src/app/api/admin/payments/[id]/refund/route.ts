@@ -12,6 +12,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
 import { auditLog } from "@/lib/admin/audit";
 import { getClientIP } from "@/lib/utils/rate-limit";
+import { validateBody, adminPaymentRefundSchema } from "@/lib/api/validation";
 
 export async function POST(
   request: Request,
@@ -23,8 +24,10 @@ export async function POST(
 
     const supabase = createAdminClient();
     const { id } = await params;
-    const body = await request.json();
-    const reason = body.reason || "관리자 환불 처리";
+    const [refundBody, refundErr] = await validateBody(request, adminPaymentRefundSchema);
+    if (refundErr) return refundErr;
+    const reason = refundBody.reason || "관리자 환불 처리";
+    const body = refundBody;
 
     // 1. 결제 정보 조회
     const { data: payment, error: paymentError } = await supabase

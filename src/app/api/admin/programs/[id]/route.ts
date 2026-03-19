@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from "@/lib/admin/auth";
 import { apiError } from "@/lib/api/error";
+import { validateBody, adminUpdateProgramSchema } from "@/lib/api/validation";
 
 export async function GET(
   request: Request,
@@ -54,14 +55,12 @@ export async function PATCH(
 
     const supabase = createAdminClient();
     const { id } = await params;
-    const body = await request.json();
+    const [progBody, progErr] = await validateBody(request, adminUpdateProgramSchema);
+    if (progErr) return progErr;
 
-    const allowedFields = ['title', 'summary', 'target', 'institution', 'apply_start', 'apply_end', 'detail_url', 'hashtags'];
     const updates: Record<string, unknown> = {};
-    for (const key of allowedFields) {
-      if (key in body) {
-        updates[key] = body[key];
-      }
+    for (const [key, value] of Object.entries(progBody)) {
+      if (value !== undefined) updates[key] = value;
     }
 
     if (Object.keys(updates).length === 0) {

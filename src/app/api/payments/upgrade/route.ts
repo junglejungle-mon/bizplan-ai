@@ -14,6 +14,7 @@ import {
 } from "@/lib/payment/subscription";
 import { apiError } from "@/lib/api/error";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
+import { validateBody, upgradeSchema } from "@/lib/api/validation";
 
 /**
  * GET /api/payments/upgrade?planId=xxx
@@ -105,10 +106,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { planId } = await request.json();
-    if (!planId) {
-      return Response.json({ error: "planId가 필요합니다." }, { status: 400 });
-    }
+    const [upgradeBody, upgradeErr] = await validateBody(request, upgradeSchema);
+    if (upgradeErr) return upgradeErr;
+    const { planId } = upgradeBody;
 
     // 새 플랜 조회
     const newPlan = await getPlanById(planId);

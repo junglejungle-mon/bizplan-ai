@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { apiError } from "@/lib/api/error";
+import { validateBody, createDocumentSchema } from "@/lib/api/validation";
 
 /**
  * GET /api/documents — 서류 목록
@@ -55,8 +56,9 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Company not found" }, { status: 404 });
   }
 
-  const body = await request.json();
-  const { documentType, source, fileUrl, issuedDate } = body;
+  const [docBody, docErr] = await validateBody(request, createDocumentSchema);
+  if (docErr) return docErr;
+  const { documentType, source, fileUrl, issuedDate } = docBody;
 
   const { data: doc, error } = await supabase
     .from("company_documents")
