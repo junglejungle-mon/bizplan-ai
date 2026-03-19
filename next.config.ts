@@ -30,10 +30,12 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
+      // 'unsafe-inline' is required for Next.js internal inline scripts (hydration bootstrap, __NEXT_DATA__ etc.).
+      // strict-dynamic/nonce cannot be used until Next.js provides first-class nonce support without patching.
       "script-src 'self' 'unsafe-inline' https://cdn.portone.io https://*.google-analytics.com https://*.googletagmanager.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https: http:",
+      "img-src 'self' data: blob: https:",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.portone.io https://*.google-analytics.com https://*.sentry.io https://*.ingest.sentry.io",
       "frame-src 'self' https://cdn.portone.io https://*.portone.io",
       "object-src 'none'",
@@ -55,9 +57,9 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: "/:path*",
+        source: "/(.*)",
         has: [{ type: "host", value: "www.bizplanai.co.kr" }],
-        destination: "https://bizplanai.co.kr/:path*",
+        destination: "https://bizplanai.co.kr/$1",
         permanent: true,
       },
       {

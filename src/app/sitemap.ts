@@ -2,7 +2,8 @@ import { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr").trim();
+  const base = (process.env.NEXT_PUBLIC_APP_URL || "https://bizplanai.co.kr").trim().replace(/\/$/, "");
+  const baseUrl = base + "/";
 
   // 정적 페이지
   const staticPages: MetadataRoute.Sitemap = [
@@ -13,43 +14,43 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
-      url: `${baseUrl}/pricing`,
+      url: `${base}/pricing/`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/faq`,
+      url: `${base}/faq/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/contact`,
+      url: `${base}/contact/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${base}/login/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
-      url: `${baseUrl}/signup`,
+      url: `${base}/signup/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
-      url: `${baseUrl}/terms`,
+      url: `${base}/terms/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.3,
     },
     {
-      url: `${baseUrl}/privacy`,
+      url: `${base}/privacy/`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.3,
@@ -68,7 +69,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if (programs) {
       programPages = programs.map((p) => ({
-        url: `${baseUrl}/programs/${p.id}`,
+        url: `${base}/programs/${p.id}/`,
         lastModified: new Date(p.collected_at),
         changeFrequency: "weekly" as const,
         priority: 0.7,
