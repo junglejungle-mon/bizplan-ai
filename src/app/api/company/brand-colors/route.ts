@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import sharp from "sharp";
+import { validateFileSignature } from "@/lib/utils/file-signature";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/company/brand-colors
@@ -8,6 +10,11 @@ import sharp from "sharp";
  * Body: FormData with "logo" file
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`brand-colors:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -29,6 +36,14 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await logoFile.arrayBuffer());
+
+    // 매직 바이트 검증 (MIME 타입 스푸핑 방지)
+    if (!validateFileSignature(new Uint8Array(buffer), logoFile.type)) {
+      return NextResponse.json(
+        { error: "파일 내용이 선언된 형식과 일치하지 않습니다" },
+        { status: 400 }
+      );
+    }
 
     // sharp로 이미지 리사이즈 + 색상 통계 추출
     const { dominant, channels } = await sharp(buffer)

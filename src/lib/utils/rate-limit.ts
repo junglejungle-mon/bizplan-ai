@@ -97,17 +97,31 @@ function memRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
   const now = Date.now();
   const entry = memStore.get(key);
 
-  if (!entry || now > entry.resetAt) {
-    memStore.set(key, { count: 1, resetAt: now + config.window });
-    return { success: true, remaining: config.limit - 1, resetAt: now + config.window };
+  // 서버리스 환경(Vercel)에서는 인메모리 폴백이 인스턴스별로 분리되어
+  // 실제 제한 효과가 희석될 수 있으므로, 보수적으로 limit를 1/3로 줄인다.
+  const effectiveLimit = process.env.VERCEL
+    ? Math.max(1, Math.floor(config.limit / 3))
+    : config.limit;
+
+  if (process.env.VERCEL) {
+    console.warn(
+      `[RateLimit] 서버리스 인메모리 폴백 사용 중 (key=${key}). ` +
+      `Redis 미설정 시 인스턴스별 분리로 제한 효과가 감소합니다. ` +
+      `effectiveLimit=${effectiveLimit} (원래 ${config.limit}의 1/3 적용)`
+    );
   }
 
-  if (entry.count >= config.limit) {
+  if (!entry || now > entry.resetAt) {
+    memStore.set(key, { count: 1, resetAt: now + config.window });
+    return { success: true, remaining: effectiveLimit - 1, resetAt: now + config.window };
+  }
+
+  if (entry.count >= effectiveLimit) {
     return { success: false, remaining: 0, resetAt: entry.resetAt };
   }
 
   entry.count++;
-  return { success: true, remaining: config.limit - entry.count, resetAt: entry.resetAt };
+  return { success: true, remaining: effectiveLimit - entry.count, resetAt: entry.resetAt };
 }
 
 // ─── 통합 Rate Limit ─────────────────────────

@@ -1,12 +1,19 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateFileSignature } from "@/lib/utils/file-signature";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/documents/upload
  * 서류 파일 업로드 → Supabase Storage → 메타데이터 저장
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting (AI 업로드 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`upload:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -76,6 +83,14 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
+    // 매직 바이트 검증 (MIME 타입 스푸핑 방지)
+    if (!validateFileSignature(buffer, file.type)) {
+      return Response.json(
+        { error: "파일 내용이 선언된 형식과 일치하지 않습니다" },
+        { status: 400 }
+      );
+    }
+
     const { error: uploadError } = await admin.storage
       .from("documents")
       .upload(fileName, buffer, {
@@ -86,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       console.error("[Documents] Storage upload error:", uploadError);
       return Response.json(
-        { error: `파일 업로드 실패: ${uploadError.message}` },
+        { error: "파일 업로드에 실패했습니다" },
         { status: 500 }
       );
     }

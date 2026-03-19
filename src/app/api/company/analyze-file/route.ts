@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callClaudeVision } from "@/lib/ai/claude";
 import { calculateProfileScore } from "@/lib/utils/profile-score";
+import { validateFileSignature } from "@/lib/utils/file-signature";
+import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 
 /**
  * POST /api/company/analyze-file
@@ -12,6 +14,11 @@ import { calculateProfileScore } from "@/lib/utils/profile-score";
  * - 추출된 데이터를 company_documents에 저장
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting (AI 파일 분석 엔드포인트)
+  const ip = getClientIP(request);
+  const rl = await rateLimitAsync(`analyze-file:${ip}`, RATE_LIMITS.AI_GENERATE);
+  if (!rl.success) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -73,6 +80,14 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
+    // 매직 바이트 검증 (MIME 타입 스푸핑 방지)
+    if (!validateFileSignature(buffer, file.type)) {
+      return Response.json(
+        { error: "파일 내용이 선언된 형식과 일치하지 않습니다" },
+        { status: 400 }
+      );
+    }
+
     const { error: uploadError } = await admin.storage
       .from("documents")
       .upload(fileName, buffer, {
@@ -83,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       console.error("[AnalyzeFile] Storage upload error:", uploadError);
       return Response.json(
-        { error: `파일 업로드 실패: ${uploadError.message}` },
+        { error: "파일 업로드에 실패했습니다" },
         { status: 500 }
       );
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processExpiredSubscriptions } from "@/lib/payment/subscription";
 import { apiError } from "@/lib/api/error";
+import { constantTimeEqual } from "@/lib/admin/auth";
 
 /**
  * POST /api/subscriptions/process-expired
@@ -18,7 +19,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  // 타이밍 공격 방지: 상수 시간 비교 사용
+  if (!constantTimeEqual(authHeader ?? "", `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
