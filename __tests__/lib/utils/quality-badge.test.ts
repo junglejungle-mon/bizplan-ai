@@ -1,6 +1,7 @@
 /**
  * QualityBadge 컴포넌트 로직 테스트 (순수 로직만)
  */
+import { describe, it, expect } from "vitest";
 
 // 품질 등급 판별 함수 (컴포넌트에서 추출한 로직)
 function getQualityLevel(score: number | null | undefined) {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { sanitizeSvg } from "@/lib/utils/svg-sanitizer";
 
 describe("sanitizeSvg", () => {

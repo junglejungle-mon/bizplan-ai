@@ -2,25 +2,26 @@
  * Admin Plans API 통합 테스트
  * Proxy 기반 Supabase mock으로 체이닝 문제 해결
  */
+import { vi } from "vitest";
 
 // requireAdmin mock: 인증을 항상 통과시킴
-jest.mock("@/lib/admin/auth", () => ({
-  requireAdmin: jest.fn().mockResolvedValue(null),
+vi.mock("@/lib/admin/auth", () => ({
+  requireAdmin: vi.fn().mockResolvedValue(null),
 }));
 
 // logger mock: 테스트 중 로깅 억제
-jest.mock("@/lib/logger", () => ({
+vi.mock("@/lib/logger", () => ({
   adminLogger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
   createLogger: () => ({
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   }),
 }));
 
@@ -56,7 +57,7 @@ function createSupabaseMock(tableResults: Record<string, any>) {
 
 let currentMock: ReturnType<typeof createSupabaseMock>;
 
-jest.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => currentMock,
 }));
 
