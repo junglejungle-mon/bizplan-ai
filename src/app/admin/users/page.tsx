@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface UserSubscription {
@@ -153,9 +153,8 @@ export default function AdminUsersPage() {
             ) : users.length === 0 ? (
               <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">사용자 없음</td></tr>
             ) : users.map((user) => (
-              <>
+              <Fragment key={user.id}>
                 <tr
-                  key={user.id}
                   className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                     selectedUser === user.id ? "bg-blue-50 hover:bg-blue-50" : ""
                   }`}
@@ -188,7 +187,7 @@ export default function AdminUsersPage() {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

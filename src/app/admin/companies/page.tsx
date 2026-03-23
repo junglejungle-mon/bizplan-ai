@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface Company {
@@ -181,7 +181,7 @@ export default function AdminCompaniesPage() {
             ) : companies.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">업체 없음</td></tr>
             ) : companies.map((c) => (
-              <tbody key={c.id}>
+              <Fragment key={c.id}>
                 <tr
                   className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${selectedId === c.id ? "bg-blue-50 hover:bg-blue-50" : ""}`}
                   onClick={() => handleSelect(c.id)}
@@ -220,7 +220,7 @@ export default function AdminCompaniesPage() {
                     </td>
                   </tr>
                 )}
-              </tbody>
+              </Fragment>
             ))}
           </tbody>
         </table>

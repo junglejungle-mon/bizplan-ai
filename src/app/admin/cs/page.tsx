@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,13 @@ interface FAQ {
   question: string;
   answer: string;
   order: number;
+}
+
+interface AutoReply {
+  id: string;
+  trigger: string;
+  response: string;
+  is_active: boolean;
 }
 
 const FAQ_CATEGORIES = [
@@ -77,30 +84,21 @@ const DEFAULT_FAQS: FAQ[] = [
   },
 ];
 
-// ── 자동응답 템플릿 ──
-
-interface AutoReply {
-  id: string;
-  trigger: string;
-  response: string;
-  isActive: boolean;
-}
-
 const DEFAULT_AUTO_REPLIES: AutoReply[] = [
   {
-    id: "ar1", trigger: "환불", isActive: true,
+    id: "ar1", trigger: "환불", is_active: true,
     response: "환불 관련 문의 감사합니다. 결제 후 7일 이내에 서비스를 이용하지 않은 경우 전액 환불이 가능합니다. 상세 환불 정책은 이용약관을 확인해주세요. 환불 처리를 원하시면 '환불 신청'이라고 입력해주세요.",
   },
   {
-    id: "ar2", trigger: "가격|요금|비용|플랜", isActive: true,
+    id: "ar2", trigger: "가격|요금|비용|플랜", is_active: true,
     response: "요금제 안내입니다.\n- 무료: 월 1건 사업계획서\n- 프로 (99,000원/월): 월 10건 + IR 5건 + 재생성 50회\n- 올프리 (299,000원/월): 무제한\n자세한 내용은 요금제 페이지를 확인해주세요.",
   },
   {
-    id: "ar3", trigger: "오류|에러|안됨|작동", isActive: true,
+    id: "ar3", trigger: "오류|에러|안됨|작동", is_active: true,
     response: "불편을 드려 죄송합니다. 정확한 도움을 위해 다음 정보를 알려주세요.\n1. 어떤 기능에서 문제가 발생했나요?\n2. 화면에 표시된 오류 메시지가 있나요?\n3. 사용 중인 브라우저와 기기를 알려주세요.",
   },
   {
-    id: "ar4", trigger: "취소|해지", isActive: true,
+    id: "ar4", trigger: "취소|해지", is_active: true,
     response: "구독 취소를 원하시나요? 설정 > 구독 관리에서 직접 취소하실 수 있습니다. 취소 후에도 현재 결제 기간까지는 서비스 이용이 가능합니다. 도움이 필요하시면 알려주세요.",
   },
 ];
@@ -117,40 +115,170 @@ export default function AdminCSPage() {
     question: "", answer: "", category: "general",
   });
   const [addingFaq, setAddingFaq] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // 서버에서 FAQ 조회
+  const fetchFaqs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/cs/faqs");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.faqs && data.faqs.length > 0) {
+          setFaqs(data.faqs);
+        }
+        // 서버에 데이터가 없으면 DEFAULT_FAQS 유지
+      }
+    } catch {
+      // 서버 연결 실패 시 기본 데이터 유지
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 서버에서 자동응답 조회
+  const fetchAutoReplies = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/cs/auto-replies");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.autoReplies && data.autoReplies.length > 0) {
+          setAutoReplies(data.autoReplies);
+        }
+      }
+    } catch {
+      // 서버 연결 실패 시 기본 데이터 유지
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFaqs();
+    fetchAutoReplies();
+  }, [fetchFaqs, fetchAutoReplies]);
 
   const filteredFaqs = selectedCategory
     ? faqs.filter((f) => f.category === selectedCategory)
     : faqs;
 
-  const handleSaveFaq = (id: string) => {
-    setFaqs((prev) => prev.map((f) =>
-      f.id === id ? { ...f, ...editForm } : f
-    ));
-    setEditingFaq(null);
+  const handleSaveFaq = async (id: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/cs/faqs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...editForm }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFaqs((prev) => prev.map((f) =>
+          f.id === id ? { ...f, ...data.faq } : f
+        ));
+        toast.success("FAQ가 수정되었습니다.");
+      } else {
+        // 서버 실패 시 로컬만 업데이트
+        setFaqs((prev) => prev.map((f) =>
+          f.id === id ? { ...f, ...editForm } : f
+        ));
+        toast.warning("로컬에만 반영되었습니다.");
+      }
+    } catch {
+      setFaqs((prev) => prev.map((f) =>
+        f.id === id ? { ...f, ...editForm } : f
+      ));
+      toast.warning("서버 연결 실패. 로컬에만 반영되었습니다.");
+    } finally {
+      setSaving(false);
+      setEditingFaq(null);
+    }
   };
 
-  const handleAddFaq = () => {
-    const newFaq: FAQ = {
-      id: `new-${Date.now()}`,
-      category: editForm.category,
-      question: editForm.question,
-      answer: editForm.answer,
-      order: faqs.length + 1,
-    };
-    setFaqs([...faqs, newFaq]);
-    setAddingFaq(false);
-    setEditForm({ question: "", answer: "", category: "general" });
+  const handleAddFaq = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/cs/faqs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: editForm.question,
+          answer: editForm.answer,
+          category: editForm.category,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFaqs([...faqs, data.faq]);
+        toast.success("FAQ가 추가되었습니다.");
+      } else {
+        // 서버 실패 시 로컬에 추가
+        const newFaq: FAQ = {
+          id: `new-${Date.now()}`,
+          category: editForm.category,
+          question: editForm.question,
+          answer: editForm.answer,
+          order: faqs.length + 1,
+        };
+        setFaqs([...faqs, newFaq]);
+        toast.warning("로컬에만 반영되었습니다.");
+      }
+    } catch {
+      const newFaq: FAQ = {
+        id: `new-${Date.now()}`,
+        category: editForm.category,
+        question: editForm.question,
+        answer: editForm.answer,
+        order: faqs.length + 1,
+      };
+      setFaqs([...faqs, newFaq]);
+      toast.warning("서버 연결 실패. 로컬에만 반영되었습니다.");
+    } finally {
+      setSaving(false);
+      setAddingFaq(false);
+      setEditForm({ question: "", answer: "", category: "general" });
+    }
   };
 
-  const handleDeleteFaq = (id: string) => {
+  const handleDeleteFaq = async (id: string) => {
     if (!confirm("이 FAQ를 삭제하시겠습니까?")) return;
+    try {
+      const res = await fetch(`/api/admin/cs/faqs?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success("FAQ가 삭제되었습니다.");
+      } else {
+        toast.warning("서버에서 삭제 실패. 로컬에서만 제거합니다.");
+      }
+    } catch {
+      toast.warning("서버 연결 실패. 로컬에서만 제거합니다.");
+    }
     setFaqs((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const toggleAutoReply = (id: string) => {
+  const toggleAutoReply = async (id: string) => {
+    const target = autoReplies.find((r) => r.id === id);
+    if (!target) return;
+
+    const newActive = !target.is_active;
+
+    // 즉시 UI 업데이트
     setAutoReplies((prev) => prev.map((r) =>
-      r.id === id ? { ...r, isActive: !r.isActive } : r
+      r.id === id ? { ...r, is_active: newActive } : r
     ));
+
+    try {
+      const res = await fetch("/api/admin/cs/auto-replies", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_active: newActive }),
+      });
+      if (res.ok) {
+        toast.success(newActive ? "자동응답이 활성화되었습니다." : "자동응답이 비활성화되었습니다.");
+      } else {
+        toast.warning("서버 반영 실패. 로컬에만 적용되었습니다.");
+      }
+    } catch {
+      toast.warning("서버 연결 실패. 로컬에만 적용되었습니다.");
+    }
   };
 
   return (
@@ -255,7 +383,9 @@ export default function AdminCSPage() {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={handleAddFaq} disabled={!editForm.question || !editForm.answer}>저장</Button>
+                  <Button size="sm" onClick={handleAddFaq} disabled={!editForm.question || !editForm.answer || saving}>
+                    {saving ? "저장 중..." : "저장"}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => setAddingFaq(false)}>취소</Button>
                 </div>
               </CardContent>
@@ -263,75 +393,84 @@ export default function AdminCSPage() {
           )}
 
           {/* FAQ 목록 */}
-          <div className="space-y-2">
-            {filteredFaqs.map((faq) => {
-              const isEditing = editingFaq === faq.id;
-              const catLabel = FAQ_CATEGORIES.find((c) => c.value === faq.category)?.label || faq.category;
-              return (
-                <Card key={faq.id} className={isEditing ? "border-blue-200" : ""}>
-                  <CardContent className="pt-4">
-                    {isEditing ? (
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={editForm.question}
-                          onChange={(e) => setEditForm({ ...editForm, question: e.target.value })}
-                          className="w-full h-9 rounded-lg border px-3 text-sm font-medium"
-                        />
-                        <textarea
-                          value={editForm.answer}
-                          onChange={(e) => setEditForm({ ...editForm, answer: e.target.value })}
-                          className="w-full rounded-lg border px-3 py-2 text-sm"
-                          rows={3}
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleSaveFaq(faq.id)}>저장</Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingFaq(null)}>취소</Button>
+          {loading ? (
+            <div className="text-center py-8 text-gray-400">
+              <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto" />
+              <p className="mt-2 text-sm">로딩 중...</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredFaqs.map((faq) => {
+                const isEditing = editingFaq === faq.id;
+                const catLabel = FAQ_CATEGORIES.find((c) => c.value === faq.category)?.label || faq.category;
+                return (
+                  <Card key={faq.id} className={isEditing ? "border-blue-200" : ""}>
+                    <CardContent className="pt-4">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <input
+                            type="text"
+                            value={editForm.question}
+                            onChange={(e) => setEditForm({ ...editForm, question: e.target.value })}
+                            className="w-full h-9 rounded-lg border px-3 text-sm font-medium"
+                          />
+                          <textarea
+                            value={editForm.answer}
+                            onChange={(e) => setEditForm({ ...editForm, answer: e.target.value })}
+                            className="w-full rounded-lg border px-3 py-2 text-sm"
+                            rows={3}
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => handleSaveFaq(faq.id)} disabled={saving}>
+                              {saving ? "저장 중..." : "저장"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingFaq(null)}>취소</Button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="secondary" className="text-[10px]">{catLabel}</Badge>
-                              <span className="font-medium text-gray-900 text-sm">{faq.question}</span>
+                      ) : (
+                        <div>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="secondary" className="text-[10px]">{catLabel}</Badge>
+                                <span className="font-medium text-gray-900 text-sm">{faq.question}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 whitespace-pre-wrap ml-0.5">{faq.answer}</p>
                             </div>
-                            <p className="text-sm text-gray-600 whitespace-pre-wrap ml-0.5">{faq.answer}</p>
-                          </div>
-                          <div className="flex gap-1 ml-3 flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-xs h-7"
-                              onClick={() => {
-                                setEditingFaq(faq.id);
-                                setEditForm({
-                                  question: faq.question,
-                                  answer: faq.answer,
-                                  category: faq.category,
-                                });
-                              }}
-                            >
-                              편집
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-xs h-7 text-red-500"
-                              onClick={() => handleDeleteFaq(faq.id)}
-                            >
-                              삭제
-                            </Button>
+                            <div className="flex gap-1 ml-3 flex-shrink-0">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-7"
+                                onClick={() => {
+                                  setEditingFaq(faq.id);
+                                  setEditForm({
+                                    question: faq.question,
+                                    answer: faq.answer,
+                                    category: faq.category,
+                                  });
+                                }}
+                              >
+                                편집
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-7 text-red-500"
+                                onClick={() => handleDeleteFaq(faq.id)}
+                              >
+                                삭제
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -342,13 +481,13 @@ export default function AdminCSPage() {
             사용자 메시지에 특정 키워드가 포함되면 자동으로 응답합니다. 정규식 패턴을 사용할 수 있습니다.
           </p>
           {autoReplies.map((reply) => (
-            <Card key={reply.id} className={reply.isActive ? "" : "opacity-60"}>
+            <Card key={reply.id} className={reply.is_active ? "" : "opacity-60"}>
               <CardContent className="pt-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge variant={reply.isActive ? "success" : "secondary"} className="text-[10px]">
-                        {reply.isActive ? "활성" : "비활성"}
+                      <Badge variant={reply.is_active ? "success" : "secondary"} className="text-[10px]">
+                        {reply.is_active ? "활성" : "비활성"}
                       </Badge>
                       <code className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">
                         {reply.trigger}
@@ -362,7 +501,7 @@ export default function AdminCSPage() {
                     className="text-xs h-7 ml-3"
                     onClick={() => toggleAutoReply(reply.id)}
                   >
-                    {reply.isActive ? "비활성화" : "활성화"}
+                    {reply.is_active ? "비활성화" : "활성화"}
                   </Button>
                 </div>
               </CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Fragment, useEffect, useState, useCallback } from "react";
 import { QualityBadge } from "@/components/admin/quality-badge";
 
 interface Plan {
@@ -265,7 +265,7 @@ export default function AdminPlansPage() {
               </tr>
             ) : (
               plans.map((p) => (
-                <tbody key={p.id}>
+                <Fragment key={p.id}>
                   <tr
                     className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${selectedId === p.id ? "bg-blue-50 hover:bg-blue-50" : ""}`}
                     onClick={() => handleSelect(p.id)}
@@ -339,7 +339,7 @@ export default function AdminPlansPage() {
                       </td>
                     </tr>
                   )}
-                </tbody>
+                </Fragment>
               ))
             )}
           </tbody>

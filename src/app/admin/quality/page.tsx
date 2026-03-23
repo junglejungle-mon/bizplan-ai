@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface ReferenceDocument {
   id: string;
@@ -44,33 +45,45 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function AdminQualityPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<"references" | "scores">("references");
   const [documents, setDocuments] = useState<ReferenceDocument[]>([]);
   const [scores, setScores] = useState<QualityScore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState({ referenceType: "", status: "" });
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filter.referenceType) params.set("reference_type", filter.referenceType);
-    if (filter.status) params.set("status", filter.status);
-    const res = await fetch(`/api/admin/references?${params}`);
-    if (res.ok) {
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filter.referenceType) params.set("reference_type", filter.referenceType);
+      if (filter.status) params.set("status", filter.status);
+      const res = await fetch(`/api/admin/references?${params}`);
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       setDocuments(data.documents || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "레퍼런스 목록을 불러올 수 없습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [filter]);
 
   const fetchScores = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/quality/scores");
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/quality/scores");
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       setScores(data.scores || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "품질 점수를 불러올 수 없습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -145,6 +158,7 @@ export default function AdminQualityPage() {
             </div>
             <button
               className="h-9 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+              onClick={() => router.push("/admin/references")}
             >
               + 업로드
             </button>
@@ -164,6 +178,11 @@ export default function AdminQualityPage() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">로딩 중...</td></tr>
+                ) : error ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center">
+                    <p className="text-sm text-red-500 mb-2">{error}</p>
+                    <button onClick={fetchDocuments} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">다시 시도</button>
+                  </td></tr>
                 ) : documents.length === 0 ? (
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">레퍼런스가 없습니다</td></tr>
                 ) : documents.map((doc) => {
@@ -195,6 +214,11 @@ export default function AdminQualityPage() {
         <div>
           {loading ? (
             <div className="text-center py-8 text-gray-400">로딩 중...</div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-red-500 mb-2">{error}</p>
+              <button onClick={fetchScores} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">다시 시도</button>
+            </div>
           ) : scores.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <p className="mb-2">채점 데이터 없음</p>

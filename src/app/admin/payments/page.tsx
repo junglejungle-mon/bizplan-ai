@@ -306,7 +306,10 @@ function PaymentsTable({
               <Fragment key={p.id}>
                 <tr
                   className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? "bg-blue-50/50" : ""}`}
-                  onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                  onClick={() => {
+                    setExpandedId(isExpanded ? null : p.id);
+                    setRefundReason("");
+                  }}
                 >
                   <td className="py-3 px-4">
                     <div className="font-medium text-gray-900 text-xs">
@@ -337,6 +340,7 @@ function PaymentsTable({
                         onClick={(e) => {
                           e.stopPropagation();
                           setExpandedId(isExpanded ? null : p.id);
+                          setRefundReason("");
                         }}
                       >
                         환불

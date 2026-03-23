@@ -30,21 +30,27 @@ const REFERENCE_TYPES = [
 export default function AdminReferencesPage() {
   const [documents, setDocuments] = useState<ReferenceDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState({ referenceType: "", status: "" });
   const [showUpload, setShowUpload] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filter.referenceType) params.set("reference_type", filter.referenceType);
-    if (filter.status) params.set("status", filter.status);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filter.referenceType) params.set("reference_type", filter.referenceType);
+      if (filter.status) params.set("status", filter.status);
 
-    const res = await fetch(`/api/admin/references?${params}`);
-    if (res.ok) {
+      const res = await fetch(`/api/admin/references?${params}`);
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       setDocuments(data.documents || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "레퍼런스 목록을 불러올 수 없습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [filter]);
 
   useEffect(() => {
@@ -109,6 +115,13 @@ export default function AdminReferencesPage() {
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   로딩 중...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center">
+                  <p className="text-sm text-red-500 mb-2">{error}</p>
+                  <button onClick={fetchDocuments} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">다시 시도</button>
                 </td>
               </tr>
             ) : documents.length === 0 ? (

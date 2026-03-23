@@ -35,18 +35,24 @@ export default function AdminReferenceDetailPage() {
   const [doc, setDoc] = useState<ReferenceDocument | null>(null);
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [processLog, setProcessLog] = useState<string[]>([]);
   const [showOcr, setShowOcr] = useState(false);
 
   const fetchDocument = useCallback(async () => {
-    const res = await fetch(`/api/admin/references/${id}`);
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/references/${id}`);
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data = await res.json();
       setDoc(data.document);
       setChunks(data.chunks || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "문서를 불러올 수 없습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
@@ -113,6 +119,15 @@ export default function AdminReferenceDetailPage() {
 
   if (loading) {
     return <div className="text-center py-12 text-gray-400">로딩 중...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm text-red-500 mb-2">{error}</p>
+        <button onClick={fetchDocument} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">다시 시도</button>
+      </div>
+    );
   }
 
   if (!doc) {
