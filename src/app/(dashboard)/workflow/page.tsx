@@ -3,12 +3,12 @@
  *
  * 사용자 시나리오 (a-z):
  * ① 회사 정보 입력
- * ② AI 인터뷰 (자료 업로드 + 질문 답변)
+ * ② AI 인터뷰 (자료 업로드 + 질문 답변)  → /workflow/interview
  * ③ 프로그램 매칭 (점수 + 추천)
  * ④ 사업계획서 작성 (AI 자동 + 편집)
- * ⑤ 양식 채움 + PPT 출력
+ * ⑤ 양식 채움 + PPT 출력  → /workflow/output
  *
- * 각 단계는 실제 DB 상태(회사/문서/매칭/계획서/PPT)를 기반으로 자동 판정.
+ * 각 단계는 실제 DB 상태를 기반으로 자동 판정.
  */
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -24,7 +24,6 @@ export const metadata = {
   description: 'AI와 함께 a-z로 사업계획서를 완성하세요',
 };
 
-// company_interviews 테이블이 없을 수도 있어서 안전하게 카운트
 async function safeCount(
   supabase: Awaited<ReturnType<typeof createClient>>,
   table: string,
@@ -51,7 +50,6 @@ export default async function WorkflowPage() {
 
   if (!user) redirect('/login');
 
-  // 1. 회사 정보 로드
   const { data: companies } = await supabase
     .from('companies')
     .select('*')
@@ -62,7 +60,6 @@ export default async function WorkflowPage() {
   const company = companies?.[0];
   if (!company) redirect('/onboarding');
 
-  // 2. 각 단계별 상태 데이터 (병렬)
   const [
     { count: documentCount },
     interviewCount,
@@ -111,7 +108,6 @@ export default async function WorkflowPage() {
       .eq('company_id', company.id),
   ]);
 
-  // 3. 단계별 상태 판정
   const hasCompany = !!company.business_summary || !!company.industry;
   const hasDocuments = (documentCount ?? 0) > 0;
   const hasInterview = interviewCount > 0 || hasDocuments;
@@ -145,7 +141,6 @@ export default async function WorkflowPage() {
             : 'locked',
   };
 
-  // 4. 스테퍼 정보
   const steps: WorkflowStepInfo[] = [
     {
       key: 'company',
@@ -160,7 +155,7 @@ export default async function WorkflowPage() {
       number: 2,
       label: 'AI 인터뷰 + 자료 업로드',
       shortLabel: 'AI 인터뷰',
-      description: '대화로 사업 정보 수집',
+      description: '7개 핵심 질문 자동 답안',
       status: stepStatuses.interview,
     },
     {
@@ -189,7 +184,6 @@ export default async function WorkflowPage() {
     },
   ];
 
-  // 5. 카드 props
   const topProgramTitle = topMatching?.programs
     ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((topMatching.programs as any).title as string) || ''
@@ -215,25 +209,27 @@ export default async function WorkflowPage() {
       },
     },
     interview: {
-      title: 'AI 인터뷰 + 자료 업로드',
-      description: '내 사업 자료를 올리고 AI와 대화하세요',
+      title: 'AI 인터뷰 (7개 표준 질문)',
+      description: 'AI가 자료를 보고 답안 자동 생성, 검토만 하세요',
       summary: hasDocuments
-        ? `자료 ${documentCount}건 업로드 완료`
-        : '아직 자료가 없습니다',
+        ? `자료 ${documentCount}건 — AI가 자동 답안 생성 가능`
+        : '자료 없이도 직접 답변 가능',
       metrics: hasDocuments
         ? [
             { label: '문서', value: String(documentCount), color: 'success' },
-            { label: '인터뷰', value: String(interviewCount || 0) },
-            { label: '상태', value: hasInterview ? '준비됨' : '대기' },
+            { label: '질문', value: '7개' },
+            { label: '소요', value: '~5분' },
           ]
-        : undefined,
+        : [
+            { label: '질문', value: '7개' },
+            { label: '소요', value: '~10분' },
+            { label: 'AI', value: '지원' },
+          ],
       primaryAction: {
-        label: hasInterview ? '자료 추가' : '인터뷰 시작',
-        href: '/documents',
+        label: hasInterview ? '인터뷰 편집' : 'AI 인터뷰 시작',
+        href: '/workflow/interview',
       },
-      secondaryAction: hasInterview
-        ? { label: '인터뷰 보기', href: '/consultant' }
-        : undefined,
+      secondaryAction: { label: '자료 업로드', href: '/documents' },
     },
     matching: {
       title: '정부지원사업 매칭',
@@ -286,7 +282,7 @@ export default async function WorkflowPage() {
       title: '양식 자동 채움 + IR PPT',
       description: 'HWPX 공고 양식을 채우고 고퀄리티 PPT를 생성합니다',
       summary: hasIR
-        ? `IR ${irCount}건 생성됨`
+        ? `IR ${irCount}건 생성됨 (하네스 v2 적용)`
         : hasPlan
           ? '계획서를 기반으로 PPT를 생성하세요'
           : undefined,
@@ -298,8 +294,8 @@ export default async function WorkflowPage() {
           ]
         : undefined,
       primaryAction: {
-        label: hasIR ? 'PPT 보기' : 'PPT 생성',
-        href: '/ir',
+        label: hasIR ? '결과물 보기' : '결과물 생성',
+        href: '/workflow/output',
       },
       secondaryAction: hasPlan
         ? { label: '문서 다운로드', href: '/documents' }
@@ -307,7 +303,6 @@ export default async function WorkflowPage() {
     },
   };
 
-  // 6. 셸 렌더링
   return (
     <div className="container mx-auto px-4 py-6 md:py-10 max-w-6xl">
       <WorkflowShell
