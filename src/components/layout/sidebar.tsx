@@ -20,9 +20,12 @@ import {
   CalendarDays,
   Gift,
   Users,
+  Workflow,
 } from "lucide-react";
 
 const sidebarItems = [
+  // ★ 통합 워크플로우 — 사용자가 a-z 흐름을 한 곳에서 보는 진입점
+  { href: "/workflow", label: "사업계획서 만들기", icon: Workflow },
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/consultant", label: "AI 컨설턴트", icon: Sparkles },
   { href: "/programs", label: "지원사업", icon: Search },

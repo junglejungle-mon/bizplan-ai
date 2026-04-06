@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateBusinessPlan } from "@/lib/pipeline/plan-generator";
+import { generateBusinessPlanWithInterview } from "@/lib/pipeline/plan-generator-with-interview";
 import { rateLimit, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
 import { incrementUsage } from "@/lib/payment/usage";
 import { safeErrorMessage } from "@/lib/api/error";
@@ -11,6 +11,10 @@ export const maxDuration = 300;
 /**
  * POST /api/plans/[id]/generate
  * 사업계획서 AI 자동 생성 (SSE 스트리밍)
+ *
+ * 변경 (Week 4): generateBusinessPlan → generateBusinessPlanWithInterview
+ *   - /workflow/interview에서 채운 7개 인터뷰 답변을 자동으로 컨텍스트에 주입
+ *   - 답변이 없으면 기존 동작 그대로
  */
 export async function POST(
   request: NextRequest,
@@ -41,7 +45,7 @@ export async function POST(
     return new Response("Not Found", { status: 404 });
   }
 
-  // 이어쓰기(resume) 여부 확인 — 이미 생성된 섹션이 있으면 resume
+  // 이어쓰기(resume) 여부 확인
   const { data: existingSections } = await supabase
     .from("plan_sections")
     .select("id, content")
@@ -52,8 +56,7 @@ export async function POST(
     (s: { id: string; content: string | null }) => s.content && s.content.length > 100
   );
 
-  // 사용량 체크 (무료: 1건/월, 유료: 플랜별 제한)
-  // 이어쓰기(resume)인 경우 이미 카운트된 생성이므로 usage 증가 생략
+  // 사용량 체크
   if (!isResume) {
     const usageResult = await incrementUsage(user.id, "plan_generations");
     if (!usageResult.allowed) {
@@ -76,11 +79,12 @@ export async function POST(
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of generateBusinessPlan({
+        for await (const event of generateBusinessPlanWithInterview({
           planId,
           companyId: plan.company_id,
           programId: plan.program_id || undefined,
           templateOcrText: body.templateOcrText || plan.template_ocr_text || undefined,
+          applyInterviewContext: body.applyInterviewContext !== false,
         })) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(event)}\n\n`)

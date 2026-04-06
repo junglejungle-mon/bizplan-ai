@@ -1,21 +1,15 @@
 /**
- * IR Generator + 하네스 v2 통합 래퍼
+ * IR Generator + 하네스 v2 + 인터뷰 컨텍스트 통합 래퍼
  *
  * ir-generator.ts는 그대로 유지하고, 그 출력을 v2 하네스로 통과시켜
- * 80점 이상이 될 때까지 자동 개선하는 외부 래퍼.
+ * 80점 이상이 될 때까지 자동 개선.
  *
  * 핵심:
  * 1. 기존 generateIRPresentation()은 건드리지 않음 (호환성 유지)
  * 2. 생성 완료 후, DB에서 슬라이드를 다시 로드해 v2 하네스에 통과
- * 3. 개선된 슬라이드를 DB에 다시 저장 (UPDATE)
- * 4. 최종 점수 + 진단 리포트 반환
- *
- * 사용:
- *   import { generateIRWithHarness } from '@/lib/pipeline/ir-generator-with-harness';
- *
- *   for await (const event of generateIRWithHarness({ planId, companyId })) {
- *     console.log(event.type, event.data);
- *   }
+ * 3. 인터뷰 답변(있으면)을 컨텍스트에 자동 주입
+ * 4. 개선된 슬라이드를 DB에 다시 저장 (UPDATE)
+ * 5. 최종 점수 + 진단 리포트 반환
  */
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateIRPresentation } from './ir-generator';
@@ -24,6 +18,10 @@ import {
   type SlideInput,
   type PptHarnessV2Result,
 } from './ppt-harness-v2';
+import {
+  loadInterviewContext,
+  formatInterviewForPrompt,
+} from '@/lib/interview/context-injector';
 
 export type IRTemplate =
   | 'minimal'
@@ -43,6 +41,8 @@ export interface IRWithHarnessOptions {
   maxIterations?: number;
   /** 디버그 로그 */
   verbose?: boolean;
+  /** 하네스 자동 적용 (false면 ir-generator만 실행) */
+  applyHarness?: boolean;
 }
 
 export interface IRWithHarnessEvent {
@@ -71,17 +71,17 @@ export async function* generateIRWithHarness(
     passThreshold = 80,
     maxIterations = 3,
     verbose = false,
+    applyHarness = true,
   } = options;
 
   let presentationId: string | null = null;
   let initialScore = 0;
 
   // ============================================================
-  // 1. ir-generator로 1차 생성
+  // 1. ir-generator로 1차 생성 (스트리밍 그대로 통과)
   // ============================================================
   try {
     for await (const event of generateIRPresentation({ planId, companyId, template })) {
-      // generation_complete로 마킹해서 통과
       if (event.type === 'complete') {
         presentationId = (event.data.presentationId as string) || null;
         initialScore = (event.data.qualityScore as number) || 0;
@@ -99,7 +99,6 @@ export async function* generateIRWithHarness(
         yield event as IRWithHarnessEvent;
         return;
       } else {
-        // progress / slide_done 그대로 통과
         yield event as IRWithHarnessEvent;
       }
     }
@@ -123,8 +122,21 @@ export async function* generateIRWithHarness(
   }
 
   // ============================================================
-  // 2. 점수가 이미 통과면 하네스 스킵
+  // 2. 하네스 적용 여부 판정
   // ============================================================
+  if (!applyHarness) {
+    yield {
+      type: 'complete',
+      data: {
+        presentationId,
+        finalScore: initialScore,
+        harnessApplied: false,
+        message: 'applyHarness=false — 하네스 스킵',
+      },
+    };
+    return;
+  }
+
   if (initialScore >= passThreshold) {
     yield {
       type: 'complete',
@@ -139,7 +151,7 @@ export async function* generateIRWithHarness(
   }
 
   // ============================================================
-  // 3. DB에서 슬라이드 다시 로드 → 하네스 입력 형식으로 변환
+  // 3. DB에서 슬라이드 다시 로드
   // ============================================================
   yield {
     type: 'harness_start',
@@ -178,7 +190,7 @@ export async function* generateIRWithHarness(
   }));
 
   // ============================================================
-  // 4. 컨텍스트 빌드 (회사 + 사업계획서 섹션)
+  // 4. 컨텍스트 빌드 (회사 + 사업계획서 섹션 + 인터뷰 답변)
   // ============================================================
   const { data: company } = await supabase
     .from('companies')
@@ -198,14 +210,29 @@ export async function* generateIRWithHarness(
     .eq('plan_id', planId)
     .order('section_order');
 
+  // 인터뷰 답변 로드 (있으면 컨텍스트에 자동 주입)
+  const interviewCtx = await loadInterviewContext(supabase, companyId);
+
+  // 인터뷰 답변을 사업계획서 섹션 컨텍스트로 추가
+  const augmentedSections = [
+    ...((planSections || []).map((s) => ({
+      section_name: s.section_name as string,
+      content: (s.content as string) || '',
+    }))),
+  ];
+
+  if (interviewCtx.hasAnswers) {
+    augmentedSections.unshift({
+      section_name: '회사 인터뷰 (사용자 직접 입력)',
+      content: formatInterviewForPrompt(interviewCtx),
+    });
+  }
+
   const harnessContext = {
     title: (plan?.title as string) || 'IR Pitch Deck',
     companyName: (company?.name as string) || '회사',
     industry: (company?.industry as string) || undefined,
-    sections: (planSections || []).map((s) => ({
-      section_name: s.section_name as string,
-      content: (s.content as string) || '',
-    })),
+    sections: augmentedSections,
   };
 
   // ============================================================
@@ -221,18 +248,13 @@ export async function* generateIRWithHarness(
       maxIterations,
     });
 
-    // 라운드별 진행 이벤트
-    harnessResult.scoreHistory.forEach((h) => {
-      // 동기 내부에서 yield 안 됨 — 별도 이벤트로 마지막에 한 번에 전송
-    });
-
     yield {
       type: 'harness_iteration',
       data: {
-        scoreHistory: harnessResult.scoreHistory.map((h) => ({
-          iteration: h.iteration,
-          score: h.score,
-          weakSlideCount: h.weakSlides.length,
+        scoreHistory: harnessResult.scoreHistory.map((entry) => ({
+          iteration: entry.iteration,
+          score: entry.score,
+          weakSlideCount: entry.weakSlides.length,
         })),
       },
     };
@@ -255,7 +277,6 @@ export async function* generateIRWithHarness(
     const finalSlide = harnessResult.finalSlides[i];
     const originalSlide = initialSlides[i];
 
-    // 컨텐츠가 동일하면 스킵 (불필요한 UPDATE 방지)
     if (
       JSON.stringify(finalSlide.content) === JSON.stringify(originalSlide.content) &&
       finalSlide.title === originalSlide.title
@@ -281,19 +302,17 @@ export async function* generateIRWithHarness(
   }
 
   // ============================================================
-  // 7. 진단 리포트를 ir_presentations 메타에 저장 (있다면)
+  // 7. 메타 업데이트
   // ============================================================
   try {
     await supabase
       .from('ir_presentations')
       .update({
-        // diagnostics는 컬럼이 있을 때만 저장됨 (없으면 무시됨)
-        // 안전하게 별도 jsonb metadata 컬럼 권장
         updated_at: new Date().toISOString(),
       })
       .eq('id', presentationId);
   } catch {
-    // 실패해도 무시 (메타 저장은 부수효과)
+    // 무시
   }
 
   // ============================================================
@@ -307,6 +326,7 @@ export async function* generateIRWithHarness(
       finalScore: harnessResult.finalScore,
       improvedSlides: updatedCount,
       diagnostics: harnessResult.diagnostics,
+      interviewApplied: interviewCtx.hasAnswers,
     },
   };
 
@@ -320,6 +340,7 @@ export async function* generateIRWithHarness(
       iterations: harnessResult.iterations,
       improvedSlides: updatedCount,
       harnessApplied: true,
+      interviewApplied: interviewCtx.hasAnswers,
       status: harnessResult.status,
     },
   };
@@ -329,9 +350,6 @@ export async function* generateIRWithHarness(
 // 비-제너레이터 버전 (테스트/스크립트 용)
 // ============================================================================
 
-/**
- * 단순 호출 버전 — 모든 이벤트 수집 후 최종 결과만 반환
- */
 export async function generateIRWithHarnessOnce(
   options: IRWithHarnessOptions
 ): Promise<{

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateIRPresentation } from "@/lib/pipeline/ir-generator";
+import { generateIRWithHarness } from "@/lib/pipeline/ir-generator-with-harness";
 import { incrementUsage } from "@/lib/payment/usage";
 import { safeErrorMessage } from "@/lib/api/error";
 import { rateLimitAsync, getClientIP, RATE_LIMITS, rateLimitResponse } from "@/lib/utils/rate-limit";
@@ -11,6 +11,17 @@ export const maxDuration = 300;
 /**
  * POST /api/plans/[id]/ir/generate
  * IR PPT 자동 생성 (SSE 스트리밍)
+ *
+ * 흐름:
+ * 1. ir-generator로 1차 슬라이드 생성
+ * 2. 인터뷰 답변(있으면) 자동 로드해서 컨텍스트에 주입
+ * 3. PPT 하네스 v2로 80점+ 자동 개선 (최대 3라운드)
+ * 4. 개선된 슬라이드만 DB UPDATE
+ *
+ * 변경 (Week 4): generateIRPresentation → generateIRWithHarness
+ *   - 11개 패턴 라이브러리 자동 적용
+ *   - 인터뷰 답변 자동 통합
+ *   - 품질 80점+ 보장
  */
 export async function POST(
   request: NextRequest,
@@ -29,7 +40,7 @@ export async function POST(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // 사용량 체크 (무료: 0회, 유료: 플랜별 제한)
+  // 사용량 체크
   const usageResult = await incrementUsage(user.id, "ir_generations");
   if (!usageResult.allowed) {
     return Response.json(
@@ -57,7 +68,7 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   let selectedTemplate = body.template || "minimal";
 
-  // 브랜드 색상이 있으면 자동으로 custom_ci 적용 (사용자가 명시적으로 다른 템플릿 선택하지 않은 경우)
+  // 브랜드 색상이 있으면 자동으로 custom_ci 적용
   if (!body.template || body.template === "minimal") {
     try {
       const { data: companies } = await supabase
@@ -76,18 +87,26 @@ export async function POST(
         }
       }
     } catch {
-      // 실패해도 무시 — 기본 템플릿 사용
+      // 실패해도 무시
     }
   }
+
+  // 옵션: 클라이언트가 명시적으로 하네스 비활성화 가능
+  const applyHarness = body.applyHarness !== false;
+  const passThreshold = typeof body.passThreshold === "number" ? body.passThreshold : 80;
+  const maxIterations = typeof body.maxIterations === "number" ? body.maxIterations : 3;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of generateIRPresentation({
+        for await (const event of generateIRWithHarness({
           planId,
           companyId: plan.company_id,
           template: selectedTemplate as "minimal" | "tech" | "classic" | "professional" | "vibrant" | "custom_ci",
+          applyHarness,
+          passThreshold,
+          maxIterations,
         })) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
