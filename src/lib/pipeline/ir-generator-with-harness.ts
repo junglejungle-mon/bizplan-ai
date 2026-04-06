@@ -10,6 +10,9 @@
  * 3. 인터뷰 답변(있으면)을 컨텍스트에 자동 주입
  * 4. 개선된 슬라이드를 DB에 다시 저장 (UPDATE)
  * 5. 최종 점수 + 진단 리포트 반환
+ *
+ * 변경 이력 (Round 1 정리):
+ * - 죽은 export `generateIRWithHarnessOnce` 제거 (호출 0건)
  */
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateIRPresentation } from './ir-generator';
@@ -343,53 +346,5 @@ export async function* generateIRWithHarness(
       interviewApplied: interviewCtx.hasAnswers,
       status: harnessResult.status,
     },
-  };
-}
-
-// ============================================================================
-// 비-제너레이터 버전 (테스트/스크립트 용)
-// ============================================================================
-
-export async function generateIRWithHarnessOnce(
-  options: IRWithHarnessOptions
-): Promise<{
-  success: boolean;
-  presentationId?: string;
-  initialScore?: number;
-  finalScore?: number;
-  iterations?: number;
-  status?: string;
-  error?: string;
-}> {
-  let presentationId: string | undefined;
-  let initialScore: number | undefined;
-  let finalScore: number | undefined;
-  let iterations: number | undefined;
-  let status: string | undefined;
-  let errorMsg: string | undefined;
-
-  for await (const event of generateIRWithHarness(options)) {
-    if (event.type === 'generation_complete') {
-      presentationId = event.data.presentationId as string;
-      initialScore = event.data.initialScore as number;
-    } else if (event.type === 'harness_complete') {
-      finalScore = event.data.finalScore as number;
-      iterations = event.data.iterations as number;
-      status = event.data.status as string;
-    } else if (event.type === 'complete' && finalScore === undefined) {
-      finalScore = event.data.finalScore as number;
-    } else if (event.type === 'error') {
-      errorMsg = (event.data.message as string) || 'unknown error';
-    }
-  }
-
-  return {
-    success: !errorMsg,
-    presentationId,
-    initialScore,
-    finalScore,
-    iterations,
-    status,
-    error: errorMsg,
   };
 }
