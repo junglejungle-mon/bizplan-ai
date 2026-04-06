@@ -10,13 +10,10 @@
  * - 로컬: data/ai-logs/YYYY-MM-DD/{caller}.jsonl
  * - Vercel: 스킵 (파일시스템 쓰기 불가)
  *
- * 변경 이력 (Round 2 정리):
- * - 죽은 import 제거 + Node fs 모듈 정적 import로 turbopack 동적 패턴 경고 제거
- * - SKIP_LOGGING 가드로 Vercel/브라우저에서는 절대 실행되지 않음
+ * 변경 이력:
+ * - Round 1: 죽은 import (writeFile, sep) 제거
+ * - Round 3: turbopack 동적 패턴 경고 회피 — fs 작업을 별도 헬퍼 모듈(logger-fs)로 분리
  */
-import * as nodeFs from 'node:fs/promises';
-import * as nodePath from 'node:path';
-import * as nodeCrypto from 'node:crypto';
 import type { AICallOptions, AICallResult } from './types';
 
 interface LogEntry {
@@ -41,9 +38,6 @@ const LOG_ENABLED = process.env.AI_LOG === '1' || process.env.LOG_AI_CALLS === '
 const LOG_FULL = process.env.AI_LOG_FULL === '1';
 const SKIP_LOGGING = !LOG_ENABLED || process.env.VERCEL === '1';
 
-// 고정 로그 디렉토리 베이스
-const LOG_BASE_DIR = 'data/ai-logs';
-
 /**
  * AI 호출 로그 저장
  */
@@ -56,15 +50,10 @@ export async function logAICall(data: {
   if (SKIP_LOGGING) return;
 
   try {
-    const promptHash = nodeCrypto
-      .createHash('sha256')
-      .update(data.prompt)
-      .digest('hex')
-      .slice(0, 16);
+    // logger-fs 헬퍼는 string literal로 dynamic import (turbopack 정적 분석 친화적)
+    const fsHelper = await import('./logger-fs');
 
-    const today = new Date().toISOString().split('T')[0];
-    const logDir = nodePath.join(process.cwd(), LOG_BASE_DIR, today);
-    await nodeFs.mkdir(logDir, { recursive: true });
+    const promptHash = fsHelper.hashPrompt(data.prompt);
 
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
@@ -86,9 +75,7 @@ export async function logAICall(data: {
       ...(data.error && { error: data.error.message }),
     };
 
-    // JSONL 형식으로 append (한 줄 = 한 호출)
-    const logFile = nodePath.join(logDir, `${entry.caller}.jsonl`);
-    await nodeFs.appendFile(logFile, JSON.stringify(entry) + '\n', 'utf-8');
+    await fsHelper.appendLog(entry.caller, JSON.stringify(entry));
   } catch {
     // 로깅 실패는 무시
   }
@@ -101,26 +88,18 @@ export async function getTodayLogs(caller?: string): Promise<LogEntry[]> {
   if (SKIP_LOGGING) return [];
 
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const logDir = nodePath.join(process.cwd(), LOG_BASE_DIR, today);
+    const fsHelper = await import('./logger-fs');
+    const lines = await fsHelper.readTodayLogs(caller);
 
-    const files = await nodeFs.readdir(logDir);
-    const targetFiles = caller ? files.filter((f) => f.startsWith(caller)) : files;
-
-    const allEntries: LogEntry[] = [];
-    for (const file of targetFiles) {
-      const content = await nodeFs.readFile(nodePath.join(logDir, file), 'utf-8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      for (const line of lines) {
-        try {
-          allEntries.push(JSON.parse(line) as LogEntry);
-        } catch {
-          /* skip */
-        }
+    const entries: LogEntry[] = [];
+    for (const line of lines) {
+      try {
+        entries.push(JSON.parse(line) as LogEntry);
+      } catch {
+        /* skip */
       }
     }
-
-    return allEntries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    return entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   } catch {
     return [];
   }
