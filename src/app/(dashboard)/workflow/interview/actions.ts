@@ -78,6 +78,12 @@ export async function generateInterviewAnswers(): Promise<{
 
 // ============================================================================
 // 2. 답변 저장
+//
+// company_interviews 스키마 (실제 DB):
+//   id, company_id, question, answer, category, extracted_insights,
+//   question_order, round, created_at
+//
+// → row-per-question 방식: 기존 round=1 row를 모두 삭제 후 새로 insert
 // ============================================================================
 export async function saveInterviewAnswers(
   answers: InterviewAnswer[]
@@ -98,34 +104,66 @@ export async function saveInterviewAnswers(
   const company = companies?.[0];
   if (!company) return { ok: false, error: '회사 정보가 없습니다' };
 
-  // company_interviews 테이블에 저장 시도, 없으면 companies.metadata에 저장
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: upsertErr } = await (supabase as any)
-      .from('company_interviews')
-      .upsert(
-        {
-          company_id: company.id,
-          answers,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'company_id' }
-      );
+  // 질문 텍스트를 question-bank에서 가져오기 위해 import
+  const { INTERVIEW_QUESTIONS } = await import('@/lib/interview/question-bank');
+  const questionMap = new Map(
+    INTERVIEW_QUESTIONS.map((q, idx) => [q.id, { question: q.question, order: idx }])
+  );
 
-    if (upsertErr) {
-      // 테이블이 없거나 다른 오류면 companies 테이블의 metadata에 저장 폴백
-      const { error: updateErr } = await supabase
-        .from('companies')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .update({ metadata: { interview_answers: answers } as any })
-        .eq('id', company.id);
+  if (answers.length === 0) {
+    return { ok: false, error: '저장할 답변이 없습니다' };
+  }
 
-      if (updateErr) {
-        return { ok: false, error: `저장 실패: ${updateErr.message}` };
-      }
-    }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : '저장 실패' };
+  // workflow 카테고리 → DB 허용 enum 매핑
+  // (DB의 company_interviews_category_check는 legacy onboarding 시스템 enum만 허용)
+  // basic, business, team_evidence, optimization, strategy
+  const categoryMap: Record<string, string> = {
+    company: 'basic',
+    team: 'team_evidence',
+    problem: 'business',
+    solution: 'business',
+    market: 'strategy',
+    competition: 'strategy',
+    business_model: 'business',
+    financials: 'optimization',
+    roadmap: 'strategy',
+  };
+
+  // 1) 기존 round=1 row 전부 삭제
+  const { error: delErr } = await supabase
+    .from('company_interviews')
+    .delete()
+    .eq('company_id', company.id)
+    .eq('round', 1);
+
+  if (delErr) {
+    return { ok: false, error: `기존 답변 정리 실패: ${delErr.message}` };
+  }
+
+  // 2) 새 row 7개 insert (질문별로 1행)
+  const rows = answers.map((a) => {
+    const meta = questionMap.get(a.questionId);
+    return {
+      company_id: company.id,
+      question: meta?.question || a.questionId,
+      answer: a.answer,
+      category: categoryMap[a.category] || 'basic',
+      question_order: meta?.order ?? 0,
+      round: 1,
+    };
+  });
+
+  const { error: insErr, data: insData } = await supabase
+    .from('company_interviews')
+    .insert(rows)
+    .select();
+
+  if (insErr) {
+    return { ok: false, error: `저장 실패: ${insErr.message}` };
+  }
+
+  if (!insData || insData.length === 0) {
+    return { ok: false, error: '저장 실패: 0 rows inserted (RLS 정책 의심)' };
   }
 
   revalidatePath('/workflow');
@@ -136,6 +174,9 @@ export async function saveInterviewAnswers(
 
 // ============================================================================
 // 3. 기존 답변 로드 (페이지 진입 시)
+//
+// row-per-question 스키마에서 questionId를 복원하기 위해
+// question-bank의 질문 텍스트와 매칭한다.
 // ============================================================================
 export async function loadInterviewAnswers(): Promise<Record<string, string>> {
   const supabase = await createClient();
@@ -146,7 +187,7 @@ export async function loadInterviewAnswers(): Promise<Record<string, string>> {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, metadata')
+    .select('id')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
     .limit(1);
@@ -154,38 +195,26 @@ export async function loadInterviewAnswers(): Promise<Record<string, string>> {
   const company = companies?.[0];
   if (!company) return {};
 
-  // 1. company_interviews 테이블 시도
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: interviewRow } = await (supabase as any)
-      .from('company_interviews')
-      .select('answers')
-      .eq('company_id', company.id)
-      .maybeSingle();
+  const { data: rows } = await supabase
+    .from('company_interviews')
+    .select('question, answer, question_order')
+    .eq('company_id', company.id)
+    .eq('round', 1)
+    .order('question_order', { ascending: true });
 
-    if (interviewRow?.answers) {
-      const result: Record<string, string> = {};
-      const list = interviewRow.answers as InterviewAnswer[];
-      for (const a of list) {
-        result[a.questionId] = a.answer;
-      }
-      return result;
+  if (!rows || rows.length === 0) return {};
+
+  // question 텍스트로 questionId 역매핑
+  const { INTERVIEW_QUESTIONS } = await import('@/lib/interview/question-bank');
+  const questionToId = new Map(INTERVIEW_QUESTIONS.map((q) => [q.question, q.id]));
+
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    if (!row.answer) continue;
+    const qId = questionToId.get(row.question as string);
+    if (qId) {
+      result[qId] = row.answer as string;
     }
-  } catch {
-    // 테이블 없음 → 폴백
   }
-
-  // 2. companies.metadata 폴백
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta = (company.metadata as any) || {};
-  if (meta.interview_answers) {
-    const result: Record<string, string> = {};
-    const list = meta.interview_answers as InterviewAnswer[];
-    for (const a of list) {
-      result[a.questionId] = a.answer;
-    }
-    return result;
-  }
-
-  return {};
+  return result;
 }
