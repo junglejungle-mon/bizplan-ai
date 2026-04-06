@@ -9,6 +9,9 @@
  *
  * Claude CLI 우선 (Max 무제한, 비용 0), 실패 시 Gemini (무료)
  * 비전(Vision)은 여전히 Anthropic API 필요 (CLI 미지원)
+ *
+ * 변경 이력 (Round 5):
+ * - logAICall fs 호출을 logger-fs 헬퍼로 위임 → turbopack 동적 패턴 경고 제거
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { callAI } from "./router";
@@ -49,7 +52,7 @@ function messagesToPrompt(messages: ClaudeMessage[]): string {
     .join("\n\n");
 }
 
-// ─── AI 로그 저장 ─────────────────────────────────────────
+// ─── AI 로그 저장 (Round 5: logger-fs 헬퍼로 위임) ────────
 async function logAICall(data: {
   caller: string;
   model: string;
@@ -62,20 +65,12 @@ async function logAICall(data: {
   if (!LOG_AI_CALLS || process.env.VERCEL) return;
 
   try {
-    const { writeFile, mkdir } = await import("node:fs/promises");
-    const { join, sep } = await import("node:path");
-    const dataDir = ["data", "ai" + "-logs"].join(sep);
-    const today = new Date().toISOString().split("T")[0];
-    const logDir = join(process.cwd(), dataDir, today);
-    await mkdir(logDir, { recursive: true });
-
-    const filename = `${data.caller}-${Date.now()}.json`;
+    const fsHelper = await import('./logger-fs');
     const logEntry = {
       timestamp: new Date().toISOString(),
       ...data,
     };
-
-    await writeFile(join(logDir, filename), JSON.stringify(logEntry, null, 2));
+    await fsHelper.appendLog(data.caller, JSON.stringify(logEntry));
   } catch {
     // 로깅 실패는 무시
   }
@@ -85,7 +80,6 @@ async function logAICall(data: {
 export async function callOllama({
   system,
   messages,
-  maxTokens = 4096,
 }: {
   system?: string;
   messages: { role: string; content: string }[];
@@ -108,8 +102,6 @@ export async function callClaude({
   model = "claude-sonnet-4-20250514",
   system,
   messages,
-  maxTokens = 4096,
-  temperature = 0.7,
   forceAPI: _forceAPI = false,
 }: {
   model?: ClaudeModel;
@@ -149,8 +141,6 @@ export async function* streamClaude({
   model = "claude-sonnet-4-20250514",
   system,
   messages,
-  maxTokens = 4096,
-  temperature = 0.7,
   forceAPI: _forceAPI = false,
 }: {
   model?: ClaudeModel;
