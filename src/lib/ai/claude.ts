@@ -8,21 +8,16 @@
  * 함수 시그니처는 100% 유지 → 호출자 코드 변경 불필요
  *
  * Claude CLI 우선 (Max 무제한, 비용 0), 실패 시 Gemini (무료)
- * 비전(Vision)은 여전히 Anthropic API 필요 (CLI 미지원)
+ * Vision도 Claude CLI 텍스트 폴백으로 위임 (Anthropic API 직접 호출 0건).
  *
- * 변경 이력 (Round 5):
- * - logAICall fs 호출을 logger-fs 헬퍼로 위임 → turbopack 동적 패턴 경고 제거
+ * 변경 이력:
+ * - Round 5: logAICall fs 호출을 logger-fs 헬퍼로 위임
+ * - 2026-04-07: Anthropic SDK client 인스턴스화 완전 제거 (타입만 유지)
  */
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { callAI } from "./router";
 
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
-
-// Vision 전용 클라이언트 (이미지/PDF 처리는 CLI 불가)
-const apiClient = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
-});
-const anthropicVision = apiClient;
 
 // ─── 타입 정의 ───────────────────────────────────────────
 export type ClaudeModel =
@@ -178,16 +173,12 @@ export async function* streamClaude({
   });
 }
 
-// ─── callClaudeVision (2026-04-07 비용 차단) ──
-// 이전: Anthropic Vision API 직접 호출 → 비용 발생
-// 현재: 무조건 텍스트 폴백 (Claude CLI 경로) → 비용 0원
+// ─── callClaudeVision (2026-04-07 완전 차단) ──
+// Anthropic Vision API 직접 호출을 완전히 제거.
+// 모든 호출은 Claude CLI(callClaude) 경로로 텍스트 폴백 처리됨 → 비용 0원.
 //
 // 부작용: 이미지/PDF의 시각 정보 손실 (텍스트 메타정보만 전달).
-// OCR 품질이 필수면 별도 fallback (Tesseract 등) 도입 필요 — 별도 phase.
-//
-// CLAUDE_VISION_ENABLED=1 환경변수로 명시적으로 켤 때만 Anthropic API 사용.
-const VISION_ENABLED = process.env.CLAUDE_VISION_ENABLED === "1";
-
+// OCR 품질이 필수면 별도 phase에서 Tesseract 등 도입 필요.
 export async function callClaudeVision({
   model = "claude-sonnet-4-20250514",
   system,
@@ -201,62 +192,22 @@ export async function callClaudeVision({
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
-  // 강제 차단: 명시적으로 켜지 않으면 무조건 텍스트 폴백
-  if (!VISION_ENABLED || !process.env.ANTHROPIC_API_KEY) {
-    console.warn(
-      "[callClaudeVision] ⚠️ Anthropic Vision API 차단됨 — 텍스트 폴백 (Claude CLI 경유)"
-    );
-    const textMessages = messages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : "[이미지/문서 첨부됨 — 텍스트 정보로 대체. CLAUDE_VISION_ENABLED=1로 설정 시 Vision 활성화]",
-    }));
-    return callClaude({ model, system, messages: textMessages, maxTokens, temperature });
-  }
-
-  // VISION_ENABLED=1 일 때만 실제 Anthropic API 호출
-  const startTime = Date.now();
-
-  const response = await anthropicVision.messages.create({
-    model,
-    max_tokens: maxTokens,
-    ...(system && {
-      system: [
-        {
-          type: "text" as const,
-          text: system,
-          cache_control: { type: "ephemeral" as const },
-        },
-      ],
-    }),
-    messages,
-    temperature,
-  });
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  const result = textBlock?.text ?? "";
-
-  logAICall({
-    caller: "callClaudeVision",
-    model,
-    source: "anthropic-vision-api",
-    system,
-    messages: messages.map((m) => ({
-      role: m.role,
-      content:
-        typeof m.content === "string" ? m.content : "[vision/document content]",
-    })),
-    response: result,
-    durationMs: Date.now() - startTime,
-  });
-
-  return result;
+  console.warn(
+    "[callClaudeVision] Anthropic Vision API 비활성 — Claude CLI 텍스트 폴백 사용"
+  );
+  const textMessages = messages.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content:
+      typeof m.content === "string"
+        ? m.content
+        : "[이미지/문서 첨부됨 — 텍스트 정보로 대체]",
+  }));
+  return callClaude({ model, system, messages: textMessages, maxTokens, temperature });
 }
 
 // ─── Exports (하위 호환) ─────────────────────────────────
-export { apiClient as anthropic };
+// Note: 2026-04-07 — Anthropic SDK client export 제거됨.
+// 직접 호출 경로는 모두 router(callAI)로 통합되어 더 이상 SDK client 인스턴스가 필요 없음.
 
 // 현재 모드 (router는 자동 폴백)
 export const aiMode = "router";
