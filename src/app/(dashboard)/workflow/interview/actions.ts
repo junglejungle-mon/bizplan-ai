@@ -79,12 +79,15 @@ export async function generateInterviewAnswers(): Promise<{
 // ============================================================================
 // 2. 답변 저장
 //
-// company_interviews 스키마 (실제 DB):
+// company_interviews 스키마 (실제 DB, legacy onboarding과 공유):
 //   id, company_id, question, answer, category, extracted_insights,
 //   question_order, round, created_at
 //
-// → row-per-question 방식: 기존 round=1 row를 모두 삭제 후 새로 insert
+// 워크플로우 인터뷰는 legacy onboarding(round 1~5)과 충돌하지 않도록
+// round=99 (WORKFLOW_ROUND) 별도 네임스페이스에 저장한다.
+// → 기존 onboarding 사용자 데이터를 절대 건드리지 않는다.
 // ============================================================================
+const WORKFLOW_ROUND = 99;
 export async function saveInterviewAnswers(
   answers: InterviewAnswer[]
 ): Promise<{ ok: boolean; error?: string }> {
@@ -134,7 +137,7 @@ export async function saveInterviewAnswers(
     .from('company_interviews')
     .delete()
     .eq('company_id', company.id)
-    .eq('round', 1);
+    .eq('round', WORKFLOW_ROUND);
 
   if (delErr) {
     return { ok: false, error: `기존 답변 정리 실패: ${delErr.message}` };
@@ -149,7 +152,7 @@ export async function saveInterviewAnswers(
       answer: a.answer,
       category: categoryMap[a.category] || 'basic',
       question_order: meta?.order ?? 0,
-      round: 1,
+      round: WORKFLOW_ROUND,
     };
   });
 
@@ -199,7 +202,7 @@ export async function loadInterviewAnswers(): Promise<Record<string, string>> {
     .from('company_interviews')
     .select('question, answer, question_order')
     .eq('company_id', company.id)
-    .eq('round', 1)
+    .eq('round', WORKFLOW_ROUND)
     .order('question_order', { ascending: true });
 
   if (!rows || rows.length === 0) return {};
