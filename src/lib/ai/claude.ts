@@ -86,7 +86,7 @@ export async function callOllama({
   const result = await callAI(prompt, {
     model: "haiku",
     systemPrompt: system,
-    timeoutMs: 120_000,
+    timeoutMs: 600_000,
     context: "callOllama-legacy",
   });
   return result.output;
@@ -113,7 +113,7 @@ export async function callClaude({
   const result = await callAI(prompt, {
     model: modelKey,
     systemPrompt: system,
-    timeoutMs: 180_000,
+    timeoutMs: 600_000,
     context: "callClaude",
   });
 
@@ -152,7 +152,7 @@ export async function* streamClaude({
   const result = await callAI(prompt, {
     model: modelKey,
     systemPrompt: system,
-    timeoutMs: 240_000,
+    timeoutMs: 600_000,
     context: "streamClaude",
   });
 
