@@ -108,7 +108,7 @@ export default async function WorkflowPage() {
       .eq('company_id', company.id),
   ]);
 
-  const hasCompany = !!company.business_summary || !!company.industry;
+  const hasCompany = !!company.business_content || !!company.industry;
   const hasDocuments = (documentCount ?? 0) > 0;
   const hasInterview = interviewCount > 0 || hasDocuments;
   const hasMatching = (matchingCount ?? 0) > 0;
