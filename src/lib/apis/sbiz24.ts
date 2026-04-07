@@ -177,9 +177,40 @@ function mapExltdPbanc(item: ExltdPbancItem) {
     apply_end: parseDate(item.aplyPdEndKornNm),
     institution: item.linkFlfmtInstNm || item.jrsdInstNm || "소상공인시장진흥공단",
     detail_url: item.pbancUrlAddr || `https://www.sbiz24.kr/extldPbanc/${item.pbancId}`,
-    attachment_urls: {},
+    attachment_urls: extractSbiz24Attachments(item as unknown as Record<string, unknown>),
     raw_data: item as unknown as Record<string, unknown>,
   };
+}
+
+// sbiz24 raw_data → attachment_urls 정규화
+// linkAtchFileNm + linkAtchFilePathNm은 @로 구분된 다중 파일
+function extractSbiz24Attachments(item: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  const fileNames = (item.linkAtchFileNm as string | undefined)?.split("@").filter(Boolean) || [];
+  const filePaths = (item.linkAtchFilePathNm as string | undefined)?.split("@").filter(Boolean) || [];
+
+  // 파일명과 경로를 1:1 매칭 (양식 파일들)
+  if (filePaths.length > 0) {
+    const files: Array<{ name: string; url: string }> = [];
+    for (let i = 0; i < filePaths.length; i++) {
+      files.push({
+        name: fileNames[i] || `attachment_${i + 1}`,
+        url: filePaths[i],
+      });
+    }
+    result.files = files;
+  }
+
+  // 공고문 PDF/HWP (선택)
+  if (item.txtFilePathNm && item.txtOtptFileNm) {
+    result.notice = {
+      name: item.txtOtptFileNm,
+      url: item.txtFilePathNm,
+    };
+  }
+
+  return result;
 }
 
 // ===== 융자상품 맵핑 =====
