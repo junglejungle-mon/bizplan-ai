@@ -97,25 +97,28 @@ function isEmptyOrPlaceholder(text: string): boolean {
 /**
  * section XML에서 모든 텍스트 노드 추출
  * <hp:t> 태그 내용과 위치 정보를 함께 반환
+ *
+ * 2026-04-07: 비탐욕 regex → depth-counting으로 교체
+ * 이유: 표 셀(<hp:tbl> 안 <hp:p>) 같은 중첩 구조에서 비탐욕 regex가
+ * 상위 닫기 태그를 먼저 소비해 누락이 발생함. depth-counting은
+ * form-filler.ts의 findParagraphPositions와 동일 방식으로 paraIndex 통일.
  */
 function extractTextNodes(xml: string, sectionFile: string): TextNode[] {
   const nodes: TextNode[] = [];
-  let paraIndex = 0;
 
-  // 각 <hp:p> 단락 처리
-  const paraPattern = /<hp:p[^>]*>([\s\S]*?)<\/hp:p>/g;
-  let paraMatch;
+  // depth-counting으로 모든 <hp:p> 블록 찾기 (셀프클로징 포함)
+  const paraPositions = findAllParagraphs(xml);
 
-  while ((paraMatch = paraPattern.exec(xml)) !== null) {
-    const paraContent = paraMatch[1];
-    const isInTable = isInsideTable(xml, paraMatch.index);
+  for (let paraIndex = 0; paraIndex < paraPositions.length; paraIndex++) {
+    const { start, end, full: paraXml } = paraPositions[paraIndex];
+    const isInTable = isInsideTable(xml, start);
 
     // <hp:t> 태그 추출
     const textPattern = /<hp:t>([\s\S]*?)<\/hp:t>|<hp:t\/>/g;
     let textMatch;
     let hasText = false;
 
-    while ((textMatch = textPattern.exec(paraContent)) !== null) {
+    while ((textMatch = textPattern.exec(paraXml)) !== null) {
       hasText = true;
       const rawText = textMatch[1] ?? "";
       const text = rawText.trim();
@@ -126,11 +129,11 @@ function extractTextNodes(xml: string, sectionFile: string): TextNode[] {
         sectionFile,
         isInTable,
         isEmpty: isEmptyOrPlaceholder(text),
-        xmlOffset: paraMatch.index + textMatch.index,
+        xmlOffset: start + textMatch.index,
       });
     }
 
-    // <hp:t> 태그가 아예 없는 빈 단락
+    // <hp:t> 태그가 아예 없는 빈 단락 (정부 표준 양식 = self-closing run)
     if (!hasText) {
       nodes.push({
         text: "",
@@ -138,14 +141,77 @@ function extractTextNodes(xml: string, sectionFile: string): TextNode[] {
         sectionFile,
         isInTable,
         isEmpty: true,
-        xmlOffset: paraMatch.index,
+        xmlOffset: start,
       });
     }
 
-    paraIndex++;
+    // end는 다음 paraIndex 진단용 (현재는 사용 안 함)
+    void end;
   }
 
   return nodes;
+}
+
+/**
+ * depth-counting으로 모든 <hp:p> 블록 위치 찾기
+ * form-filler.ts의 findParagraphPositions와 동일한 알고리즘
+ * (paraIndex 체계 통일)
+ */
+function findAllParagraphs(
+  xml: string
+): Array<{ start: number; end: number; full: string }> {
+  const positions: Array<{ start: number; end: number; full: string }> = [];
+  const openTag = /<hp:p[\s>]/g;
+
+  let openMatch;
+  while ((openMatch = openTag.exec(xml)) !== null) {
+    const startPos = openMatch.index;
+
+    // 셀프클로징 체크: <hp:p ... />
+    const selfClosingCheck = xml.substring(startPos, startPos + 500);
+    const selfClosingMatch = selfClosingCheck.match(/^<hp:p[^>]*\/>/);
+    if (selfClosingMatch) {
+      positions.push({
+        start: startPos,
+        end: startPos + selfClosingMatch[0].length,
+        full: selfClosingMatch[0],
+      });
+      continue;
+    }
+
+    // 깊이 카운팅으로 매칭되는 닫기 태그 찾기
+    let depth = 1;
+    let searchPos = openMatch.index + openMatch[0].length;
+    while (depth > 0 && searchPos < xml.length) {
+      const nextOpen = xml.indexOf("<hp:p", searchPos);
+      const nextClose = xml.indexOf("</hp:p>", searchPos);
+
+      if (nextClose === -1) break;
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        const afterOpen = xml.substring(nextOpen, nextOpen + 500);
+        if (/^<hp:p[^>]*\/>/.test(afterOpen)) {
+          searchPos = nextOpen + afterOpen.match(/^<hp:p[^>]*\/>/)![0].length;
+        } else {
+          depth++;
+          searchPos = nextOpen + 5;
+        }
+      } else {
+        depth--;
+        if (depth === 0) {
+          const endPos = nextClose + "</hp:p>".length;
+          positions.push({
+            start: startPos,
+            end: endPos,
+            full: xml.substring(startPos, endPos),
+          });
+        }
+        searchPos = nextClose + "</hp:p>".length;
+      }
+    }
+  }
+
+  return positions;
 }
 
 /** 주어진 offset이 <hp:tbl>...</hp:tbl> 안에 있는지 확인 */

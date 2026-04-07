@@ -246,6 +246,16 @@ function replaceEmptyTextInParagraph(
     return paraXml.replace(examplePattern, `<hp:t>${escapedText}</hp:t>`);
   }
 
+  // 7a. self-closing <hp:run charPrIDRef="N"/> — 정부 표준 양식의 빈 셀 패턴
+  // 부평구/창업진흥원 등 대부분의 HWPX 양식이 이 형태로 빈 셀을 표현함
+  // <hp:t>가 아예 없고 닫기 태그도 없어서 패턴 7로 못 잡음
+  const selfClosingRun = /<hp:run([^>]*)\/>/;
+  const selfClosingMatch = paraXml.match(selfClosingRun);
+  if (selfClosingMatch) {
+    const newRun = `<hp:run${selfClosingMatch[1]}><hp:t>${escapedText}</hp:t></hp:run>`;
+    return paraXml.replace(selfClosingRun, newRun);
+  }
+
   // 7. <hp:run>에 <hp:t>가 없는 경우 — run의 닫기 태그 앞에 <hp:t> 삽입
   const runWithoutText = /<hp:run([^>]*)>((?:(?!<hp:t)[\s\S])*?)<\/hp:run>/;
   const runMatch = paraXml.match(runWithoutText);
