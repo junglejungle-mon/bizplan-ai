@@ -178,8 +178,16 @@ export async function* streamClaude({
   });
 }
 
-// ─── callClaudeVision (Vision/OCR 전용 — Anthropic API 필수) ──
-// CLI는 이미지 미지원이라 이건 그대로 유지
+// ─── callClaudeVision (2026-04-07 비용 차단) ──
+// 이전: Anthropic Vision API 직접 호출 → 비용 발생
+// 현재: 무조건 텍스트 폴백 (Claude CLI 경로) → 비용 0원
+//
+// 부작용: 이미지/PDF의 시각 정보 손실 (텍스트 메타정보만 전달).
+// OCR 품질이 필수면 별도 fallback (Tesseract 등) 도입 필요 — 별도 phase.
+//
+// CLAUDE_VISION_ENABLED=1 환경변수로 명시적으로 켤 때만 Anthropic API 사용.
+const VISION_ENABLED = process.env.CLAUDE_VISION_ENABLED === "1";
+
 export async function callClaudeVision({
   model = "claude-sonnet-4-20250514",
   system,
@@ -193,19 +201,22 @@ export async function callClaudeVision({
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    // Vision 호출이 필요한데 API 키 없으면 텍스트 폴백 시도
-    console.warn("[callClaudeVision] ANTHROPIC_API_KEY 없음 — 텍스트 폴백");
+  // 강제 차단: 명시적으로 켜지 않으면 무조건 텍스트 폴백
+  if (!VISION_ENABLED || !process.env.ANTHROPIC_API_KEY) {
+    console.warn(
+      "[callClaudeVision] ⚠️ Anthropic Vision API 차단됨 — 텍스트 폴백 (Claude CLI 경유)"
+    );
     const textMessages = messages.map((m) => ({
       role: m.role as "user" | "assistant",
       content:
         typeof m.content === "string"
           ? m.content
-          : "[이미지/문서 첨부됨 — 텍스트 정보로 대체]",
+          : "[이미지/문서 첨부됨 — 텍스트 정보로 대체. CLAUDE_VISION_ENABLED=1로 설정 시 Vision 활성화]",
     }));
     return callClaude({ model, system, messages: textMessages, maxTokens, temperature });
   }
 
+  // VISION_ENABLED=1 일 때만 실제 Anthropic API 호출
   const startTime = Date.now();
 
   const response = await anthropicVision.messages.create({
