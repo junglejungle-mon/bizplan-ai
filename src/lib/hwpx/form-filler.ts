@@ -93,36 +93,49 @@ function findParagraphPositions(
 
 /**
  * XML well-formedness 간이 검증
- * 삽입 후 기본적인 태그 균형이 맞는지 확인
+ *
+ * 검증 로직: 삽입 전후의 태그 카운트 차이를 비교한다.
+ * (절대값 비교는 정규식 false positive 때문에 부정확하므로 폐기)
  */
-function validateXmlBalance(xml: string): { valid: boolean; error?: string } {
-  // <hp:p> 열기/닫기 수 일치 확인
-  const openCount = (xml.match(/<hp:p[\s>]/g) || []).length;
-  const selfClosingCount = (xml.match(/<hp:p[^>]*\/>/g) || []).length;
-  const closeCount = (xml.match(/<\/hp:p>/g) || []).length;
+function validateXmlBalance(
+  xml: string,
+  baseline?: { openP: number; closeP: number; openRun: number; closeRun: number }
+): { valid: boolean; error?: string } {
+  const openP = (xml.match(/<hp:p[\s>]/g) || []).length;
+  const closeP = (xml.match(/<\/hp:p>/g) || []).length;
+  const openRun = (xml.match(/<hp:run[\s>]/g) || []).length;
+  const closeRun = (xml.match(/<\/hp:run>/g) || []).length;
 
-  const expectedCloseCount = openCount - selfClosingCount;
-  if (expectedCloseCount !== closeCount) {
-    return {
-      valid: false,
-      error: `<hp:p> 태그 불균형: 열기 ${openCount}개(셀프클로징 ${selfClosingCount}개), 닫기 ${closeCount}개`,
-    };
-  }
-
-  // <hp:run> 열기/닫기 수 일치 확인
-  const runOpenCount = (xml.match(/<hp:run[\s>]/g) || []).length;
-  const runSelfClosingCount = (xml.match(/<hp:run[^>]*\/>/g) || []).length;
-  const runCloseCount = (xml.match(/<\/hp:run>/g) || []).length;
-
-  const expectedRunClose = runOpenCount - runSelfClosingCount;
-  if (expectedRunClose !== runCloseCount) {
-    return {
-      valid: false,
-      error: `<hp:run> 태그 불균형: 열기 ${runOpenCount}개, 닫기 ${runCloseCount}개`,
-    };
+  if (baseline) {
+    // baseline 대비 open/close 증가량이 일치해야 함
+    const dPOpen = openP - baseline.openP;
+    const dPClose = closeP - baseline.closeP;
+    if (dPOpen !== dPClose) {
+      return {
+        valid: false,
+        error: `<hp:p> 증가량 불일치: 열기 +${dPOpen}, 닫기 +${dPClose}`,
+      };
+    }
+    const dROpen = openRun - baseline.openRun;
+    const dRClose = closeRun - baseline.closeRun;
+    if (dROpen !== dRClose) {
+      return {
+        valid: false,
+        error: `<hp:run> 증가량 불일치: 열기 +${dROpen}, 닫기 +${dRClose}`,
+      };
+    }
   }
 
   return { valid: true };
+}
+
+function getTagCounts(xml: string) {
+  return {
+    openP: (xml.match(/<hp:p[\s>]/g) || []).length,
+    closeP: (xml.match(/<\/hp:p>/g) || []).length,
+    openRun: (xml.match(/<hp:run[\s>]/g) || []).length,
+    closeRun: (xml.match(/<\/hp:run>/g) || []).length,
+  };
 }
 
 /**
@@ -150,6 +163,9 @@ function insertTextAtParagraph(
 
   if (lines.length === 0) return xml;
 
+  // 삽입 전 baseline 카운트 (증가량 비교용)
+  const baseline = getTagCounts(xml);
+
   let result: string;
 
   // 단일 줄: <hp:t> 태그 내용만 교체
@@ -171,8 +187,8 @@ function insertTextAtParagraph(
       xml.substring(targetPara.end);
   }
 
-  // 삽입 후 XML 태그 균형 검증
-  const validation = validateXmlBalance(result);
+  // 삽입 전후의 태그 증가량이 일치해야 함 (절대값이 아닌 delta 비교)
+  const validation = validateXmlBalance(result, baseline);
   if (!validation.valid) {
     console.warn(
       `[form-filler] XML 검증 실패 (필드: "${field.label}"): ${validation.error}. 원본 유지.`
