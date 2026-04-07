@@ -1,0 +1,76 @@
+{
+  "version": "v1",
+  "description": "AI Router 회귀 테스트용 골든 케이스 - 동일 입력 동일 결과 보장",
+  "cases": [
+    {
+      "id": "case-1-simple-list",
+      "name": "간단한 카테고리 나열",
+      "prompt": "한국 정부지원사업의 R&D 카테고리를 5개 나열해줘. 형식: 1. 카테고리명",
+      "options": {
+        "model": "haiku",
+        "context": "golden-case-1"
+      },
+      "expectations": {
+        "minLength": 50,
+        "mustContain": ["1.", "2.", "3.", "4.", "5."],
+        "mustNotContain": ["error", "ERROR", "실패"]
+      }
+    },
+    {
+      "id": "case-2-json-structure",
+      "name": "JSON 구조 응답",
+      "prompt": "다음 JSON 형식으로만 답해줘 (마크다운 코드 블록 없이): {\"company_size\": \"중소기업|대기업|소상공인 중 하나\", \"recommended_programs\": [\"프로그램명\"], \"reasoning\": \"한 문장 이유\"}\n\n질문: 직원 10명 매출 5억 IT 스타트업에게 추천하는 정부지원사업 1개?",
+      "options": {
+        "model": "sonnet",
+        "context": "golden-case-2",
+        "jsonMode": true
+      },
+      "expectations": {
+        "minLength": 30,
+        "isJson": true,
+        "jsonKeys": ["company_size", "recommended_programs", "reasoning"]
+      }
+    },
+    {
+      "id": "case-3-matching-logic",
+      "name": "매칭 점수 계산 (AI도자기 케이스)",
+      "prompt": "회사: AI 기반 도자기 제조 스타트업, 직원 5명, 매출 1억원, 설립 2년차\n공고: 청년창업사관학교 (만 39세 이하 창업 7년 미만 대상)\n\n이 회사가 이 공고에 적합한가? 0~100점으로 점수만 답해 (한 글자 숫자 또는 두 자리).",
+      "options": {
+        "model": "haiku",
+        "context": "golden-case-3"
+      },
+      "expectations": {
+        "minLength": 1,
+        "matchPattern": "\\d+",
+        "scoreRange": [50, 100]
+      }
+    },
+    {
+      "id": "case-4-section-write",
+      "name": "사업계획서 섹션 작성 (시장 분석 100자)",
+      "prompt": "한국 펫푸드 시장 규모를 1-2 문장으로 설명해줘. 숫자(억원/조원) 포함 필수.",
+      "options": {
+        "model": "haiku",
+        "context": "golden-case-4"
+      },
+      "expectations": {
+        "minLength": 30,
+        "matchPattern": "(억원|조원|만원|원)"
+      }
+    },
+    {
+      "id": "case-5-cache-test",
+      "name": "캐시 동작 확인 (동일 입력 즉시 응답)",
+      "prompt": "1+1=? 숫자만 답해.",
+      "options": {
+        "model": "haiku",
+        "context": "golden-case-5-cache"
+      },
+      "expectations": {
+        "minLength": 1,
+        "secondCallShouldBeCached": true,
+        "secondCallMaxMs": 100
+      }
+    }
+  ]
+}

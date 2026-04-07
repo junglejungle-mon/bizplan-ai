@@ -60,3 +60,6 @@ references/NAS/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# session memos (Claude Code)
+.next-session-memo.md

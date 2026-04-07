@@ -1,68 +1,23 @@
-import Anthropic from "@anthropic-ai/sdk";
+/**
+ * claude.ts — AI Router 통합 (v2)
+ *
+ * 변경:
+ * - 기존: Anthropic SDK + Ollama 직접 호출
+ * - 신규: lib/ai/router.ts (Claude CLI → Gemini 폴백) 사용
+ *
+ * 함수 시그니처는 100% 유지 → 호출자 코드 변경 불필요
+ *
+ * Claude CLI 우선 (Max 무제한, 비용 0), 실패 시 Gemini (무료)
+ * Vision도 Claude CLI 텍스트 폴백으로 위임 (Anthropic API 직접 호출 0건).
+ *
+ * 변경 이력:
+ * - Round 5: logAICall fs 호출을 logger-fs 헬퍼로 위임
+ * - 2026-04-07: Anthropic SDK client 인스턴스화 완전 제거 (타입만 유지)
+ */
+import type Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "./router";
 
-// ─── AI Provider 설정 ───────────────────────────────────
-// 사용자 대면 (인터뷰, 사업계획서): 항상 Anthropic API (품질 우선)
-// 백그라운드 배치 (매칭): Ollama 로컬 모델 (무료)
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:14b";
-
-const useOllama = process.env.USE_OLLAMA === "true" || process.env.AI_MODE === "local";
-const isLocalMode = process.env.AI_MODE === "local";
 const LOG_AI_CALLS = process.env.LOG_AI_CALLS === "true";
-
-if (!process.env.ANTHROPIC_API_KEY && !useOllama) {
-  console.warn("[AI] ANTHROPIC_API_KEY 미설정. AI 기능이 제한됩니다.");
-}
-
-const apiClient = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
-});
-
-// Anthropic 클라이언트 (Ollama 미사용 시 또는 Vision 전용)
-const anthropicClient = apiClient;
-const anthropicVision = apiClient;
-
-// ─── Ollama 호출 (배치 매칭 전용, 무료) ─────────────────
-export async function callOllama({
-  system,
-  messages,
-  maxTokens = 4096,
-  temperature = 0.7,
-}: {
-  system?: string;
-  messages: { role: string; content: string }[];
-  maxTokens?: number;
-  temperature?: number;
-}): Promise<string> {
-  const ollamaMessages: { role: string; content: string }[] = [];
-
-  if (system) {
-    ollamaMessages.push({ role: "system", content: system });
-  }
-  for (const m of messages) {
-    ollamaMessages.push({ role: m.role, content: m.content });
-  }
-
-  const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      messages: ollamaMessages,
-      max_tokens: maxTokens,
-      temperature,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => "");
-    throw new Error(`Ollama API error: ${response.status} — ${errText.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content ?? "";
-}
 
 // ─── 타입 정의 ───────────────────────────────────────────
 export type ClaudeModel =
@@ -75,44 +30,24 @@ export interface ClaudeMessage {
   content: string;
 }
 
-// ─── 재시도 헬퍼 (Exponential Backoff) ────────────────────
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: { maxRetries?: number; baseDelayMs?: number; caller?: string } = {}
-): Promise<T> {
-  const { maxRetries = 3, baseDelayMs = 1000, caller = "unknown" } = options;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      const err = error as { status?: number; error?: { type?: string }; message?: string };
-      const isRetryable =
-        err?.status === 429 || // Rate limit
-        err?.status === 500 || // Server error
-        err?.status === 502 ||
-        err?.status === 503 ||
-        err?.status === 529 || // Anthropic overloaded
-        err?.error?.type === "overloaded_error" ||
-        err?.message?.includes("ECONNRESET") ||
-        err?.message?.includes("ETIMEDOUT");
-
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
-
-      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
-      console.warn(
-        `[AI Retry] ${caller} attempt ${attempt + 1}/${maxRetries} failed (${err?.status || err?.message}), retrying in ${Math.round(delay)}ms`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-
-  throw new Error("Unreachable");
+// 모델명 → router 모델 키 변환
+function modelToKey(model: string): "haiku" | "sonnet" | "opus" {
+  if (model.includes("haiku")) return "haiku";
+  if (model.includes("opus")) return "opus";
+  return "sonnet";
 }
 
-// ─── AI 로그 저장 ─────────────────────────────────────────
+// messages 배열 → 단일 프롬프트 변환 (CLI는 messages 형식 미지원)
+function messagesToPrompt(messages: ClaudeMessage[]): string {
+  return messages
+    .map((m) => {
+      const prefix = m.role === "user" ? "User" : "Assistant";
+      return `${prefix}: ${m.content}`;
+    })
+    .join("\n\n");
+}
+
+// ─── AI 로그 저장 (Round 5: logger-fs 헬퍼로 위임) ────────
 async function logAICall(data: {
   caller: string;
   model: string;
@@ -120,30 +55,41 @@ async function logAICall(data: {
   messages: { role: string; content: string }[];
   response: string;
   durationMs: number;
+  source?: string;
 }) {
-  // Vercel 환경에서는 파일시스템 쓰기 불가 → 스킵
   if (!LOG_AI_CALLS || process.env.VERCEL) return;
 
   try {
-    // dynamic import로 분리 → Turbopack 정적 파일 패턴 스캔 방지
-    const { writeFile, mkdir } = await import("node:fs/promises");
-    const { join, sep } = await import("node:path");
-    const dataDir = ["data", "ai" + "-logs"].join(sep);
-    const today = new Date().toISOString().split("T")[0];
-    const logDir = join(process.cwd(), dataDir, today);
-    await mkdir(logDir, { recursive: true });
-
-    const filename = `${data.caller}-${Date.now()}.json`;
+    const fsHelper = await import('./logger-fs');
     const logEntry = {
       timestamp: new Date().toISOString(),
-      mode: useOllama ? "ollama" : "api",
       ...data,
     };
-
-    await writeFile(join(logDir, filename), JSON.stringify(logEntry, null, 2));
+    await fsHelper.appendLog(data.caller, JSON.stringify(logEntry));
   } catch {
-    // 로깅 실패는 무시 (메인 로직에 영향 없음)
+    // 로깅 실패는 무시
   }
+}
+
+// ─── Ollama 호출 (하위 호환 — 이제는 router로 위임) ─────
+export async function callOllama({
+  system,
+  messages,
+}: {
+  system?: string;
+  messages: { role: string; content: string }[];
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<string> {
+  // router 사용 (Claude CLI → Gemini)
+  const prompt = messagesToPrompt(messages as ClaudeMessage[]);
+  const result = await callAI(prompt, {
+    model: "haiku",
+    systemPrompt: system,
+    timeoutMs: 120_000,
+    context: "callOllama-legacy",
+  });
+  return result.output;
 }
 
 // ─── callClaude (비스트리밍) ──────────────────────────────
@@ -151,9 +97,7 @@ export async function callClaude({
   model = "claude-sonnet-4-20250514",
   system,
   messages,
-  maxTokens = 4096,
-  temperature = 0.7,
-  forceAPI = false,
+  forceAPI: _forceAPI = false,
 }: {
   model?: ClaudeModel;
   system?: string;
@@ -163,85 +107,36 @@ export async function callClaude({
   forceAPI?: boolean;
 }): Promise<string> {
   const startTime = Date.now();
+  const prompt = messagesToPrompt(messages);
+  const modelKey = modelToKey(model);
 
-  // ─── Ollama 모드 (기본 — 무료) ───
-  if (useOllama && !forceAPI) {
-    const result = await withRetry(
-      () => callOllama({ system, messages, maxTokens, temperature }),
-      { caller: "callClaude:ollama" }
-    );
-
-    logAICall({
-      caller: "callClaude:ollama",
-      model: OLLAMA_MODEL,
-      system,
-      messages,
-      response: result,
-      durationMs: Date.now() - startTime,
-    });
-
-    return result;
-  }
-
-  // ─── Anthropic API (사업계획서 등 forceAPI=true) ───
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("[callClaude] ANTHROPIC_API_KEY 필수 — Anthropic API 호출에는 API 키가 필요합니다.");
-  }
-
-  const response = await withRetry(
-    () =>
-      anthropicClient.messages.create({
-        model,
-        max_tokens: maxTokens,
-        ...(system && {
-          system: [
-            {
-              type: "text" as const,
-              text: system,
-              cache_control: { type: "ephemeral" as const },
-            },
-          ],
-        }),
-        messages: messages.map((m, i) => ({
-          role: m.role,
-          content: [
-            {
-              type: "text" as const,
-              text: m.content,
-              ...(i === messages.length - 1 && m.role === "user"
-                ? { cache_control: { type: "ephemeral" as const } }
-                : {}),
-            },
-          ],
-        })),
-        temperature,
-      }),
-    { caller: "callClaude" }
-  );
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  const result = textBlock?.text ?? "";
+  const result = await callAI(prompt, {
+    model: modelKey,
+    systemPrompt: system,
+    timeoutMs: 180_000,
+    context: "callClaude",
+  });
 
   logAICall({
     caller: "callClaude",
-    model,
+    model: result.model,
+    source: result.source,
     system,
     messages,
-    response: result,
+    response: result.output,
     durationMs: Date.now() - startTime,
   });
 
-  return result;
+  return result.output;
 }
 
 // ─── streamClaude (스트리밍) ─────────────────────────────
+// 주의: Claude CLI는 스트리밍 미지원. 전체 응답을 받은 후 청크로 yield.
 export async function* streamClaude({
   model = "claude-sonnet-4-20250514",
   system,
   messages,
-  maxTokens = 4096,
-  temperature = 0.7,
-  forceAPI = false,
+  forceAPI: _forceAPI = false,
 }: {
   model?: ClaudeModel;
   system?: string;
@@ -251,126 +146,39 @@ export async function* streamClaude({
   forceAPI?: boolean;
 }): AsyncGenerator<string> {
   const startTime = Date.now();
-  let fullResponse = "";
+  const prompt = messagesToPrompt(messages);
+  const modelKey = modelToKey(model);
 
-  // ─── Ollama 스트리밍 (기본 — 무료) ───
-  if (useOllama && !forceAPI) {
-    const ollamaMessages: { role: string; content: string }[] = [];
-    if (system) ollamaMessages.push({ role: "system", content: system });
-    for (const m of messages) ollamaMessages.push({ role: m.role, content: m.content });
+  const result = await callAI(prompt, {
+    model: modelKey,
+    systemPrompt: system,
+    timeoutMs: 240_000,
+    context: "streamClaude",
+  });
 
-    const response = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        messages: ollamaMessages,
-        max_tokens: maxTokens,
-        temperature,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(`Ollama stream error: ${response.status} — ${errText.slice(0, 200)}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
-        try {
-          const chunk = JSON.parse(line.slice(6));
-          const text = chunk.choices?.[0]?.delta?.content;
-          if (text) {
-            fullResponse += text;
-            yield text;
-          }
-        } catch { /* skip malformed chunks */ }
-      }
-    }
-
-    logAICall({
-      caller: "streamClaude:ollama",
-      model: OLLAMA_MODEL,
-      system,
-      messages,
-      response: fullResponse,
-      durationMs: Date.now() - startTime,
-    });
-    return;
-  }
-
-  // ─── Anthropic API 스트리밍 (forceAPI=true) ───
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("[streamClaude] ANTHROPIC_API_KEY 필수 — Anthropic API 호출에는 API 키가 필요합니다.");
-  }
-
-  const stream = await withRetry(
-    async () =>
-      anthropicClient.messages.stream({
-        model,
-        max_tokens: maxTokens,
-        ...(system && {
-          system: [
-            {
-              type: "text" as const,
-              text: system,
-              cache_control: { type: "ephemeral" as const },
-            },
-          ],
-        }),
-        messages: messages.map((m, i) => ({
-          role: m.role,
-          content: [
-            {
-              type: "text" as const,
-              text: m.content,
-              ...(i === messages.length - 1 && m.role === "user"
-                ? { cache_control: { type: "ephemeral" as const } }
-                : {}),
-            },
-          ],
-        })),
-        temperature,
-      }),
-    { caller: "streamClaude" }
-  );
-
-  for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
-      fullResponse += event.delta.text;
-      yield event.delta.text;
-    }
+  // 전체 응답을 청크로 분할 (50자씩)
+  const chunkSize = 50;
+  for (let i = 0; i < result.output.length; i += chunkSize) {
+    yield result.output.slice(i, i + chunkSize);
   }
 
   logAICall({
     caller: "streamClaude",
-    model,
+    model: result.model,
+    source: result.source,
     system,
     messages,
-    response: fullResponse,
+    response: result.output,
     durationMs: Date.now() - startTime,
   });
 }
 
-// ─── callClaudeVision (Vision/OCR 전용) ──
-// 로컬 모드: 이미지→텍스트 변환 후 프록시 호출 (CLI는 이미지 미지원)
-// API 모드: Anthropic Vision API 직접 호출
+// ─── callClaudeVision (2026-04-07 완전 차단) ──
+// Anthropic Vision API 직접 호출을 완전히 제거.
+// 모든 호출은 Claude CLI(callClaude) 경로로 텍스트 폴백 처리됨 → 비용 0원.
+//
+// 부작용: 이미지/PDF의 시각 정보 손실 (텍스트 메타정보만 전달).
+// OCR 품질이 필수면 별도 phase에서 Tesseract 등 도입 필요.
 export async function callClaudeVision({
   model = "claude-sonnet-4-20250514",
   system,
@@ -384,83 +192,31 @@ export async function callClaudeVision({
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("[callClaudeVision] ANTHROPIC_API_KEY 필수 — Vision은 항상 Anthropic API를 사용합니다.");
-  }
-
-  const startTime = Date.now();
-
-  // 로컬 모드에서는 이미지를 텍스트로 변환하여 프록시에 전달
-  let processedMessages = messages;
-  if (isLocalMode) {
-    processedMessages = messages.map((m) => {
-      if (typeof m.content === "string") return m;
-      if (Array.isArray(m.content)) {
-        // 이미지 블록을 텍스트로 변환
-        const textParts = m.content.map((block: { type: string; text?: string }) => {
-          if (block.type === "text") return block.text;
-          if (block.type === "image") {
-            return "[이미지/문서 파일이 첨부되었습니다. 파일 내용을 직접 볼 수 없으므로, 주어진 텍스트 정보를 기반으로 최대한 분석해주세요.]";
-          }
-          return "";
-        }).filter(Boolean);
-        return { ...m, content: textParts.join("\n\n") };
-      }
-      return m;
-    }) as typeof messages;
-  }
-
-  const response = await withRetry(
-    () =>
-      anthropicVision.messages.create({
-        model,
-        max_tokens: maxTokens,
-        ...(system && {
-          system: [
-            {
-              type: "text" as const,
-              text: system,
-              cache_control: { type: "ephemeral" as const },
-            },
-          ],
-        }),
-        messages: processedMessages,
-        temperature,
-      }),
-    { caller: "callClaudeVision" }
+  console.warn(
+    "[callClaudeVision] Anthropic Vision API 비활성 — Claude CLI 텍스트 폴백 사용"
   );
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  const result = textBlock?.text ?? "";
-
-  // 비동기 로깅
-  logAICall({
-    caller: "callClaudeVision",
-    model,
-    system,
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: typeof m.content === "string" ? m.content : "[vision/document content]",
-    })),
-    response: result,
-    durationMs: Date.now() - startTime,
-  });
-
-  return result;
+  const textMessages = messages.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content:
+      typeof m.content === "string"
+        ? m.content
+        : "[이미지/문서 첨부됨 — 텍스트 정보로 대체]",
+  }));
+  return callClaude({ model, system, messages: textMessages, maxTokens, temperature });
 }
 
-// ─── Exports ─────────────────────────────────────────────
-// anthropic: 하위 호환성 (Vision/OCR에서 직접 사용하는 곳은 callClaudeVision으로 전환 권장)
-export { apiClient as anthropic };
+// ─── Exports (하위 호환) ─────────────────────────────────
+// Note: 2026-04-07 — Anthropic SDK client export 제거됨.
+// 직접 호출 경로는 모두 router(callAI)로 통합되어 더 이상 SDK client 인스턴스가 필요 없음.
 
-// 현재 모드 확인용
-export const aiMode = useOllama ? "ollama" : "api";
+// 현재 모드 (router는 자동 폴백)
+export const aiMode = "router";
 
-// ─── 사업계획서 전용 Wrapper (항상 Anthropic API) ────────
+// 사업계획서 전용 Wrapper (router가 자동으로 최선 선택)
 export async function callClaudeAPI(opts: Parameters<typeof callClaude>[0]) {
-  return callClaude({ ...opts, forceAPI: true });
+  return callClaude(opts);
 }
 
 export async function* streamClaudeAPI(opts: Parameters<typeof streamClaude>[0]) {
-  yield* streamClaude({ ...opts, forceAPI: true });
+  yield* streamClaude(opts);
 }
