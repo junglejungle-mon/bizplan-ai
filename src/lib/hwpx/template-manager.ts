@@ -87,6 +87,38 @@ export function extractFormUrls(
     }
   }
 
+  // 4. bizinfo 형태: { pdf: "...", file: "..." } — 확장자 없는 download URL
+  // 매직바이트는 다운로드 후 검증되므로 여기서는 URL만 통과시킴
+  if (typeof attachmentUrls.file === "string" && attachmentUrls.file.startsWith("http")) {
+    // @로 구분된 다중 URL 처리 (sbiz24 스타일)
+    for (const u of attachmentUrls.file.split("@").filter(Boolean)) {
+      if (u.startsWith("http")) urls.push(u);
+    }
+  }
+  if (typeof attachmentUrls.pdf === "string" && attachmentUrls.pdf.startsWith("http")) {
+    // pdf만 있는 경우는 양식이 아닐 가능성 높음 → 일단 추출만
+    for (const u of attachmentUrls.pdf.split("@").filter(Boolean)) {
+      if (u.startsWith("http")) urls.push(u);
+    }
+  }
+
+  // 5. notice 객체 (sbiz24 정규화 결과)
+  if (
+    attachmentUrls.notice &&
+    typeof attachmentUrls.notice === "object" &&
+    "url" in (attachmentUrls.notice as Record<string, unknown>)
+  ) {
+    const notice = attachmentUrls.notice as { url?: string; name?: string };
+    if (typeof notice.url === "string" && notice.url.startsWith("http")) {
+      // 파일명에 양식 키워드 있으면 우선
+      if (notice.name && isFormUrl(notice.name)) {
+        urls.unshift(notice.url); // 우선순위 높게
+      } else {
+        urls.push(notice.url);
+      }
+    }
+  }
+
   return [...new Set(urls)]; // 중복 제거
 }
 
